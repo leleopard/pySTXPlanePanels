@@ -36,11 +36,11 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| CORE-01 | As a developer, I have a `gauge_core` Python package skeleton with Arcade as the render dependency. | 🔲 |
+| CORE-01 | As a developer, I have a `gauge_core` Python package skeleton with Arcade as the render dependency. | ✅ |
 | CORE-02 | As a developer, gauge_core exposes a typed component registry so new component types (sprite, vector, text) can be added without modifying the core loader. | 🔲 |
-| CORE-03 | As a developer, textures are interned by file path so loading the same atlas multiple times consumes one GPU texture. | 🔲 |
-| CORE-04 | As a developer, gauge_core uses relative texture paths resolved against a configurable asset root. | 🔲 |
-| CORE-05 | As a developer, a piecewise-linear lookup table maps dataref values to angles/translations (port of `convertValueToTransformValue`). | 🔲 |
+| CORE-03 | As a developer, textures are interned by file path so loading the same atlas multiple times consumes one GPU texture. | ⚠️ Partial — atlas PIL Images are cached; per-region Arcade textures are not yet shared. |
+| CORE-04 | As a developer, gauge_core uses relative texture paths resolved against a configurable asset root. | ⚠️ Partial — paths resolve relative to the YAML file. Configurable asset root TBD. |
+| CORE-05 | As a developer, a piecewise-linear lookup table maps dataref values to angles/translations (port of `convertValueToTransformValue`). | ✅ |
 | CORE-06 | As a developer, a conversion-function registry exposes the available data-shaping functions so the editor can pick from a known list. | 🔲 |
 
 ---
@@ -49,9 +49,9 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| INSTR-01 | As a user, I can define an instrument in a YAML file with `name`, `size`, `position`, and a typed `components` list. | 🔲 |
-| INSTR-02 | As a user, an `ImagePanel` component supports `texture`, `layer`, `position`, `cliprect`, `origin`, `resize_to_container`, `maintain_proportions`. | 🔲 |
-| INSTR-03 | As a user, an `ImagePanel` can declare `rotation` driven by an X-Plane dataref with a piecewise-linear calibration table and optional convert function. | 🔲 |
+| INSTR-01 | As a user, I can define an instrument in a YAML file with `name`, `size`, and a typed `components` list. | ✅ |
+| INSTR-02 | As a user, an `ImagePanel` component supports `texture`, `layer`, `position`, `cliprect`, `origin`, `resize_to_container`, `maintain_proportions`. | ⚠️ Partial — texture/position/cliprect/origin work; layer, resize_to_container, maintain_proportions deferred. |
+| INSTR-03 | As a user, an `ImagePanel` can declare `rotation` driven by an X-Plane dataref with a piecewise-linear calibration table and optional convert function. | ⚠️ Partial — dataref + table work; convert function not yet wired. |
 | INSTR-04 | As a user, an `ImagePanel` can declare `translation` driven by a dataref with a calibration table, optional translation angle, and optional add-angle-to-rotation. | 🔲 |
 | INSTR-05 | As a user, an `ImagePanel` can declare `visibility` driven by a dataref + toggle predicate so warning lights turn on/off. | 🔲 |
 | INSTR-06 | As a user, a `Text` component renders a static string OR a formatted dataref value with a configurable font and color. | 🔲 |
@@ -71,7 +71,7 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| UDP-01 | As a user, the panel runtime starts `pyxpudpserver` from a YAML/INI config and exposes a `getData(ref)` interface to components. | 🔲 |
+| UDP-01 | As a user, the panel runtime starts `pyxpudpserver` from a YAML/INI config and exposes a `getData(ref)` interface to components. | ⚠️ Partial — runner accepts UDP via CLI flags (--listen, --xp, --xp-name); YAML/INI config TBD. |
 | UDP-02 | As a user, a "not receiving X-Plane data" overlay appears when UDP traffic stops. | 🔲 |
 
 ---
@@ -80,9 +80,9 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| RUN-01 | As a user, the runtime opens a window sized per panel YAML, draws the panel at 25+ FPS, and shows an FPS counter. | 🔲 |
-| RUN-02 | As a user, ESC closes the window cleanly. | 🔲 |
-| RUN-03 | As a user, test mode (numpad +/-/*) drives all gauges with a simulated value when X-Plane is not running. | 🔲 |
+| RUN-01 | As a user, the runtime opens a window sized per panel YAML, draws the panel at 25+ FPS, and shows an FPS counter. | ⚠️ Partial — single-instrument window opens and draws; FPS counter and panel YAML deferred. |
+| RUN-02 | As a user, ESC closes the window cleanly. | ✅ |
+| RUN-03 | As a user, test mode (numpad +/-/*) drives all gauges with a simulated value when X-Plane is not running. | ✅ |
 | RUN-04 | As a user, the runtime supports fullscreen and multi-monitor placement via panel YAML or CLI flags. | 🔲 |
 
 ---
@@ -91,7 +91,7 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| C172-01 | As a user, `instruments/c172_airspeed.yaml` renders a working airspeed indicator. | 🔲 |
+| C172-01 | As a user, `instruments/c172_airspeed.yaml` renders a working airspeed indicator. | 🚧 Code path complete and runs without errors; visual fidelity pending user verification. |
 | C172-02 | As a user, `instruments/c172_altimeter.yaml` renders a working altimeter. | 🔲 |
 | C172-03 | As a user, `instruments/c172_vsi.yaml` renders a working vertical speed indicator. | 🔲 |
 | C172-04 | As a user, `instruments/c172_directional_gyro.yaml` renders a working DG. | 🔲 |
@@ -140,3 +140,4 @@ High-level pointer to recent commits. Use `git log` for full detail.
 
 - *2026-04-30* — Project context bootstrap: CLAUDE.md, USER_STORIES.md, .gitignore, initial git repo.
 - *2026-04-30* — GitHub repo created at github.com/leleopard/pySTXPlanePanels; project renamed pySTXPlanePanels; INFRA-01/02/04 marked done.
+- *2026-04-30* — **MVP0 vertical slice**: gauge_core package (lookup, component, loader, runner), `instruments/c172_airspeed.yaml`, atlas asset, pyproject.toml. `python -m gauge_core.runner instruments/c172_airspeed.yaml --test` opens an Arcade window with the C172 airspeed indicator; numpad/arrows/PgUp-PgDn drive the needle; ESC quits. UDP path also wired (verified the listener binds without an X-Plane peer). Visual fidelity awaiting user check.

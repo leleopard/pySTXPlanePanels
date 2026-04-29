@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pySTXPlanePanels"
+version = "0.0.1"
+description = "Python based cockpit panel that displays X Plane aircraft gauges over UDP"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Stephane Teisserenc" }]
+dependencies = [
+    "arcade>=3.3,<4",
+    "pyyaml>=6.0",
+    "pillow>=10.0",
+    "pyxpudpserver",
+]
+
+[project.scripts]
+plane-gauge = "gauge_core.runner:main"
+
+[tool.setuptools.packages.find]
+include = ["gauge_core*"]
