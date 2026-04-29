@@ -1,6 +1,7 @@
-# Plane Gauges — User Stories & Epics
+# pySTXPlanePanels — User Stories & Epics
 
-**Project:** plane_gauges
+**Project:** pySTXPlanePanels
+**Repo:** https://github.com/leleopard/pySTXPlanePanels (public)
 **Version:** 0.0.0 (pre-MVP1)
 **Status:** Planning & infrastructure setup
 
@@ -23,10 +24,10 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| INFRA-01 | As a developer, I have a local git repository for plane_gauges so that all changes are version-controlled. | 🚧 |
-| INFRA-02 | As a developer, the repo is mirrored to GitHub so that changes are backed up and shareable. | 🔲 |
+| INFRA-01 | As a developer, I have a local git repository for pySTXPlanePanels so that all changes are version-controlled. | ✅ |
+| INFRA-02 | As a developer, the repo is mirrored to GitHub at github.com/leleopard/pySTXPlanePanels so that changes are backed up and shareable. | ✅ |
 | INFRA-03 | As a developer, every implementation change lands as a discrete commit with a clear message so that history is auditable. | 🚧 |
-| INFRA-04 | As a developer, USER_STORIES.md tracks all features and their status so the project state is always visible. | 🚧 |
+| INFRA-04 | As a developer, USER_STORIES.md tracks all features and their status so the project state is always visible. | ✅ |
 | INFRA-05 | As a developer, CLAUDE.md preserves architectural context across sessions. | ✅ |
 
 ---
@@ -138,3 +139,4 @@ These are tracked here for visibility but are not in scope for MVP1:
 High-level pointer to recent commits. Use `git log` for full detail.
 
 - *2026-04-30* — Project context bootstrap: CLAUDE.md, USER_STORIES.md, .gitignore, initial git repo.
+- *2026-04-30* — GitHub repo created at github.com/leleopard/pySTXPlanePanels; project renamed pySTXPlanePanels; INFRA-01/02/04 marked done.

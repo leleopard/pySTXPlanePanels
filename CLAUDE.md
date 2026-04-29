@@ -1,4 +1,8 @@
-# Plane Gauges — Project Context
+# pySTXPlanePanels — Project Context
+
+**Repo:** https://github.com/leleopard/pySTXPlanePanels (public)
+**Local path:** `C:\Users\stephane\Desktop\plane_gauges\`
+**Default branch:** `main`
 
 ## Project Goal
 
