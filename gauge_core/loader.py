@@ -1,25 +1,31 @@
 """YAML instrument loader.
 
-Reads an instrument YAML and returns a list of components plus the
-instrument's name and pixel size. Texture paths are resolved relative
-to the YAML file.
+Reads an instrument YAML and returns its components plus name and pixel
+size. Texture paths in the YAML are resolved relative to the YAML file.
+Component types are looked up from the registry — adding `Text`, `Line`,
+etc. is a matter of registering a factory; this loader doesn't change.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-from gauge_core.component import ImagePanel
+# Importing for side effects: the modules below register themselves with
+# the component / convert registries at import time.
+from gauge_core import component as _component  # noqa: F401
+from gauge_core import convert as _convert  # noqa: F401
+from gauge_core.registry import get_component_factory
 
 
 @dataclass
 class Instrument:
     name: str
     size: tuple[int, int]
-    components: list[ImagePanel]
+    components: list[Any]
 
 
 def load_instrument(yaml_path: str | Path) -> Instrument:
@@ -29,36 +35,13 @@ def load_instrument(yaml_path: str | Path) -> Instrument:
     with open(yaml_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    components: list[ImagePanel] = []
+    components: list[Any] = []
     for comp_def in data.get("components", []):
         ctype = comp_def.get("type")
-        if ctype != "ImagePanel":
-            raise ValueError(
-                f"MVP0 only supports type=ImagePanel; got {ctype!r} in {yaml_path}"
-            )
-
-        atlas_path = (base_dir / comp_def["texture"]).resolve()
-        origin = tuple(comp_def["origin"])
-        cliprect = tuple(comp_def["cliprect"])
-        position = tuple(comp_def["position"])
-
-        panel = ImagePanel(
-            name=comp_def["name"],
-            atlas_path=atlas_path,
-            origin_xy=origin,
-            cliprect_wh=cliprect,
-            position_xy=position,
-        )
-
-        if "rotation" in comp_def:
-            rot = comp_def["rotation"]
-            dataref = rot["dataref"]
-            # Allow YAML list form for legacy (group, index) datarefs
-            if isinstance(dataref, list):
-                dataref = tuple(dataref)
-            panel.set_rotation(dataref, rot["table"])
-
-        components.append(panel)
+        if not ctype:
+            raise ValueError(f"Component is missing `type:` in {yaml_path}")
+        factory = get_component_factory(ctype)
+        components.append(factory(comp_def, base_dir))
 
     return Instrument(
         name=data["name"],
