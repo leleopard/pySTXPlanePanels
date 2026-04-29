@@ -79,6 +79,9 @@ class ImagePanel:
         if self._rotation_dataref is not None and self._rotation_table is not None:
             value = float(get_data(self._rotation_dataref))
             angle_deg = lookup_piecewise(self._rotation_table, value)
-            # Aircraft gauges rotate clockwise as values increase. Arcade's
-            # sprite.angle is counter-clockwise, so negate.
-            self.sprite.angle = -angle_deg
+            # Arcade's sprite.angle rotates clockwise for positive values,
+            # which matches aircraft-gauge convention directly. The original
+            # OpenGL renderer pre-negated the angle in its rotation matrix
+            # to achieve the same effect; here we pass the table value
+            # straight through.
+            self.sprite.angle = angle_deg

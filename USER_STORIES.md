@@ -91,7 +91,7 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| C172-01 | As a user, `instruments/c172_airspeed.yaml` renders a working airspeed indicator. | 🚧 Code path complete and runs without errors; visual fidelity pending user verification. |
+| C172-01 | As a user, `instruments/c172_airspeed.yaml` renders a working airspeed indicator. | ✅ |
 | C172-02 | As a user, `instruments/c172_altimeter.yaml` renders a working altimeter. | 🔲 |
 | C172-03 | As a user, `instruments/c172_vsi.yaml` renders a working vertical speed indicator. | 🔲 |
 | C172-04 | As a user, `instruments/c172_directional_gyro.yaml` renders a working DG. | 🔲 |
@@ -141,3 +141,4 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-04-30* — Project context bootstrap: CLAUDE.md, USER_STORIES.md, .gitignore, initial git repo.
 - *2026-04-30* — GitHub repo created at github.com/leleopard/pySTXPlanePanels; project renamed pySTXPlanePanels; INFRA-01/02/04 marked done.
 - *2026-04-30* — **MVP0 vertical slice**: gauge_core package (lookup, component, loader, runner), `instruments/c172_airspeed.yaml`, atlas asset, pyproject.toml. `python -m gauge_core.runner instruments/c172_airspeed.yaml --test` opens an Arcade window with the C172 airspeed indicator; numpad/arrows/PgUp-PgDn drive the needle; ESC quits. UDP path also wired (verified the listener binds without an X-Plane peer). Visual fidelity awaiting user check.
+- *2026-04-30* — fix: needle rotation direction. Arcade's `sprite.angle` already rotates clockwise for positive values, matching aircraft-gauge convention; removed the unnecessary negation that was inverting the needle direction. Visually confirmed by user.
