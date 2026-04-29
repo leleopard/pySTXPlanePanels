@@ -30,10 +30,6 @@ class InstrumentWindow(arcade.Window):
         self.instrument = instrument
         self._get_data = get_data
 
-        self.sprite_list = arcade.SpriteList()
-        for comp in instrument.components:
-            self.sprite_list.append(comp.sprite)
-
         # Test-mode value (only consulted by TestDataSource; harmless otherwise).
         self.test_value = 0.0
         self.test_increment = 1.0
@@ -42,7 +38,8 @@ class InstrumentWindow(arcade.Window):
         self.clear()
         for comp in self.instrument.components:
             comp.update(self._get_data)
-        self.sprite_list.draw()
+        for comp in self.instrument.components:
+            comp.draw()
 
     def on_key_press(self, key: int, modifiers: int) -> None:
         if key == arcade.key.ESCAPE:

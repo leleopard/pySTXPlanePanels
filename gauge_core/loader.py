@@ -18,6 +18,7 @@ import yaml
 # the component / convert registries at import time.
 from gauge_core import component as _component  # noqa: F401
 from gauge_core import convert as _convert  # noqa: F401
+from gauge_core import text_component as _text_component  # noqa: F401
 from gauge_core.registry import get_component_factory
 
 

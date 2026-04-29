@@ -194,6 +194,13 @@ class ImagePanel:
             value = float(get_data(self._vis_dataref))
             self.sprite.visible = bool(self._vis_predicate(value, get_data))
 
+    def draw(self) -> None:
+        # Single-sprite draw. Fine for the C172 panel's ~30 sprites; if
+        # batching becomes worth it later, panel-level SpriteLists can be
+        # introduced behind this same interface.
+        if self.sprite.visible:
+            arcade.draw_sprite(self.sprite)
+
 
 # -- Factory + registry ---------------------------------------------------
 
