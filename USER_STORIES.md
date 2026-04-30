@@ -62,8 +62,8 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| PANEL-01 | As a user, I can define a panel in a YAML file with `name`, `size`, `background_color`, and a list of instrument references with positions and scale. | 🔲 |
-| PANEL-02 | As a user, a panel YAML can be loaded, opened in an Arcade window, and rendered live from X-Plane data. | 🔲 |
+| PANEL-01 | As a user, I can define a panel in a YAML file with `name`, `size`, `background_color`, and a list of instrument references with positions and scale. | ⚠️ Partial — name, size, background_color, instruments + positions all work. Per-instrument scale is deferred to a later commit. |
+| PANEL-02 | As a user, a panel YAML can be loaded, opened in an Arcade window, and rendered live from X-Plane data. | ✅ |
 
 ---
 
@@ -72,7 +72,7 @@ This file is the living changelog for the project. It is updated on every commit
 | ID | Story | Status |
 |----|-------|--------|
 | UDP-01 | As a user, the panel runtime starts `pyxpudpserver` from a YAML/INI config and exposes a `getData(ref)` interface to components. | ⚠️ Partial — runner accepts UDP via CLI flags (--listen, --xp, --xp-name); YAML/INI config TBD. |
-| UDP-02 | As a user, a "not receiving X-Plane data" overlay appears when UDP traffic stops. | 🔲 |
+| UDP-02 | As a user, a "not receiving X-Plane data" overlay appears when UDP traffic stops. | ✅ |
 
 ---
 
@@ -80,7 +80,7 @@ This file is the living changelog for the project. It is updated on every commit
 
 | ID | Story | Status |
 |----|-------|--------|
-| RUN-01 | As a user, the runtime opens a window sized per panel YAML, draws the panel at 25+ FPS, and shows an FPS counter. | ⚠️ Partial — single-instrument window opens and draws; FPS counter and panel YAML deferred. |
+| RUN-01 | As a user, the runtime opens a window sized per panel YAML, draws the panel at 25+ FPS, and shows an FPS counter. | ✅ |
 | RUN-02 | As a user, ESC closes the window cleanly. | ✅ |
 | RUN-03 | As a user, test mode (numpad +/-/*) drives all gauges with a simulated value when X-Plane is not running. | ✅ |
 | RUN-04 | As a user, the runtime supports fullscreen and multi-monitor placement via panel YAML or CLI flags. | 🔲 |
@@ -144,3 +144,4 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-04-30* — fix: needle rotation direction. Arcade's `sprite.angle` already rotates clockwise for positive values, matching aircraft-gauge convention; removed the unnecessary negation that was inverting the needle direction. Visually confirmed by user.
 - *2026-04-30* — feat(core): typed component + convert-function registries; ImagePanel gains translation, visibility, off-centre pivot, and convert-function support. Loader is now generic; new component types just register a factory. Convert functions ported from `pyXPPanels/lib/general/conversionFunctions.py`: return100s/1000s/10000s, convert_in_to_mb, add_compass_heading_to_value, calculate_turn_rate, true_if_over_zero, identity. Marks CORE-02, CORE-06, INSTR-03, INSTR-04, INSTR-05 ✅.
 - *2026-04-30* — feat(component): Text component (arcade.Text) for static labels and dataref-driven readouts. Uniform `draw()` method introduced across components so the runner can mix sprite + text without isinstance checks. Marks INSTR-06 ✅.
+- *2026-04-30* — feat(panel): panel YAML schema + loader; runner unified to handle either an instrument or a panel (single-instrument YAML is wrapped in a synthetic Panel of one). FPS counter shown in the window title. "Not receiving X-Plane data" overlay shown in UDP mode when pyxpudpserver.XPalive is False. Marks PANEL-02, RUN-01, UDP-02 ✅; PANEL-01 ⚠️ pending per-instrument scale.

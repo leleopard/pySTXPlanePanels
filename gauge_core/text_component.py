@@ -84,6 +84,11 @@ class Text:
     def set_visible(self, visible: bool) -> None:
         self.visible = visible
 
+    def apply_offset(self, dx: float, dy: float) -> None:
+        """Shift the label position. Used by panel composition."""
+        self.label.x += dx
+        self.label.y += dy
+
     def update(self, get_data: Callable[[Any], float]) -> None:
         if self._dataref is not None and self._format is not None:
             value = float(get_data(self._dataref))

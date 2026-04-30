@@ -131,6 +131,13 @@ class ImagePanel:
         if self._vis_predicate is None:
             raise ValueError("visibility requires a predicate name")
 
+    def apply_offset(self, dx: float, dy: float) -> None:
+        """Shift the component's base position. Used by panel composition."""
+        self._base_x += dx
+        self._base_y += dy
+        self.sprite.center_x = self._base_x
+        self.sprite.center_y = self._base_y
+
     # -- per-frame update --------------------------------------------------
 
     def update(self, get_data: Callable[[Any], float]) -> None:
