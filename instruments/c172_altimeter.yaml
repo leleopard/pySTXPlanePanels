@@ -25,7 +25,7 @@ components:
     origin: [600, 300]
     position: [155, 155]
     rotation:
-      dataref: [7, 0]
+      dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
       table:
         - [28.0, 154]
         - [29.5, -0.5]
@@ -38,7 +38,7 @@ components:
     origin: [600, 600]
     position: [155, 155]
     rotation:
-      dataref: [7, 0]
+      dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
       convert_function: convert_in_to_mb
       table:
         - [945, 165.5]

@@ -24,7 +24,7 @@ components:
     origin: [1500, 0]
     position: [155, 155]
     rotation:
-      dataref: [18, 7]
+      dataref: sim/cockpit2/gauges/indicators/slip_deg
       rotation_center: [0, 300]
       table:
         - [-7, -15]
@@ -45,7 +45,11 @@ components:
     origin: [1500, 300]
     position: [155, 155]
     rotation:
-      dataref: [17, 3]
+      # The convert function ignores the input value and computes turn
+      # rate from pitch/roll/PQR; we still need a valid dataref here so
+      # pyxpudpserver subscribes to *something*. Yaw rate (R) is a
+      # natural choice because it's part of the calculation.
+      dataref: sim/flightmodel/position/R
       convert_function: calculate_turn_rate
       table:
         - [-9, -60]

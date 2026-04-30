@@ -26,9 +26,7 @@ components:
     origin: [730, 1500]
     position: [155, 155]
     rotation:
-      # Legacy pyxpudpserver group/index form for indicated airspeed.
-      # The C172 panel reference uses [3, 0] (Speeds group, IAS).
-      dataref: [3, 0]
+      dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
       table:
         - [0, 0]
         - [40, 30]

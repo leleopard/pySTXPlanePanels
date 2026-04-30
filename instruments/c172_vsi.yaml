@@ -21,7 +21,7 @@ components:
     origin: [430, 1500]
     position: [155, 155]
     rotation:
-      dataref: [4, 2]
+      dataref: sim/cockpit2/gauges/indicators/vvi_fpm_pilot
       table:
         - [-2000, 96.5]
         - [-1500, 140]

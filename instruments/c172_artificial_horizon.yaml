@@ -24,7 +24,7 @@ components:
     origin: [0, 900]
     position: [155, 155]
     rotation:
-      dataref: [17, 1]
+      dataref: sim/flightmodel/position/phi   # roll, deg
       table:
         - [-180, 180]
         - [0, 0]
@@ -37,13 +37,13 @@ components:
     origin: [300, 900]
     position: [155, 155]
     rotation:
-      dataref: [17, 1]
+      dataref: sim/flightmodel/position/phi   # roll, deg
       table:
         - [-180, 180]
         - [0, 0]
         - [180, -180]
     translation:
-      dataref: [17, 0]
+      dataref: sim/flightmodel/position/theta   # pitch, deg
       table:
         - [-25, 48]
         - [0, 0]
@@ -56,7 +56,7 @@ components:
     origin: [600, 900]
     position: [155, 155]
     rotation:
-      dataref: [17, 1]
+      dataref: sim/flightmodel/position/phi   # roll, deg
       table:
         - [-180, 180]
         - [0, 0]

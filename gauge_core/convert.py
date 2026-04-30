@@ -68,13 +68,12 @@ def calculate_turn_rate(_value: float, get: GetData) -> float:
     """Turn rate in deg/s, derived from body rates Q/R and pitch/roll attitude.
 
     Mirrors the original implementation in pyXPPanels conversionFunctions.py.
-    Reads X-Plane DATA group 17 (attitude) and group 16 (rates).
+    Reads X-Plane string datarefs so no DATA-Output configuration is needed.
     """
-    pitch = math.radians(get((17, 0)))
-    roll = math.radians(get((17, 1)))
-    Q = get((16, 0))
-    P = get((16, 1))  # noqa: F841 — kept for parity with original
-    R = get((16, 2))
+    pitch = math.radians(get("sim/flightmodel/position/theta"))
+    roll = math.radians(get("sim/flightmodel/position/phi"))
+    Q = get("sim/flightmodel/position/Q")  # pitch rate (deg/s)
+    R = get("sim/flightmodel/position/R")  # yaw rate (deg/s)
 
     cos_pitch = math.cos(pitch)
     if cos_pitch == 0:

@@ -29,7 +29,7 @@ components:
     origin: [900, 300]
     position: [155, 155]
     rotation:
-      dataref: [118, 1]
+      dataref: sim/cockpit2/autopilot/heading_dial_deg_mag_pilot
       convert_function: add_compass_heading_to_value
       table:
         - [0, 0]
