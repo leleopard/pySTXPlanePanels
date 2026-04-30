@@ -1,16 +1,12 @@
-# Bendix-King KX165A NAV/COMM Radio (NAVCOMM #1).
-#
-# Single-radio MVP — proves custom-font rendering, instrument-level
-# visibility, and frequency display via the divideby100 convert. The
-# whole instrument hides when com1 is unpowered.
+# Bendix-King KX165A NAV/COMM Radio — NAVCOMM #1 (com1 / nav1).
 #
 # Layout: 574-px-wide background image with four DS-Digital orange
 # frequency readouts (COM active/standby on the left, NAV
 # active/standby on the right), matching pyXPPanels' BK_NAVCOMM_KX165A.
+# The whole instrument hides when com1 is unpowered.
 #
-# To use NAVCOMM #2: copy this file, switch the dataref index from
-# com1/nav1 to com2/nav2, and change the visibility dataref to
-# com2_power.
+# Sister file `bk_navcomm_2.yaml` is the same widget against
+# com2/nav2 datarefs.
 
 name: BK NAVCOMM 1
 size: [574, 70]

@@ -1,0 +1,68 @@
+# Bendix-King KX165A NAV/COMM Radio — NAVCOMM #2 (com2 / nav2).
+#
+# Identical layout / artwork / fonts to bk_navcomm_1.yaml; the only
+# differences are the dataref indices (com2/nav2 in place of com1/nav1)
+# and the power dataref that drives instrument-level visibility.
+
+name: BK NAVCOMM 2
+size: [574, 70]
+
+visibility:
+  dataref: sim/cockpit2/radios/actuators/com2_power[0]
+  predicate: true_if_over_zero
+
+components:
+  - name: background
+    type: ImagePanel
+    texture: ../assets/2048_Radio_Stack_text.png
+    cliprect: [574, 70]
+    origin: [0, 0]
+    position: [287, 35]
+
+  - name: com_active_freq
+    type: Text
+    text: ""
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 32
+    color: [211, 62, 33]
+    position: [9, 22]
+    text_format: "{:07.3f}"
+    convert_function: divideby100
+    dataref: sim/cockpit/radios/com2_freq_hz[0]
+
+  - name: com_standby_freq
+    type: Text
+    text: ""
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 32
+    color: [211, 62, 33]
+    position: [145, 22]
+    text_format: "{:07.3f}"
+    convert_function: divideby100
+    dataref: sim/cockpit/radios/com2_stdby_freq_hz[0]
+
+  - name: nav_active_freq
+    type: Text
+    text: ""
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 32
+    color: [211, 62, 33]
+    position: [288, 22]
+    text_format: "{:06.2f}"
+    convert_function: divideby100
+    dataref: sim/cockpit/radios/nav2_freq_hz[0]
+
+  - name: nav_standby_freq
+    type: Text
+    text: ""
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 32
+    color: [211, 62, 33]
+    position: [408, 22]
+    text_format: "{:06.2f}"
+    convert_function: divideby100
+    dataref: sim/cockpit/radios/nav2_stdby_freq_hz[0]
