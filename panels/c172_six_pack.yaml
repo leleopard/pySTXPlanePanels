@@ -2,22 +2,20 @@
 # single Arcade window.
 #
 # Position convention: each instrument's `position` is the panel coord
-# of the instrument's bottom-left corner. To recreate the original
-# pyXPPanels layout (center-anchored coords) the conversion is
-# `bottom_left = original_center - instrument_size/2`. Numbers below
-# are derived from C172_Panel.py:
+# of the instrument's bottom-left corner. The original pyXPPanels layout
+# used a 300-px grid combined with a 0.97 zoom on the 310-px bezels;
+# until per-instrument scale is implemented we use a 310-px grid so
+# bezels don't overlap. ASI stays anchored at the original centre
+# (170, 670); the other instruments shift right/down by up to 20 px
+# from the historical positions.
 #
-#   std6_orig = [170, 670]      -> top-left ASI centre
-#   std6_xgrid / std6_ygrid     = 300px instrument-to-instrument grid
-#   ANNUNCIATOR_pos = [620, 860]
-#
-# Six-pack grid (centres):
-#   row 0 (y=670):  ASI (170)   AH (470)    ALT (770)
-#   row 1 (y=370):  TC  (170)   DG  (470)   VSI (770)
-# Annunciator centre: (620, 860).
+# Six-pack grid centres (310 spacing):
+#   row 0 (y=670):  ASI (170)   AH (480)    ALT (790)
+#   row 1 (y=360):  TC  (170)   DG  (480)   VSI (790)
+# Annunciator centre: (635, 860) — recentred between AH and ALT.
 
 name: C172 Six-Pack
-size: [950, 920]
+size: [960, 920]
 background_color: [0, 0, 0]
 
 instruments:
@@ -25,18 +23,18 @@ instruments:
   - file: ../instruments/c172_airspeed.yaml
     position: [15, 515]
   - file: ../instruments/c172_artificial_horizon.yaml
-    position: [315, 515]
+    position: [325, 515]
   - file: ../instruments/c172_altimeter.yaml
-    position: [615, 515]
+    position: [635, 515]
 
   # Bottom row
   - file: ../instruments/c172_turn_coordinator.yaml
-    position: [15, 215]
+    position: [15, 205]
   - file: ../instruments/c172_directional_gyro.yaml
-    position: [315, 215]
+    position: [325, 205]
   - file: ../instruments/c172_vsi.yaml
-    position: [615, 215]
+    position: [635, 205]
 
-  # Annunciator above the six-pack
+  # Annunciator above the six-pack, centred on the panel's x-axis
   - file: ../instruments/c172_annunciator.yaml
-    position: [397, 827]
+    position: [412, 827]
