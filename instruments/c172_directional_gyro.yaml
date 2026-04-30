@@ -1,0 +1,52 @@
+# C172 Directional Gyro (DG / heading indicator).
+# - Background card rotates counter-clockwise as magnetic heading
+#   increases, so the current heading appears at the top (12 o'clock).
+# - Heading bug rotates relative to the current heading, using the
+#   add_compass_heading_to_value convert function.
+
+name: C172 Directional Gyro
+size: [310, 310]
+
+components:
+  - name: heading_card
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [0, 600]
+    position: [155, 155]
+    rotation:
+      dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag[0]
+      table:
+        - [0, 0]
+        - [160, -160]
+        - [210, -211]
+        - [360, -360]
+
+  - name: heading_bug
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [900, 300]
+    position: [155, 155]
+    rotation:
+      dataref: [118, 1]
+      convert_function: add_compass_heading_to_value
+      table:
+        - [0, 0]
+        - [160, 160]
+        - [210, 211]
+        - [360, 360]
+
+  - name: aircraft_silhouette
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [900, 0]
+    position: [155, 155]
+
+  - name: bezel
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [310, 310]
+    origin: [1200, 1500]
+    position: [155, 155]
