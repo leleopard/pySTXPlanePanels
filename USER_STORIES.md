@@ -93,7 +93,7 @@ This file is the living changelog for the project. It is updated on every commit
 |----|-------|--------|
 | C172-01 | As a user, `instruments/c172_airspeed.yaml` renders a working airspeed indicator. | ✅ |
 | C172-02 | As a user, `instruments/c172_altimeter.yaml` renders a working altimeter. | 🚧 Code path complete; visual verification pending. |
-| C172-03 | As a user, `instruments/c172_vsi.yaml` renders a working vertical speed indicator. | 🔲 |
+| C172-03 | As a user, `instruments/c172_vsi.yaml` renders a working vertical speed indicator. | 🚧 Code path complete; visual verification pending. |
 | C172-04 | As a user, `instruments/c172_directional_gyro.yaml` renders a working DG. | 🔲 |
 | C172-05 | As a user, `instruments/c172_artificial_horizon.yaml` renders a working artificial horizon. | 🔲 |
 | C172-06 | As a user, `instruments/c172_turn_coordinator.yaml` renders a working turn coordinator. | 🔲 |

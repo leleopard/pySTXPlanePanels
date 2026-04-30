@@ -1,0 +1,41 @@
+# C172 Vertical Speed Indicator (VSI / vario).
+# Single needle driven by DATA group 4 index 2 (vertical velocity, fpm).
+# Rest position is 270° (needle pointing 9 o'clock) per the original
+# calibration table.
+
+name: C172 VSI
+size: [310, 310]
+
+components:
+  - name: dial_face
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 298]
+    origin: [0, 2]
+    position: [155, 155]
+
+  - name: needle
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [40, 300]
+    origin: [430, 1500]
+    position: [155, 155]
+    rotation:
+      dataref: [4, 2]
+      table:
+        - [-2000, 96.5]
+        - [-1500, 140]
+        - [-1000, 189.5]
+        - [-500, 235]
+        - [0, 270]
+        - [500, 304.5]
+        - [1000, 349.5]
+        - [1500, 400]
+        - [2000, 442.5]
+
+  - name: bezel
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [310, 310]
+    origin: [1200, 1500]
+    position: [155, 155]
