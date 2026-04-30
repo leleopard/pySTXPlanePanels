@@ -98,7 +98,7 @@ This file is the living changelog for the project. It is updated on every commit
 | C172-05 | As a user, `instruments/c172_artificial_horizon.yaml` renders a working artificial horizon. | 🚧 Code path complete; visual verification pending. |
 | C172-06 | As a user, `instruments/c172_turn_coordinator.yaml` renders a working turn coordinator. | 🚧 Code path complete; visual verification pending. |
 | C172-07 | As a user, `instruments/c172_annunciator.yaml` renders the warning lights panel. | 🚧 Code path complete; visual verification pending. |
-| C172-08 | As a user, `panels/c172_six_pack.yaml` composes the six instruments + annunciator into the Cessna panel layout. | 🔲 |
+| C172-08 | As a user, `panels/c172_six_pack.yaml` composes the six instruments + annunciator into the Cessna panel layout. | 🚧 Code path complete; visual verification pending. |
 
 ---
 
@@ -145,3 +145,4 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-04-30* — feat(core): typed component + convert-function registries; ImagePanel gains translation, visibility, off-centre pivot, and convert-function support. Loader is now generic; new component types just register a factory. Convert functions ported from `pyXPPanels/lib/general/conversionFunctions.py`: return100s/1000s/10000s, convert_in_to_mb, add_compass_heading_to_value, calculate_turn_rate, true_if_over_zero, identity. Marks CORE-02, CORE-06, INSTR-03, INSTR-04, INSTR-05 ✅.
 - *2026-04-30* — feat(component): Text component (arcade.Text) for static labels and dataref-driven readouts. Uniform `draw()` method introduced across components so the runner can mix sprite + text without isinstance checks. Marks INSTR-06 ✅.
 - *2026-04-30* — feat(panel): panel YAML schema + loader; runner unified to handle either an instrument or a panel (single-instrument YAML is wrapped in a synthetic Panel of one). FPS counter shown in the window title. "Not receiving X-Plane data" overlay shown in UDP mode when pyxpudpserver.XPalive is False. Marks PANEL-02, RUN-01, UDP-02 ✅; PANEL-01 ⚠️ pending per-instrument scale.
+- *2026-04-30* — feat(c172): all six instruments + annunciator + six-pack panel YAML. Each instrument YAML ports verbatim from `pyXPPanels/instruments/`: altimeter (3 needles + Hg/mb pressure wheels), VSI, directional gyro (heading card + bug), artificial horizon (rotation+translation), turn coordinator (off-centre ball pivot), annunciator (8 visibility-toggled warning lights). `panels/c172_six_pack.yaml` composes them at the original layout coords. Each YAML smoke-tested via `py -m gauge_core.runner ... --test`. Marks C172-02..C172-08 in progress (code path complete; visual verification pending).
