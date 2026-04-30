@@ -1,0 +1,101 @@
+# C172 Annunciator Panel.
+# 8 warning lights overlaid on a 446x66 background. Each light's
+# visibility toggles based on a dataref evaluated through the
+# true_if_over_zero predicate.
+#
+# Light layout (instrument-local coords; centre at 223, 33):
+#   row 1 (y=46):  alternator   battery     low_fuel     brakes
+#   row 2 (y=21):  oil_pressure oil_temp    low_vacuum   ap_disconnect
+# Each light is 107 pixels wide; row 1 lights are 24 px tall, row 2
+# lights are 25 px tall.
+
+name: C172 Annunciator
+size: [446, 66]
+
+components:
+  - name: panel_background
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [446, 66]
+    origin: [300, 1801]
+    position: [223, 33]
+
+  - name: alternator
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 24]
+    origin: [300, 1868]
+    position: [68, 46]
+    visibility:
+      dataref: [115, 4]
+      predicate: true_if_over_zero
+
+  - name: battery
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 24]
+    origin: [407, 1868]
+    position: [175, 46]
+    visibility:
+      dataref: [113, 5]
+      predicate: true_if_over_zero
+
+  - name: low_fuel
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 24]
+    origin: [514, 1868]
+    position: [282, 46]
+    visibility:
+      dataref: [113, 6]
+      predicate: true_if_over_zero
+
+  - name: brakes
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 24]
+    origin: [621, 1868]
+    position: [389, 46]
+    visibility:
+      dataref: [14, 1]
+      predicate: true_if_over_zero
+
+  - name: oil_pressure
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 25]
+    origin: [300, 1892]
+    position: [68, 21]
+    visibility:
+      dataref: [115, 1]
+      predicate: true_if_over_zero
+
+  - name: oil_temp
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 25]
+    origin: [407, 1892]
+    position: [175, 21]
+    visibility:
+      dataref: [115, 2]
+      predicate: true_if_over_zero
+
+  - name: low_vacuum
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 25]
+    origin: [514, 1892]
+    position: [282, 21]
+    visibility:
+      dataref: [113, 4]
+      predicate: true_if_over_zero
+
+  - name: ap_disconnect
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [107, 25]
+    origin: [621, 1892]
+    position: [389, 21]
+    visibility:
+      dataref: [113, 3]
+      predicate: true_if_over_zero
