@@ -102,6 +102,24 @@ This file is the living changelog for the project. It is updated on every commit
 
 ---
 
+## EPIC 7 — Bendix-King Radio Stack
+
+**As a user, I want the five Bendix-King radios from `pyXPPanels/RadioStack.py` rendered as a YAML-driven panel, driven entirely by X-Plane datarefs (no Arduino input, no Python-side state machines).**
+
+The original implementation mixed Arduino-input handling and a few Python-side state machines (e.g. ADF timer mode tracked by listening to X-Plane commands). For this rewrite the panel must be **display-only**: every visible state derived from a dataref X-Plane already publishes. Where the original used `registerXPCmdCallback`-style logic, we re-evaluate whether the underlying state has a dataref source before re-introducing any panel-side state.
+
+| ID | Story | Status |
+|----|-------|--------|
+| RADIO-01 | As a user, `instruments/bk_navcomm.yaml` renders a working NAVCOMM #1 with COM/NAV active and standby frequencies. The whole instrument hides when com1 is unpowered. | 🚧 Code path complete; visual verification pending. |
+| RADIO-02 | As a user, a NAVCOMM #2 instrument YAML renders the same widget against com2/nav2 datarefs. | 🔲 |
+| RADIO-03 | As a user, `instruments/bk_dme.yaml` renders the DME (distance, speed, time, NAV1/2 source). Cascade visibility on `dme_power`; the three numeric readouts hide when DME signal is not found. | 🔲 |
+| RADIO-04 | As a user, `instruments/bk_adf.yaml` renders the ADF. **Pending design review:** the original Python state machine for timer mode (FRQ/FLT/ET) tracked X-Plane command bus events. Validate whether a dataref source exists before re-introducing any panel-side state. | 🔲 |
+| RADIO-05 | As a user, `instruments/bk_xpdr.yaml` renders the transponder. **Pending design review:** the original conditional-indicator logic was mode-dependent; confirm `transponder_mode` dataref is the only source of truth, then encode mode-specific indicator visibility through dataref-only predicates. | 🔲 |
+| RADIO-06 | As a user, `panels/bk_radio_stack.yaml` composes all five radios into the original vertical-strip layout. | 🔲 |
+| RADIO-07 | As a developer, gauge_core supports **instrument-level visibility** so a single dataref can hide an entire composite instrument when unpowered. | ✅ |
+| RADIO-08 | As a developer, the Text component supports custom TTF fonts loaded from a `font_file` path so radio readouts render in the correct LCD-style typeface (e.g. DS-Digital). | ✅ |
+| RADIO-09 | As a developer, the convert-function registry includes `divideby100` so X-Plane's hundredths-of-MHz frequency datarefs render as 118.250 MHz. | ✅ |
+
 ## Out of MVP1 (Backlog)
 
 These are tracked here for visibility but are not in scope for MVP1:
@@ -147,3 +165,4 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-04-30* — feat(panel): panel YAML schema + loader; runner unified to handle either an instrument or a panel (single-instrument YAML is wrapped in a synthetic Panel of one). FPS counter shown in the window title. "Not receiving X-Plane data" overlay shown in UDP mode when pyxpudpserver.XPalive is False. Marks PANEL-02, RUN-01, UDP-02 ✅; PANEL-01 ⚠️ pending per-instrument scale.
 - *2026-04-30* — feat(c172): all six instruments + annunciator + six-pack panel YAML. Each instrument YAML ports verbatim from `pyXPPanels/instruments/`: altimeter (3 needles + Hg/mb pressure wheels), VSI, directional gyro (heading card + bug), artificial horizon (rotation+translation), turn coordinator (off-centre ball pivot), annunciator (8 visibility-toggled warning lights). `panels/c172_six_pack.yaml` composes them at the original layout coords. Each YAML smoke-tested via `py -m gauge_core.runner ... --test`. Marks C172-02..C172-08 in progress (code path complete; visual verification pending).
 - *2026-04-30* — fix(panel): six-pack instruments overlapped by 10 px because the 310-px bezels were placed on a 300-px grid (the original used zoom 0.97 to compensate; we deferred per-instrument scale). Switch to a 310-px grid: ASI stays at (170, 670), AH/ALT shift right by 10/20 px, bottom row drops by 10 px, annunciator recentres at (635, 860). Window grows from 950x920 to 960x920. Visually confirmed by user: instruments no longer overlap.
+- *2026-04-30* — feat(radio MVP-0): Bendix-King NAVCOMM #1. New foundational gauge_core capabilities: `divideby100` convert function, instrument-level cascade visibility (`Instrument.visibility` predicate evaluated before drawing components, skipped in --test so all gauges show by default), and Text-component custom font loading via `font_file:` (cached load_font). DS-Digital-ItalicST.ttf and 2048_Radio_Stack_text.png copied into assets/. instruments/bk_navcomm.yaml renders the radio with 4 frequency readouts; whole instrument hides when com1_power=0 in UDP mode. Marks RADIO-01 in progress (code path verified; visual pending), RADIO-07/08/09 ✅. Adds new EPIC 7 with RADIO-02..06 still planned.

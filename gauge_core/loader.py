@@ -8,9 +8,9 @@ etc. is a matter of registering a factory; this loader doesn't change.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -19,7 +19,30 @@ import yaml
 from gauge_core import component as _component  # noqa: F401
 from gauge_core import convert as _convert  # noqa: F401
 from gauge_core import text_component as _text_component  # noqa: F401
-from gauge_core.registry import get_component_factory
+from gauge_core.registry import get_component_factory, get_convert
+
+
+def _as_dataref(raw: Any) -> Any:
+    if isinstance(raw, list):
+        return tuple(raw)
+    return raw
+
+
+@dataclass
+class InstrumentVisibility:
+    """Optional cascade-visibility predicate for an entire instrument.
+
+    Used by composite radio components where unpowered = nothing visible.
+    Cheaper than declaring `visibility:` on every individual component
+    and keeps the YAML readable.
+    """
+
+    dataref: Any
+    predicate: Callable[[float, Callable[[Any], float]], bool]
+
+    def is_visible(self, get_data: Callable[[Any], float]) -> bool:
+        value = float(get_data(self.dataref))
+        return bool(self.predicate(value, get_data))
 
 
 @dataclass
@@ -27,6 +50,7 @@ class Instrument:
     name: str
     size: tuple[int, int]
     components: list[Any]
+    visibility: InstrumentVisibility | None = None
 
 
 def load_instrument(yaml_path: str | Path) -> Instrument:
@@ -44,8 +68,23 @@ def load_instrument(yaml_path: str | Path) -> Instrument:
         factory = get_component_factory(ctype)
         components.append(factory(comp_def, base_dir))
 
+    visibility: InstrumentVisibility | None = None
+    if "visibility" in data:
+        vis = data["visibility"]
+        predicate = get_convert(vis["predicate"])
+        if predicate is None:
+            raise ValueError(
+                f"Instrument visibility requires a known predicate; "
+                f"got {vis['predicate']!r} in {yaml_path}"
+            )
+        visibility = InstrumentVisibility(
+            dataref=_as_dataref(vis["dataref"]),
+            predicate=predicate,
+        )
+
     return Instrument(
         name=data["name"],
         size=tuple(data["size"]),
         components=components,
+        visibility=visibility,
     )

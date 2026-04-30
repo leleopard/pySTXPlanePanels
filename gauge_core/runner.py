@@ -82,11 +82,24 @@ class PanelWindow(arcade.Window):
 
     def on_draw(self) -> None:
         self.clear()
-        components = self.panel.all_components()
-        for comp in components:
-            comp.update(self._get_data)
-        for comp in components:
-            comp.draw()
+
+        # Each instrument can declare an instrument-wide visibility
+        # predicate; if it evaluates False the instrument's components
+        # are skipped entirely (used by radios when unpowered). Skipped
+        # in test mode so every gauge is visible regardless of the
+        # numpad-driven test value — power-toggle behaviour is best
+        # verified against a live X-Plane.
+        for inst in self.panel.instruments:
+            if (
+                not self._is_test_mode
+                and inst.visibility is not None
+                and not inst.visibility.is_visible(self._get_data)
+            ):
+                continue
+            for comp in inst.components:
+                comp.update(self._get_data)
+            for comp in inst.components:
+                comp.draw()
 
         # No-data overlay (only when bound to UDP and X-Plane is silent).
         if not self._is_test_mode and self._udp_alive is not None and not self._udp_alive():

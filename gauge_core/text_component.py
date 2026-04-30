@@ -20,6 +20,19 @@ from gauge_core.registry import (
 )
 
 
+# Cache of font files we've already registered with pyglet so each TTF is
+# loaded at most once, even when many components reference it.
+_FONT_FILES_LOADED: set[str] = set()
+
+
+def _ensure_font_loaded(font_path: Path) -> None:
+    key = str(font_path.resolve())
+    if key in _FONT_FILES_LOADED:
+        return
+    arcade.load_font(key)
+    _FONT_FILES_LOADED.add(key)
+
+
 def _as_dataref(raw: Any) -> Any:
     if isinstance(raw, list):
         return tuple(raw)
@@ -101,7 +114,14 @@ class Text:
             self.label.draw()
 
 
-def _text_factory(comp: dict[str, Any], _base_dir: Path) -> Text:
+def _text_factory(comp: dict[str, Any], base_dir: Path) -> Text:
+    # If the YAML supplies a `font_file` it's resolved relative to the
+    # instrument YAML and registered with pyglet so the family name passed
+    # in `font_name` resolves to the bundled TTF rather than a system font.
+    if "font_file" in comp:
+        font_path = (base_dir / comp["font_file"]).resolve()
+        _ensure_font_loaded(font_path)
+
     text = Text(
         name=comp["name"],
         position_xy=tuple(comp["position"]),

@@ -43,6 +43,14 @@ def convert_in_to_mb(value: float, _get: GetData) -> float:
     return value * 33.863753
 
 
+# -- Radio frequency display ---------------------------------------------
+# X-Plane reports COM/NAV frequencies in hundredths of MHz (e.g. 11825 for
+# 118.250 MHz). The radios display them divided by 100.
+
+def divideby100(value: float, _get: GetData) -> float:
+    return float(value) / 100.0
+
+
 # -- Compass / heading bug -----------------------------------------------
 
 def add_compass_heading_to_value(value: float, get: GetData) -> float:
@@ -96,6 +104,7 @@ for _name, _func in {
     "return1000s": return1000s,
     "return10000s": return10000s,
     "convert_in_to_mb": convert_in_to_mb,
+    "divideby100": divideby100,
     "add_compass_heading_to_value": add_compass_heading_to_value,
     "calculate_turn_rate": calculate_turn_rate,
     "true_if_over_zero": true_if_over_zero,
