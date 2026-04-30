@@ -110,7 +110,7 @@ The original implementation mixed Arduino-input handling and a few Python-side s
 
 | ID | Story | Status |
 |----|-------|--------|
-| RADIO-01 | As a user, `instruments/bk_navcomm.yaml` renders a working NAVCOMM #1 with COM/NAV active and standby frequencies. The whole instrument hides when com1 is unpowered. | 🚧 Code path complete; visual verification pending. |
+| RADIO-01 | As a user, `instruments/bk_navcomm.yaml` renders a working NAVCOMM #1 with COM/NAV active and standby frequencies. The whole instrument hides when com1 is unpowered. | 🚧 Code path + visuals OK at font_size 32. COM keeps 3 decimals (118.250) — visually differentiates COM vs NAV (which uses 2). Final precision/sizing may need re-tuning once the screen sits behind a hardware mockup of the radio stack. |
 | RADIO-02 | As a user, a NAVCOMM #2 instrument YAML renders the same widget against com2/nav2 datarefs. | 🔲 |
 | RADIO-03 | As a user, `instruments/bk_dme.yaml` renders the DME (distance, speed, time, NAV1/2 source). Cascade visibility on `dme_power`; the three numeric readouts hide when DME signal is not found. | 🔲 |
 | RADIO-04 | As a user, `instruments/bk_adf.yaml` renders the ADF. **Pending design review:** the original Python state machine for timer mode (FRQ/FLT/ET) tracked X-Plane command bus events. Validate whether a dataref source exists before re-introducing any panel-side state. | 🔲 |
