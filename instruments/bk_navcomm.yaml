@@ -32,7 +32,7 @@ components:
     text: ""
     font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
-    font_size: 35
+    font_size: 32
     color: [211, 62, 33]
     position: [9, 22]
     text_format: "{:07.3f}"
@@ -44,7 +44,7 @@ components:
     text: ""
     font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
-    font_size: 35
+    font_size: 32
     color: [211, 62, 33]
     position: [145, 22]
     text_format: "{:07.3f}"
@@ -56,7 +56,7 @@ components:
     text: ""
     font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
-    font_size: 35
+    font_size: 32
     color: [211, 62, 33]
     position: [288, 22]
     text_format: "{:06.2f}"
@@ -68,7 +68,7 @@ components:
     text: ""
     font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
-    font_size: 35
+    font_size: 32
     color: [211, 62, 33]
     position: [408, 22]
     text_format: "{:06.2f}"
