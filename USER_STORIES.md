@@ -96,7 +96,7 @@ This file is the living changelog for the project. It is updated on every commit
 | C172-03 | As a user, `instruments/c172_vsi.yaml` renders a working vertical speed indicator. | 🚧 Code path complete; visual verification pending. |
 | C172-04 | As a user, `instruments/c172_directional_gyro.yaml` renders a working DG. | 🚧 Code path complete; visual verification pending. |
 | C172-05 | As a user, `instruments/c172_artificial_horizon.yaml` renders a working artificial horizon. | 🚧 Code path complete; visual verification pending. |
-| C172-06 | As a user, `instruments/c172_turn_coordinator.yaml` renders a working turn coordinator. | 🔲 |
+| C172-06 | As a user, `instruments/c172_turn_coordinator.yaml` renders a working turn coordinator. | 🚧 Code path complete; visual verification pending. |
 | C172-07 | As a user, `instruments/c172_annunciator.yaml` renders the warning lights panel. | 🔲 |
 | C172-08 | As a user, `panels/c172_six_pack.yaml` composes the six instruments + annunciator into the Cessna panel layout. | 🔲 |
 

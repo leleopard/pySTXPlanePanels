@@ -1,0 +1,62 @@
+# C172 Turn Coordinator.
+# - Plane silhouette rotates with computed turn rate (deg/s) using the
+#   calculate_turn_rate convert function (which reads pitch/roll/PQR
+#   internally — the dataref index 17,3 is required by the framework
+#   but the value itself is not used by the convert).
+# - The slip ball rotates around an off-centre pivot 300 units above
+#   the sprite centre, simulating a pendulum hanging from a high pivot.
+
+name: C172 Turn Coordinator
+size: [310, 310]
+
+components:
+  - name: ball_background
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [1200, 0]
+    position: [155, 155]
+
+  - name: ball
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [1500, 0]
+    position: [155, 155]
+    rotation:
+      dataref: [18, 7]
+      rotation_center: [0, 300]
+      table:
+        - [-7, -15]
+        - [0, 0]
+        - [7, 15]
+
+  - name: turn_scale
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [1200, 300]
+    position: [155, 155]
+
+  - name: plane_silhouette
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [300, 300]
+    origin: [1500, 300]
+    position: [155, 155]
+    rotation:
+      dataref: [17, 3]
+      convert_function: calculate_turn_rate
+      table:
+        - [-9, -60]
+        - [-3, -20]
+        - [0, 0]
+        - [3, 20]
+        - [9, 60]
+
+  - name: bezel
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    cliprect: [310, 310]
+    origin: [1200, 1500]
+    position: [155, 155]
