@@ -15,7 +15,7 @@ components:
     origin: [0, 600]
     position: [155, 155]
     rotation:
-      dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag[0]
+      dataref: sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot
       table:
         - [0, 0]
         - [160, -160]
