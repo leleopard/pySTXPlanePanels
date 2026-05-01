@@ -60,6 +60,7 @@ class PanelWindow(arcade.Window):
         get_data: Callable[[Any], float],
         is_test_mode: bool,
         udp_alive: Callable[[], bool] | None = None,
+        on_shutdown: Callable[[], None] | None = None,
     ) -> None:
         w, h = panel.size
         super().__init__(w, h, panel.name)
@@ -72,6 +73,7 @@ class PanelWindow(arcade.Window):
         self._get_data = get_data
         self._is_test_mode = is_test_mode
         self._udp_alive = udp_alive
+        self._on_shutdown = on_shutdown
 
         # Test-mode value (read by TestDataSource if attached).
         self.test_value = 0.0
@@ -89,6 +91,11 @@ class PanelWindow(arcade.Window):
             color=(255, 165, 0, 230),  # orange-ish
             font_size=14,
         )
+
+    def on_close(self) -> None:
+        if self._on_shutdown is not None:
+            self._on_shutdown()
+        super().on_close()
 
     # -- frame loop -------------------------------------------------------
 
@@ -180,6 +187,9 @@ class UDPDataSource:
     def alive(self) -> bool:
         return bool(getattr(self._server, "XPalive", False))
 
+    def quit(self) -> None:
+        self._server.quit()
+
 
 def _parse_addr(s: str) -> tuple[str, int]:
     host, port = s.rsplit(":", 1)
@@ -249,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
             get_data=udp,
             is_test_mode=False,
             udp_alive=udp.alive,
+            on_shutdown=udp.quit,
         )
 
     arcade.run()
