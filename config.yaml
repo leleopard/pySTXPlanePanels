@@ -1,0 +1,25 @@
+# pySTXPlanePanels — X-Plane UDP configuration
+#
+# The runner loads this file automatically when it exists in the current
+# working directory. CLI flags (--listen, --xp, --xp-name) override any
+# values set here.
+#
+# Typical setup:
+#   - Run the panel app on the same PC as X-Plane: leave all defaults.
+#   - Run on a second PC on the same LAN: set xplane_host to the IP of
+#     the X-Plane machine, and set xplane_name to YOUR machine's hostname
+#     so X-Plane can route the reply packets back correctly.
+
+udp:
+  # IP/port this app listens on for incoming X-Plane data.
+  listen_host: 127.0.0.1
+  listen_port: 49008
+
+  # IP/port of the X-Plane instance to connect to.
+  xplane_host: 127.0.0.1
+  xplane_port: 49000
+
+  # The computer name sent to X-Plane when subscribing to datarefs.
+  # Defaults to the local machine hostname if not set; only needed when
+  # X-Plane and this app are on different machines.
+  # xplane_name: MY_PC_NAME

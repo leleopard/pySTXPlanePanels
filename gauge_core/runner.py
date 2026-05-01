@@ -22,6 +22,18 @@ from typing import Any, Callable
 import arcade
 import yaml
 
+_DEFAULT_CONFIG = "config.yaml"
+
+
+def _load_config(config_path: str | None) -> dict:
+    """Load UDP settings from a config YAML. Returns {} if file not found."""
+    path = Path(config_path) if config_path else Path(_DEFAULT_CONFIG)
+    if not path.exists():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("udp", {})
+
 from gauge_core.loader import load_instrument
 from gauge_core.panel import Panel, load_panel, panel_from_instrument
 
@@ -190,21 +202,31 @@ def main(argv: list[str] | None = None) -> int:
         "value across all gauges. No UDP.",
     )
     p.add_argument(
-        "--listen",
-        default="127.0.0.1:49008",
-        help="host:port this app listens on (default 127.0.0.1:49008)",
+        "--config",
+        default=None,
+        help=f"Path to config YAML (default: ./{_DEFAULT_CONFIG} if present)",
     )
-    p.add_argument(
-        "--xp",
-        default="127.0.0.1:49000",
-        help="host:port of X-Plane (default 127.0.0.1:49000)",
-    )
-    p.add_argument(
-        "--xp-name",
-        default=socket.gethostname(),
-        help="Computer name X-Plane expects (defaults to local hostname)",
-    )
+    p.add_argument("--listen", default=None, help="host:port this app listens on")
+    p.add_argument("--xp", default=None, help="host:port of X-Plane")
+    p.add_argument("--xp-name", default=None, help="Computer name X-Plane expects")
     args = p.parse_args(argv)
+
+    # Merge: config file supplies base values; CLI args override.
+    cfg = _load_config(args.config)
+    listen_host = cfg.get("listen_host", "127.0.0.1")
+    listen_port = cfg.get("listen_port", 49008)
+    xp_host = cfg.get("xplane_host", "127.0.0.1")
+    xp_port = cfg.get("xplane_port", 49000)
+    xp_name = cfg.get("xplane_name") or socket.gethostname()
+
+    if args.listen:
+        listen_host, listen_port = _parse_addr(args.listen)
+        listen_port = int(listen_port)
+    if args.xp:
+        xp_host, xp_port = _parse_addr(args.xp)
+        xp_port = int(xp_port)
+    if args.xp_name:
+        xp_name = args.xp_name
 
     panel = load_panel_or_instrument(args.yaml_path)
 
@@ -218,9 +240,9 @@ def main(argv: list[str] | None = None) -> int:
         data_source.window = window
     else:
         udp = UDPDataSource(
-            listen=_parse_addr(args.listen),
-            xp=_parse_addr(args.xp),
-            xp_name=args.xp_name,
+            listen=(listen_host, listen_port),
+            xp=(xp_host, xp_port),
+            xp_name=xp_name,
         )
         window = PanelWindow(
             panel=panel,
