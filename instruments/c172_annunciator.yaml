@@ -1,13 +1,23 @@
 # C172 Annunciator Panel.
 # 8 warning lights overlaid on a 446x66 background. Each light's
-# visibility toggles based on a dataref evaluated through the
-# true_if_over_zero predicate.
+# visibility toggles based on an X-Plane string dataref evaluated
+# through the true_if_over_zero predicate.
 #
 # Light layout (instrument-local coords; centre at 223, 33):
 #   row 1 (y=46):  alternator   battery     low_fuel     brakes
 #   row 2 (y=21):  oil_pressure oil_temp    low_vacuum   ap_disconnect
 # Each light is 107 pixels wide; row 1 lights are 24 px tall, row 2
 # lights are 25 px tall.
+#
+# Dataref assignments:
+#   alternator  sim/cockpit2/annunciators/low_voltage        (shared with battery —
+#   battery     sim/cockpit2/annunciators/low_voltage         no split dataref in stock X-Plane)
+#   low_fuel    sim/cockpit2/annunciators/fuel_quantity
+#   brakes      sim/cockpit2/controls/parking_brake_ratio    (0..1; any non-zero = light on)
+#   oil_pressure sim/cockpit2/annunciators/oil_pressure_low[0]
+#   oil_temp     sim/cockpit2/annunciators/oil_temperature_high[0]
+#   low_vacuum  sim/cockpit2/annunciators/low_vacuum
+#   ap_disconnect sim/cockpit2/annunciators/autopilot_disconnect
 
 name: C172 Annunciator
 size: [446, 66]
@@ -27,7 +37,7 @@ components:
     origin: [300, 1868]
     position: [68, 46]
     visibility:
-      dataref: [115, 4]
+      dataref: sim/cockpit2/annunciators/low_voltage
       predicate: true_if_over_zero
 
   - name: battery
@@ -37,7 +47,7 @@ components:
     origin: [407, 1868]
     position: [175, 46]
     visibility:
-      dataref: [113, 5]
+      dataref: sim/cockpit2/annunciators/low_voltage
       predicate: true_if_over_zero
 
   - name: low_fuel
@@ -47,7 +57,7 @@ components:
     origin: [514, 1868]
     position: [282, 46]
     visibility:
-      dataref: [113, 6]
+      dataref: sim/cockpit2/annunciators/fuel_quantity
       predicate: true_if_over_zero
 
   - name: brakes
@@ -57,7 +67,7 @@ components:
     origin: [621, 1868]
     position: [389, 46]
     visibility:
-      dataref: [14, 1]
+      dataref: sim/cockpit2/controls/parking_brake_ratio
       predicate: true_if_over_zero
 
   - name: oil_pressure
@@ -67,7 +77,7 @@ components:
     origin: [300, 1892]
     position: [68, 21]
     visibility:
-      dataref: [115, 1]
+      dataref: sim/cockpit2/annunciators/oil_pressure_low[0]
       predicate: true_if_over_zero
 
   - name: oil_temp
@@ -77,7 +87,7 @@ components:
     origin: [407, 1892]
     position: [175, 21]
     visibility:
-      dataref: [115, 2]
+      dataref: sim/cockpit2/annunciators/oil_temperature_high[0]
       predicate: true_if_over_zero
 
   - name: low_vacuum
@@ -87,7 +97,7 @@ components:
     origin: [514, 1892]
     position: [282, 21]
     visibility:
-      dataref: [113, 4]
+      dataref: sim/cockpit2/annunciators/low_vacuum
       predicate: true_if_over_zero
 
   - name: ap_disconnect
@@ -97,5 +107,5 @@ components:
     origin: [621, 1892]
     position: [389, 21]
     visibility:
-      dataref: [113, 3]
+      dataref: sim/cockpit2/annunciators/autopilot_disconnect
       predicate: true_if_over_zero
