@@ -1,0 +1,65 @@
+# Bendix-King KN62A DME.
+# 417×46 px background. Shows distance (NM), closing speed (kts), and
+# time-to-station (min) from the standalone DME receiver (which tracks
+# whichever NAV is selected). Whole instrument hides when dme_power = 0.
+#
+# Texture region: PIL origin [0, 71], cliprect 417×46 (immediately
+# below the NAVCOMM strip in 2048_Radio_Stack_text.png).
+#
+# Text positions use the same coordinate reference as the original
+# BendixKing_DME_KN6X.py: y_frequencies = -19 from the instrument
+# centre (centre = 23 px from bottom in a 46 px tall instrument).
+# → baseline y ≈ 4 px from bottom in our bottom-left system.
+#
+# Dataref notes:
+# - standalone_dme_dist_m is labelled "dist_m" but documented as NM.
+# - standalone_dme_time_secs is labelled "secs" but documented as
+#   minutes (X-Plane naming bug; values are correct).
+
+name: BK DME
+size: [417, 46]
+
+visibility:
+  dataref: sim/cockpit2/radios/actuators/dme_power
+  predicate: true_if_over_zero
+
+components:
+  - name: background
+    type: ImagePanel
+    texture: ../assets/2048_Radio_Stack_text.png
+    cliprect: [417, 46]
+    origin: [0, 71]
+    position: [208, 23]
+
+  - name: distance
+    type: Text
+    text: " 0.0"
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 22
+    color: [211, 62, 33]
+    position: [10, 4]
+    text_format: "{:05.1f}"
+    dataref: sim/cockpit/radios/standalone_dme_dist_m
+
+  - name: speed
+    type: Text
+    text: "  0"
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 22
+    color: [211, 62, 33]
+    position: [182, 4]
+    text_format: "{:03.0f}"
+    dataref: sim/cockpit/radios/standalone_dme_speed_kts
+
+  - name: time
+    type: Text
+    text: "  0"
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 22
+    color: [211, 62, 33]
+    position: [302, 4]
+    text_format: "{:03.0f}"
+    dataref: sim/cockpit/radios/standalone_dme_time_secs

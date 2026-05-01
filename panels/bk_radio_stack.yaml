@@ -1,0 +1,32 @@
+# Bendix-King radio stack panel.
+# Vertical strip of five radios in the original pyXPPanels layout:
+#   NAVCOMM #1 (COM1/NAV1)
+#   NAVCOMM #2 (COM2/NAV2)
+#   DME (standalone receiver)
+#   ADF (KR87)
+#   Transponder (KT70)
+#
+# Instrument positions match the original RadioStack.py coordinates
+# (bottom-left origin, y measured upward). Gaps between instruments
+# are sized to match a typical hardware radio-stack panel; adjust the
+# y values here if your physical mockup has different spacing.
+
+name: BK Radio Stack
+size: [644, 780]
+background_color: [0.05, 0.05, 0.05]
+
+instruments:
+  - file: ../instruments/bk_navcomm_1.yaml
+    position: [35, 670]
+
+  - file: ../instruments/bk_navcomm_2.yaml
+    position: [35, 470]
+
+  - file: ../instruments/bk_dme.yaml
+    position: [25, 337]
+
+  - file: ../instruments/bk_adf.yaml
+    position: [25, 240]
+
+  - file: ../instruments/bk_xpdr.yaml
+    position: [50, 110]

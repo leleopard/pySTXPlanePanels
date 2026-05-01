@@ -1,0 +1,130 @@
+# Bendix-King KT70 Transponder.
+# 382×65 px background (texture is 382×65; original resized to 399×68
+# but we use the actual atlas dimensions). Shows squawk code, flight
+# level, and mode indicators.
+#
+# Texture region: PIL origin [0, 186], cliprect 382×65.
+#
+# Transponder mode enum (sim/cockpit2/radios/actuators/transponder_mode):
+#   0=off (whole instrument hides), 1=stdby, 2=on, 3=test, 4=alt, 5=gnd
+#
+# Component visibility per mode:
+#   SBY indicator   — mode == 1
+#   ON  indicator   — mode == 2
+#   ALT indicator   — mode == 4
+#   GND indicator   — mode == 5
+#   FL readout      — mode > 2  (test=3, alt=4, gnd=5)
+#   FL label        — mode > 2
+#   R indicator     — transponder_light > 0
+#
+# Flight level = altitude_ft_pilot / 100 (return_alt_hundreds convert).
+# Format {:4.0f} gives e.g. " 35" for FL035.
+#
+# Text baseline y positions (instrument height 65 px, centre at 33):
+#   y_frequencies = centre − 20 = 13
+#   top indicators = y_frequencies + 19 = 32
+#   bottom indicators = y_frequencies − 3 = 10
+
+name: BK XPDR
+size: [382, 65]
+
+visibility:
+  dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+  predicate: true_if_over_zero
+
+components:
+  - name: background
+    type: ImagePanel
+    texture: ../assets/2048_Radio_Stack_text.png
+    cliprect: [382, 65]
+    origin: [0, 186]
+    position: [191, 32]
+
+  # -- Flight level readout (visible in ALT / GND / TEST modes) -----------
+  - name: flight_level
+    type: Text
+    text: "   0"
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 32
+    color: [211, 62, 33]
+    position: [104, 13]
+    text_format: "{:4.0f}"
+    convert_function: return_alt_hundreds
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    visibility:
+      dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+      predicate: true_if_over_2
+
+  # -- Squawk code (always visible when powered) --------------------------
+  - name: transponder_code
+    type: Text
+    text: "1200"
+    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_name: DS-Digital
+    font_size: 32
+    color: [211, 62, 33]
+    position: [299, 13]
+    text_format: "{:04.0f}"
+    dataref: sim/cockpit2/radios/actuators/transponder_code[0]
+
+  # -- Mode indicators ----------------------------------------------------
+  - name: alt_indicator
+    type: Text
+    text: "ALT"
+    font_size: 12
+    color: [211, 62, 33]
+    position: [197, 32]
+    visibility:
+      dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+      predicate: true_if_equals_4
+
+  - name: on_indicator
+    type: Text
+    text: "ON"
+    font_size: 12
+    color: [211, 62, 33]
+    position: [234, 32]
+    visibility:
+      dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+      predicate: true_if_equals_2
+
+  - name: gnd_indicator
+    type: Text
+    text: "GND"
+    font_size: 12
+    color: [211, 62, 33]
+    position: [197, 10]
+    visibility:
+      dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+      predicate: true_if_equals_5
+
+  - name: sby_indicator
+    type: Text
+    text: "SBY"
+    font_size: 12
+    color: [211, 62, 33]
+    position: [234, 10]
+    visibility:
+      dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+      predicate: true_if_equals_1
+
+  - name: fl_label
+    type: Text
+    text: "FL"
+    font_size: 12
+    color: [211, 62, 33]
+    position: [78, 10]
+    visibility:
+      dataref: sim/cockpit2/radios/actuators/transponder_mode[0]
+      predicate: true_if_over_2
+
+  - name: r_indicator
+    type: Text
+    text: "R"
+    font_size: 12
+    color: [211, 62, 33]
+    position: [269, 32]
+    visibility:
+      dataref: sim/cockpit/radios/transponder_light[0]
+      predicate: true_if_over_zero

@@ -83,12 +83,43 @@ def calculate_turn_rate(_value: float, get: GetData) -> float:
     return Q * math.sin(roll) / cos_pitch + R * math.cos(roll) / cos_pitch
 
 
+# -- Altitude display ----------------------------------------------------
+
+def return_alt_hundreds(value: float, _get: GetData) -> float:
+    """Altitude in hundreds of feet (truncated). Used by transponder FL display."""
+    return float(int(value / 100))
+
+
 # -- Predicates -----------------------------------------------------------
 # Predicates return a bool. Used by visibility transforms and
 # (potentially) for state-dependent component swapping.
 
 def true_if_over_zero(value: float, _get: GetData) -> bool:
     return value > 0.0
+
+def true_if_zero(value: float, _get: GetData) -> bool:
+    return value == 0.0
+
+def true_if_equals_1(value: float, _get: GetData) -> bool:
+    return value == 1.0
+
+def true_if_equals_2(value: float, _get: GetData) -> bool:
+    return value == 2.0
+
+def true_if_equals_3(value: float, _get: GetData) -> bool:
+    return value == 3.0
+
+def true_if_equals_4(value: float, _get: GetData) -> bool:
+    return value == 4.0
+
+def true_if_equals_5(value: float, _get: GetData) -> bool:
+    return value == 5.0
+
+def true_if_over_1(value: float, _get: GetData) -> bool:
+    return value > 1.0
+
+def true_if_over_2(value: float, _get: GetData) -> bool:
+    return value > 2.0
 
 
 # -- Identity (default) --------------------------------------------------
@@ -107,7 +138,16 @@ for _name, _func in {
     "divideby100": divideby100,
     "add_compass_heading_to_value": add_compass_heading_to_value,
     "calculate_turn_rate": calculate_turn_rate,
+    "return_alt_hundreds": return_alt_hundreds,
     "true_if_over_zero": true_if_over_zero,
+    "true_if_zero": true_if_zero,
+    "true_if_equals_1": true_if_equals_1,
+    "true_if_equals_2": true_if_equals_2,
+    "true_if_equals_3": true_if_equals_3,
+    "true_if_equals_4": true_if_equals_4,
+    "true_if_equals_5": true_if_equals_5,
+    "true_if_over_1": true_if_over_1,
+    "true_if_over_2": true_if_over_2,
     "identity": identity,
 }.items():
     register_convert(_name, _func)

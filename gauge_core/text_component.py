@@ -76,6 +76,14 @@ class Text:
             kwargs["font_name"] = font_name
         self.label = arcade.Text(**kwargs)
 
+        # Track position separately so apply_offset() can be called before
+        # the Arcade window is created (arcade.Text is lazily GPU-initialised;
+        # accessing its .x/.y property triggers _init_deferred() which
+        # requires an active window).
+        self._x = float(position_xy[0])
+        self._y = float(position_xy[1])
+        self._pos_dirty = False
+
         self.visible = True
 
         # Optional dataref-driven text
@@ -83,6 +91,10 @@ class Text:
         self._format: str | None = None
         self._convert: Callable | None = None
         self._static_text = text
+
+        # Optional dataref-driven visibility (mirrors ImagePanel behaviour)
+        self._vis_dataref: Any | None = None
+        self._vis_predicate: Callable | None = None
 
     def set_dataref(
         self,
@@ -94,20 +106,36 @@ class Text:
         self._format = text_format
         self._convert = get_convert(convert_function)
 
+    def set_visibility(self, dataref: Any, predicate: str) -> None:
+        self._vis_dataref = _as_dataref(dataref)
+        self._vis_predicate = get_convert(predicate)
+        if self._vis_predicate is None:
+            raise ValueError("visibility requires a predicate name")
+
     def set_visible(self, visible: bool) -> None:
         self.visible = visible
 
     def apply_offset(self, dx: float, dy: float) -> None:
         """Shift the label position. Used by panel composition."""
-        self.label.x += dx
-        self.label.y += dy
+        self._x += dx
+        self._y += dy
+        self._pos_dirty = True
 
     def update(self, get_data: Callable[[Any], float]) -> None:
+        if self._pos_dirty:
+            self.label.x = self._x
+            self.label.y = self._y
+            self._pos_dirty = False
+
         if self._dataref is not None and self._format is not None:
             value = float(get_data(self._dataref))
             if self._convert is not None:
                 value = float(self._convert(value, get_data))
             self.label.text = self._format.format(value)
+
+        if self._vis_dataref is not None and self._vis_predicate is not None:
+            value = float(get_data(self._vis_dataref))
+            self.visible = bool(self._vis_predicate(value, get_data))
 
     def draw(self) -> None:
         if self.visible:
@@ -138,6 +166,9 @@ def _text_factory(comp: dict[str, Any], base_dir: Path) -> Text:
             text_format=comp.get("text_format", "{:.1f}"),
             convert_function=comp.get("convert_function"),
         )
+    if "visibility" in comp:
+        vis = comp["visibility"]
+        text.set_visibility(dataref=vis["dataref"], predicate=vis["predicate"])
     return text
 
 
