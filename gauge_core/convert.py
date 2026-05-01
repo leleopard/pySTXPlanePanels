@@ -67,19 +67,20 @@ def add_compass_heading_to_value(value: float, get: GetData) -> float:
 def calculate_turn_rate(_value: float, get: GetData) -> float:
     """Turn rate in deg/s, derived from body rates Q/R and pitch/roll attitude.
 
-    Mirrors the original implementation in pyXPPanels conversionFunctions.py.
-    Reads X-Plane string datarefs so no DATA-Output configuration is needed.
+    Q and R (RREF datarefs) arrive in deg/s, so the formula output is already
+    deg/s — no unit conversion needed. The original pyXPPanels code read from
+    DATA group 16 which sent angular rates in rad/s and applied * 180/pi;
+    that factor must be omitted here.
     """
     pitch = math.radians(get("sim/flightmodel/position/theta"))
     roll = math.radians(get("sim/flightmodel/position/phi"))
-    Q = get("sim/flightmodel/position/Q")  # pitch rate (deg/s)
-    R = get("sim/flightmodel/position/R")  # yaw rate (deg/s)
+    Q = get("sim/flightmodel/position/Q")  # pitch rate, deg/s
+    R = get("sim/flightmodel/position/R")  # yaw rate, deg/s
 
     cos_pitch = math.cos(pitch)
     if cos_pitch == 0:
         return 0.0
-    rate = Q * math.sin(roll) / cos_pitch + R * math.cos(roll) / cos_pitch
-    return rate * 180.0 / math.pi
+    return Q * math.sin(roll) / cos_pitch + R * math.cos(roll) / cos_pitch
 
 
 # -- Predicates -----------------------------------------------------------
