@@ -15,6 +15,14 @@ name: BK Radio Stack
 size: [644, 780]
 background_color: [0.05, 0.05, 0.05]
 
+# Each panel that runs simultaneously needs its own listen port.
+# X-Plane sends RREF data back to whichever port subscribed; two panels
+# can both subscribe on different ports and receive data independently.
+# config.yaml holds the shared X-Plane host/port/name; only listen_port
+# varies per panel.
+udp:
+  listen_port: 49009
+
 instruments:
   - file: ../instruments/bk_navcomm_1.yaml
     position: [35, 670]

@@ -240,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
 
     panel = load_panel_or_instrument(args.yaml_path)
 
+    # Panel YAML udp.listen_port overrides config.yaml (CLI still wins).
+    if panel.udp_listen_port is not None and args.listen is None:
+        listen_port = panel.udp_listen_port
+
+    udp: UDPDataSource | None = None
     if args.test:
         data_source = TestDataSource()
         window = PanelWindow(
@@ -262,7 +267,18 @@ def main(argv: list[str] | None = None) -> int:
             on_shutdown=udp.quit,
         )
 
-    arcade.run()
+    try:
+        arcade.run()
+    finally:
+        # Ensure sockets are always released — covers Ctrl+C, terminal kill,
+        # and any path that doesn't go through on_close() (e.g. KeyboardInterrupt
+        # propagating out of arcade.run before the window dispatches on_close).
+        if udp is not None:
+            try:
+                udp.quit()
+            except Exception:
+                pass
+
     return 0
 
 

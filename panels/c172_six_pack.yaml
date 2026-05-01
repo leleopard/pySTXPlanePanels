@@ -18,6 +18,9 @@ name: C172 Six-Pack
 size: [960, 920]
 background_color: [0, 0, 0]
 
+udp:
+  listen_port: 49008
+
 instruments:
   # Top row
   - file: ../instruments/c172_airspeed.yaml
