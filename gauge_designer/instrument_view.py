@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QWidget, QSplitter, QListWidget, QTreeWidget, QTreeWidgetItem,
+    QWidget, QSplitter, QListWidget,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem,
 )
@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
+from gauge_designer.properties_form import PropertiesForm
 
 
 # ── Eye icon drawing ─────────────────────────────────────────────────────────
@@ -73,64 +74,6 @@ class _EyeDelegate(QStyledItemDelegate):
         return super().editorEvent(event, model, option, index)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _coerce(text: str):
-    """bool > int > float > str, matching how PyYAML round-trips values."""
-    if text.lower() == "true":
-        return True
-    if text.lower() == "false":
-        return False
-    try:
-        if "." not in text and "e" not in text.lower():
-            return int(text)
-        return float(text)
-    except ValueError:
-        return text
-
-
-def _item_key_path(item: QTreeWidgetItem) -> list:
-    """Return key/index path from the component-root to this item."""
-    path = []
-    while item is not None:
-        key = item.text(0)
-        if key.startswith("[") and key.endswith("]"):
-            path.append(int(key[1:-1]))
-        else:
-            path.append(key)
-        item = item.parent()
-    path.reverse()
-    return path
-
-
-def _set_nested(data, path: list, value):
-    for key in path[:-1]:
-        data = data[key]
-    data[path[-1]] = value
-
-
-def _populate_tree(parent, data, editable: bool = True):
-    """Recursively build tree rows from a dict, list, or scalar."""
-    if isinstance(data, dict):
-        for key, value in data.items():
-            if isinstance(value, (dict, list)):
-                node = QTreeWidgetItem(parent, [str(key), ""])
-                _populate_tree(node, value, editable)
-            else:
-                item = QTreeWidgetItem(parent, [str(key), str(value)])
-                if editable:
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-    elif isinstance(data, list):
-        for i, elem in enumerate(data):
-            if isinstance(elem, (dict, list)):
-                node = QTreeWidgetItem(parent, [f"[{i}]", ""])
-                _populate_tree(node, elem, editable)
-            else:
-                item = QTreeWidgetItem(parent, [f"[{i}]", str(elem)])
-                if editable:
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-
-
 # ── Main widget ───────────────────────────────────────────────────────────────
 
 class InstrumentView(QWidget):
@@ -167,17 +110,14 @@ class InstrumentView(QWidget):
         btn_bar.addStretch()
         left_layout.addLayout(btn_bar)
 
-        # ── Pane 2: property tree ────────────────────────────────────────
+        # ── Pane 2: properties form ──────────────────────────────────────
         mid = QWidget()
         mid_layout = QVBoxLayout(mid)
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.addWidget(QLabel("Properties"))
-        self._tree = QTreeWidget()
-        self._tree.setColumnCount(2)
-        self._tree.setHeaderLabels(["Key", "Value"])
-        self._tree.setColumnWidth(0, 160)
-        self._tree.itemChanged.connect(self._on_item_changed)
-        mid_layout.addWidget(self._tree)
+        self._form = PropertiesForm()
+        self._form.changed.connect(self._on_form_changed)
+        mid_layout.addWidget(self._form)
 
         # ── Pane 3: canvas preview ───────────────────────────────────────
         right = QWidget()
@@ -194,7 +134,7 @@ class InstrumentView(QWidget):
         splitter.addWidget(left)
         splitter.addWidget(mid)
         splitter.addWidget(right)
-        splitter.setSizes([180, 280, 360])
+        splitter.setSizes([180, 320, 360])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -206,16 +146,14 @@ class InstrumentView(QWidget):
         self._loading = True
         self._hidden = set()
         self._list.clear()
-        self._tree.blockSignals(True)
-        self._tree.clear()
-        self._tree.blockSignals(False)
+        self._form.clear()
         self._components = instrument_data.get("components", [])
         for comp in self._components:
-            item = self._list.item(self._list.count())  # not yet added
             self._list.addItem(comp.get("name", "(unnamed)"))
             self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
         self._loading = False
         yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
+        self._form.set_yaml_dir(yaml_dir)
         self._canvas.load(instrument_data, yaml_dir)
         self._canvas.set_hidden(set())
         if self._components:
@@ -225,9 +163,7 @@ class InstrumentView(QWidget):
         self._loading = True
         self._hidden = set()
         self._list.clear()
-        self._tree.blockSignals(True)
-        self._tree.clear()
-        self._tree.blockSignals(False)
+        self._form.clear()
         self._components = []
         self._loading = False
         self._canvas.clear()
@@ -247,40 +183,31 @@ class InstrumentView(QWidget):
             self._hidden.add(name)
         self._canvas.set_hidden(self._hidden.copy())
 
-    # ── Tree editing ──────────────────────────────────────────────────────
+    # ── Row selection ─────────────────────────────────────────────────────
 
     def _on_row_changed(self, row: int):
-        self._tree.blockSignals(True)
-        self._tree.clear()
         name = None
         if 0 <= row < len(self._components):
             comp = self._components[row]
             name = comp.get("name")
-            for key, value in comp.items():
-                if isinstance(value, (dict, list)):
-                    node = QTreeWidgetItem(self._tree, [key, ""])
-                    _populate_tree(node, value, editable=True)
-                    node.setExpanded(True)
-                else:
-                    item = QTreeWidgetItem(self._tree, [key, str(value)])
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-        self._tree.blockSignals(False)
+            self._form.load(comp)
+        else:
+            self._form.clear()
         self._canvas.set_selected(name)
 
-    def _on_item_changed(self, item: QTreeWidgetItem, column: int):
-        if column != 1 or self._loading:
-            return
+    # ── Form change callback ──────────────────────────────────────────────
+
+    def _on_form_changed(self):
         row = self._list.currentRow()
         if row < 0 or row >= len(self._components):
             return
-        path = _item_key_path(item)
-        value = _coerce(item.text(1))
-        try:
-            _set_nested(self._components[row], path, value)
-        except (KeyError, IndexError, TypeError):
-            return
-        if path == ["name"]:
-            self._list.currentItem().setText(str(value))
+        updated = self._form.get_data()
+        # update in-place so canvas references stay valid
+        self._components[row].clear()
+        self._components[row].update(updated)
+        new_name = updated.get("name", "")
+        if self._list.item(row) and self._list.item(row).text() != new_name:
+            self._list.item(row).setText(new_name)
         self.changed.emit()
 
     # ── Canvas callbacks ──────────────────────────────────────────────────
@@ -293,7 +220,13 @@ class InstrumentView(QWidget):
                 break
 
     def _on_canvas_moved(self, name: str, x: int, y: int):
-        self._on_row_changed(self._list.currentRow())
+        row = self._list.currentRow()
+        if 0 <= row < len(self._components):
+            comp = self._components[row]
+            if comp.get("name") == name:
+                self._loading = True
+                self._form.load(comp)
+                self._loading = False
         self.changed.emit()
 
     # ── List toolbar ──────────────────────────────────────────────────────
