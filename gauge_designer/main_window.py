@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
         self._instrument_data = data
         self._dirty = False
         self._view.load(data, path)
-        self._preview.set_yaml(path)
+        self._preview.set_yaml(path, data_provider=lambda: self._instrument_data)
         self._save_act.setEnabled(True)
         self._update_title()
 
@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
         if path:
             self._write(path)
             self._current_path = path
-            self._preview.set_yaml(path)
+            self._preview.set_yaml(path, data_provider=lambda: self._instrument_data)
             self._push_recent(path)
 
     def _write(self, path: str):
