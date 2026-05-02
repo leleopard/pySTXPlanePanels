@@ -1,20 +1,55 @@
-"""PIL-based static sprite compositor — renders an instrument YAML as a QPixmap.
+"""PIL-based sprite compositor with click-to-select and drag-to-reposition.
 
 Sprites are composited at their nominal positions with no rotation or translation
-applied (datarefs are unavailable at design time). Visibility flags are ignored so
-all components are always visible. The selected component is outlined in yellow.
+applied. Visibility flags are ignored so all components are always visible.
+The selected component is outlined in yellow.
+
+Interaction:
+  - Left-click a sprite  → selects it (component_selected signal)
+  - Left-drag a sprite   → repositions it live; component_moved emitted on release
+  - Click empty space    → no action
 """
 
 import io
 from pathlib import Path
 
 from PIL import Image, ImageDraw
-from PySide6.QtWidgets import QWidget, QScrollArea, QLabel, QVBoxLayout
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap, QPainter
+
+
+class _CanvasSurface(QWidget):
+    """Inner widget that owns the pixmap and handles mouse events."""
+
+    def __init__(self, canvas: "InstrumentCanvas", parent=None):
+        super().__init__(parent)
+        self._canvas = canvas
+        self._pixmap = QPixmap()
+
+    def set_pixmap(self, pixmap: QPixmap):
+        self._pixmap = pixmap
+        self.resize(pixmap.size() if not pixmap.isNull() else self.size())
+        self.update()
+
+    def paintEvent(self, _event):
+        if not self._pixmap.isNull():
+            QPainter(self).drawPixmap(0, 0, self._pixmap)
+
+    def mousePressEvent(self, event):
+        self._canvas._on_press(event)
+
+    def mouseMoveEvent(self, event):
+        self._canvas._on_move(event)
+
+    def mouseReleaseEvent(self, event):
+        self._canvas._on_release(event)
 
 
 class InstrumentCanvas(QWidget):
+    component_selected = Signal(str)        # name of clicked component
+    component_moved = Signal(str, int, int)  # name, new_x, new_y  (on drag release)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._data: dict = {}
@@ -22,11 +57,15 @@ class InstrumentCanvas(QWidget):
         self._selected_name: str | None = None
         self._atlas_cache: dict[str, Image.Image] = {}
 
-        self._img_label = QLabel()
-        self._img_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        # drag state
+        self._drag_name: str | None = None
+        self._drag_start: tuple[float, float] | None = None
+        self._drag_orig: list[int] | None = None
+
+        self._surface = _CanvasSurface(self)
 
         scroll = QScrollArea()
-        scroll.setWidget(self._img_label)
+        scroll.setWidget(self._surface)
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
 
@@ -54,17 +93,82 @@ class InstrumentCanvas(QWidget):
         self._data = {}
         self._selected_name = None
         self._atlas_cache.clear()
-        self._img_label.setPixmap(QPixmap())
+        self._drag_name = None
+        self._surface.set_pixmap(QPixmap())
+
+    # ── Mouse handling ────────────────────────────────────────────────────
+
+    def _on_press(self, event):
+        if event.button() != Qt.LeftButton:
+            return
+        cx, cy = event.position().x(), event.position().y()
+        name = self._hit_test(int(cx), int(cy))
+        if name:
+            self._drag_name = name
+            self._drag_start = (cx, cy)
+            comp = self._find_comp(name)
+            pos = comp.get("position", [0, 0]) if comp else [0, 0]
+            self._drag_orig = [int(pos[0]), int(pos[1])]
+            self._surface.setCursor(Qt.SizeAllCursor)
+            self.component_selected.emit(name)
+        else:
+            self._drag_name = None
+
+    def _on_move(self, event):
+        if not (event.buttons() & Qt.LeftButton) or not self._drag_name:
+            return
+        p = event.position()
+        dx = p.x() - self._drag_start[0]
+        dy = p.y() - self._drag_start[1]
+        new_x = int(round(self._drag_orig[0] + dx))
+        new_y = int(round(self._drag_orig[1] - dy))  # canvas y-down → YAML y-up
+        comp = self._find_comp(self._drag_name)
+        if comp is not None:
+            comp["position"] = [new_x, new_y]
+            self._render()  # live preview during drag
+
+    def _on_release(self, event):
+        if event.button() != Qt.LeftButton or not self._drag_name:
+            return
+        self._surface.unsetCursor()
+        comp = self._find_comp(self._drag_name)
+        if comp is not None:
+            x, y = comp.get("position", [0, 0])
+            self.component_moved.emit(self._drag_name, int(x), int(y))
+        self._drag_name = None
+        self._drag_start = None
+        self._drag_orig = None
+
+    # ── Hit testing ───────────────────────────────────────────────────────
+
+    def _hit_test(self, cx: int, cy: int) -> str | None:
+        """Return name of topmost sprite at canvas point (cx, cy), or None."""
+        w, h = self._data.get("size", [310, 310])
+        for comp in reversed(self._data.get("components", [])):
+            if comp.get("type") != "ImagePanel":
+                continue
+            try:
+                _sprite, px, py = self._crop_sprite(comp, w, h)
+                cw, ch = comp.get("cliprect", [100, 100])
+                if px <= cx < px + cw and py <= cy < py + ch:
+                    return comp.get("name")
+            except Exception:
+                continue
+        return None
+
+    def _find_comp(self, name: str) -> dict | None:
+        for comp in self._data.get("components", []):
+            if comp.get("name") == name:
+                return comp
+        return None
 
     # ── Rendering ────────────────────────────────────────────────────────
 
     def _render(self):
         if not self._data:
-            self._img_label.setPixmap(QPixmap())
+            self._surface.set_pixmap(QPixmap())
             return
-        pixmap = self._composite()
-        self._img_label.setPixmap(pixmap)
-        self._img_label.resize(pixmap.size())
+        self._surface.set_pixmap(self._composite())
 
     def _composite(self) -> QPixmap:
         w, h = self._data.get("size", [310, 310])
@@ -79,7 +183,6 @@ class InstrumentCanvas(QWidget):
             except Exception:
                 continue
 
-        # Yellow outline for the selected component drawn on top
         if self._selected_name:
             draw = ImageDraw.Draw(composite)
             for comp in self._data.get("components", []):
@@ -97,12 +200,11 @@ class InstrumentCanvas(QWidget):
                     except Exception:
                         pass
                 else:
-                    # Non-sprite: draw a crosshair at position
                     pos = comp.get("position", [w // 2, h // 2])
-                    cx, cy_up = int(pos[0]), int(pos[1])
-                    cy = h - cy_up
-                    draw.line([(cx - 12, cy), (cx + 12, cy)], fill=(255, 220, 0, 255), width=2)
-                    draw.line([(cx, cy - 12), (cx, cy + 12)], fill=(255, 220, 0, 255), width=2)
+                    cx_p, cy_up = int(pos[0]), int(pos[1])
+                    cy_p = h - cy_up
+                    draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)], fill=(255, 220, 0, 255), width=2)
+                    draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)], fill=(255, 220, 0, 255), width=2)
                 break
 
         buf = io.BytesIO()
@@ -123,8 +225,6 @@ class InstrumentCanvas(QWidget):
         px, py = comp.get("position", [0, 0])
 
         sprite = atlas.crop((ox, oy, ox + cw, oy + ch))
-
-        # Convert from YAML centre+y-up coords to PIL top-left+y-down
         paste_x = int(round(px - cw / 2))
         paste_y = int(round((canvas_h - py) - ch / 2))
 

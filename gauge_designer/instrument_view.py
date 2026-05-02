@@ -116,6 +116,8 @@ class InstrumentView(QWidget):
         right_layout.addWidget(self._canvas)
 
         self.changed.connect(self._canvas.refresh)
+        self._canvas.component_selected.connect(self._on_canvas_selected)
+        self._canvas.component_moved.connect(self._on_canvas_moved)
 
         splitter.addWidget(left)
         splitter.addWidget(mid)
@@ -229,6 +231,18 @@ class InstrumentView(QWidget):
         self._components.append(new_comp)
         self._list.addItem(new_comp["name"])
         self._list.setCurrentRow(len(self._components) - 1)
+        self.changed.emit()
+
+    def _on_canvas_selected(self, name: str):
+        for i, comp in enumerate(self._components):
+            if comp.get("name") == name:
+                if self._list.currentRow() != i:
+                    self._list.setCurrentRow(i)  # triggers _on_row_changed
+                break
+
+    def _on_canvas_moved(self, name: str, x: int, y: int):
+        # Data already mutated by drag; rebuild tree to show updated position
+        self._on_row_changed(self._list.currentRow())
         self.changed.emit()
 
     def _remove_component(self):
