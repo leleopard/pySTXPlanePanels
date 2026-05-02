@@ -3,11 +3,77 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
+    QStyledItemDelegate, QStyleOptionViewItem,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
+from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
 
+
+# ── Eye icon drawing ─────────────────────────────────────────────────────────
+
+def _draw_eye(painter: QPainter, rect: QRect, visible: bool):
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing)
+
+    fg = QColor(180, 180, 180) if visible else QColor(90, 90, 90)
+    painter.setPen(QPen(fg, 1.5))
+    painter.setBrush(Qt.NoBrush)
+
+    cx = rect.center().x()
+    cy = rect.center().y()
+    ew = rect.width() - 4
+    eh = max(rect.height() * 5 // 12, 5)
+
+    painter.drawEllipse(QRect(cx - ew // 2, cy - eh // 2, ew, eh))
+
+    pr = max(eh // 3, 2)
+    painter.setBrush(QBrush(fg))
+    painter.drawEllipse(QPoint(cx, cy), pr, pr)
+
+    if not visible:
+        painter.setPen(QPen(QColor(200, 60, 60), 1.5))
+        painter.drawLine(rect.left() + 3, rect.bottom() - 2,
+                         rect.right() - 3, rect.top() + 2)
+
+    painter.restore()
+
+
+class _EyeDelegate(QStyledItemDelegate):
+    """Draws an eye icon on the right of each list item; click toggles visibility."""
+
+    visibility_toggled = Signal(int, bool)  # row, new visible state
+    EYE_W = 22
+
+    def paint(self, painter, option, index):
+        text_opt = QStyleOptionViewItem(option)
+        text_opt.rect = option.rect.adjusted(0, 0, -(self.EYE_W + 6), 0)
+        super().paint(painter, text_opt, index)
+        vis = index.data(Qt.UserRole)
+        _draw_eye(painter, self._eye_rect(option.rect),
+                  vis if vis is not None else True)
+
+    def _eye_rect(self, item_rect: QRect) -> QRect:
+        sz = self.EYE_W
+        return QRect(
+            item_rect.right() - sz - 4,
+            item_rect.top() + (item_rect.height() - sz) // 2,
+            sz, sz,
+        )
+
+    def editorEvent(self, event, model, option, index):
+        if event.type() == QEvent.Type.MouseButtonRelease:
+            if self._eye_rect(option.rect).contains(event.position().toPoint()):
+                current = index.data(Qt.UserRole)
+                new_val = not (current if current is not None else True)
+                model.setData(index, new_val, Qt.UserRole)
+                self.visibility_toggled.emit(index.row(), new_val)
+                return True
+        return super().editorEvent(event, model, option, index)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _coerce(text: str):
     """bool > int > float > str, matching how PyYAML round-trips values."""
@@ -65,12 +131,15 @@ def _populate_tree(parent, data, editable: bool = True):
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
 
 
+# ── Main widget ───────────────────────────────────────────────────────────────
+
 class InstrumentView(QWidget):
     changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._components: list[dict] = []
+        self._hidden: set[str] = set()
         self._loading = False
 
         splitter = QSplitter(Qt.Horizontal)
@@ -82,6 +151,9 @@ class InstrumentView(QWidget):
         left_layout.addWidget(QLabel("Components"))
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
+        self._delegate = _EyeDelegate(self._list)
+        self._delegate.visibility_toggled.connect(self._on_visibility_toggled)
+        self._list.setItemDelegate(self._delegate)
         left_layout.addWidget(self._list)
 
         btn_bar = QHBoxLayout()
@@ -132,21 +204,26 @@ class InstrumentView(QWidget):
 
     def load(self, instrument_data: dict, yaml_path: str = ""):
         self._loading = True
+        self._hidden = set()
         self._list.clear()
         self._tree.blockSignals(True)
         self._tree.clear()
         self._tree.blockSignals(False)
         self._components = instrument_data.get("components", [])
         for comp in self._components:
+            item = self._list.item(self._list.count())  # not yet added
             self._list.addItem(comp.get("name", "(unnamed)"))
+            self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
         self._loading = False
         yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
         self._canvas.load(instrument_data, yaml_dir)
+        self._canvas.set_hidden(set())
         if self._components:
             self._list.setCurrentRow(0)
 
     def clear(self):
         self._loading = True
+        self._hidden = set()
         self._list.clear()
         self._tree.blockSignals(True)
         self._tree.clear()
@@ -157,6 +234,18 @@ class InstrumentView(QWidget):
 
     def get_components(self) -> list[dict]:
         return self._components
+
+    # ── Visibility toggle ─────────────────────────────────────────────────
+
+    def _on_visibility_toggled(self, row: int, visible: bool):
+        if row < 0 or row >= len(self._components):
+            return
+        name = self._components[row].get("name", "")
+        if visible:
+            self._hidden.discard(name)
+        else:
+            self._hidden.add(name)
+        self._canvas.set_hidden(self._hidden.copy())
 
     # ── Tree editing ──────────────────────────────────────────────────────
 
@@ -192,6 +281,19 @@ class InstrumentView(QWidget):
             return
         if path == ["name"]:
             self._list.currentItem().setText(str(value))
+        self.changed.emit()
+
+    # ── Canvas callbacks ──────────────────────────────────────────────────
+
+    def _on_canvas_selected(self, name: str):
+        for i, comp in enumerate(self._components):
+            if comp.get("name") == name:
+                if self._list.currentRow() != i:
+                    self._list.setCurrentRow(i)
+                break
+
+    def _on_canvas_moved(self, name: str, x: int, y: int):
+        self._on_row_changed(self._list.currentRow())
         self.changed.emit()
 
     # ── List toolbar ──────────────────────────────────────────────────────
@@ -230,19 +332,8 @@ class InstrumentView(QWidget):
         }
         self._components.append(new_comp)
         self._list.addItem(new_comp["name"])
+        self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
         self._list.setCurrentRow(len(self._components) - 1)
-        self.changed.emit()
-
-    def _on_canvas_selected(self, name: str):
-        for i, comp in enumerate(self._components):
-            if comp.get("name") == name:
-                if self._list.currentRow() != i:
-                    self._list.setCurrentRow(i)  # triggers _on_row_changed
-                break
-
-    def _on_canvas_moved(self, name: str, x: int, y: int):
-        # Data already mutated by drag; rebuild tree to show updated position
-        self._on_row_changed(self._list.currentRow())
         self.changed.emit()
 
     def _remove_component(self):
@@ -256,6 +347,7 @@ class InstrumentView(QWidget):
         )
         if reply != QMessageBox.Yes:
             return
+        self._hidden.discard(name)
         self._components.pop(row)
         self._list.takeItem(row)
         self.changed.emit()

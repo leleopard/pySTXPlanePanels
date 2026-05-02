@@ -57,6 +57,8 @@ class InstrumentCanvas(QWidget):
         self._selected_name: str | None = None
         self._atlas_cache: dict[str, Image.Image] = {}
 
+        self._hidden: set[str] = set()
+
         # drag state
         self._drag_name: str | None = None
         self._drag_start: tuple[float, float] | None = None
@@ -86,12 +88,17 @@ class InstrumentCanvas(QWidget):
             self._selected_name = name
             self._render()
 
+    def set_hidden(self, hidden: set[str]):
+        self._hidden = hidden
+        self._render()
+
     def refresh(self):
         self._render()
 
     def clear(self):
         self._data = {}
         self._selected_name = None
+        self._hidden = set()
         self._atlas_cache.clear()
         self._drag_name = None
         self._surface.set_pixmap(QPixmap())
@@ -154,6 +161,8 @@ class InstrumentCanvas(QWidget):
         for comp in reversed(self._data.get("components", [])):  # topmost first
             if comp.get("type") != "ImagePanel":
                 continue
+            if comp.get("name") in self._hidden:
+                continue
             try:
                 _sprite, px, py = self._crop_sprite(comp, w, h)
                 cw, ch = comp.get("cliprect", [100, 100])
@@ -183,6 +192,8 @@ class InstrumentCanvas(QWidget):
 
         for comp in self._data.get("components", []):
             if comp.get("type") != "ImagePanel":
+                continue
+            if comp.get("name") in self._hidden:
                 continue
             try:
                 sprite, px, py = self._crop_sprite(comp, w, h)
