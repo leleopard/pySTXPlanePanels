@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal
+
+from gauge_designer.canvas import InstrumentCanvas
 
 
 def _coerce(text: str):
@@ -71,7 +75,7 @@ class InstrumentView(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
 
-        # ── Left: component list + toolbar ──────────────────────────────
+        # ── Pane 1: component list + toolbar ────────────────────────────
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -91,21 +95,32 @@ class InstrumentView(QWidget):
         btn_bar.addStretch()
         left_layout.addLayout(btn_bar)
 
-        # ── Right: property tree ─────────────────────────────────────────
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(QLabel("Properties"))
+        # ── Pane 2: property tree ────────────────────────────────────────
+        mid = QWidget()
+        mid_layout = QVBoxLayout(mid)
+        mid_layout.setContentsMargins(0, 0, 0, 0)
+        mid_layout.addWidget(QLabel("Properties"))
         self._tree = QTreeWidget()
         self._tree.setColumnCount(2)
         self._tree.setHeaderLabels(["Key", "Value"])
         self._tree.setColumnWidth(0, 160)
         self._tree.itemChanged.connect(self._on_item_changed)
-        right_layout.addWidget(self._tree)
+        mid_layout.addWidget(self._tree)
+
+        # ── Pane 3: canvas preview ───────────────────────────────────────
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(QLabel("Preview"))
+        self._canvas = InstrumentCanvas()
+        right_layout.addWidget(self._canvas)
+
+        self.changed.connect(self._canvas.refresh)
 
         splitter.addWidget(left)
+        splitter.addWidget(mid)
         splitter.addWidget(right)
-        splitter.setSizes([200, 400])
+        splitter.setSizes([180, 280, 360])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -113,7 +128,7 @@ class InstrumentView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────
 
-    def load(self, instrument_data: dict):
+    def load(self, instrument_data: dict, yaml_path: str = ""):
         self._loading = True
         self._list.clear()
         self._tree.blockSignals(True)
@@ -123,6 +138,8 @@ class InstrumentView(QWidget):
         for comp in self._components:
             self._list.addItem(comp.get("name", "(unnamed)"))
         self._loading = False
+        yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
+        self._canvas.load(instrument_data, yaml_dir)
         if self._components:
             self._list.setCurrentRow(0)
 
@@ -134,6 +151,7 @@ class InstrumentView(QWidget):
         self._tree.blockSignals(False)
         self._components = []
         self._loading = False
+        self._canvas.clear()
 
     def get_components(self) -> list[dict]:
         return self._components
@@ -143,8 +161,10 @@ class InstrumentView(QWidget):
     def _on_row_changed(self, row: int):
         self._tree.blockSignals(True)
         self._tree.clear()
+        name = None
         if 0 <= row < len(self._components):
             comp = self._components[row]
+            name = comp.get("name")
             for key, value in comp.items():
                 if isinstance(value, (dict, list)):
                     node = QTreeWidgetItem(self._tree, [key, ""])
@@ -154,6 +174,7 @@ class InstrumentView(QWidget):
                     item = QTreeWidgetItem(self._tree, [key, str(value)])
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
         self._tree.blockSignals(False)
+        self._canvas.set_selected(name)
 
     def _on_item_changed(self, item: QTreeWidgetItem, column: int):
         if column != 1 or self._loading:

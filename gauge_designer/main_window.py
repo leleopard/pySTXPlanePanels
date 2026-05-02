@@ -17,7 +17,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Gauge Designer")
-        self.resize(720, 560)
+        self.resize(1060, 620)
 
         self._settings = QSettings()
         self._current_path: str | None = None
@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
         self._current_path = path
         self._instrument_data = data
         self._dirty = False
-        self._view.load(data)
+        self._view.load(data, path)
         self._preview.set_yaml(path)
         self._save_act.setEnabled(True)
         self._update_title()
