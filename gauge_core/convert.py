@@ -122,6 +122,25 @@ def true_if_over_2(value: float, _get: GetData) -> bool:
     return value > 2.0
 
 
+# -- Fuel / engine conversion --------------------------------------------
+
+def convert_lbs_to_gallons(value: float, _get: GetData) -> float:
+    """Convert fuel weight in lbs to US gallons (avgas ≈ 6 lbs/gal)."""
+    return value / 6.0
+
+
+def convert_suction(value: float, _get: GetData) -> float:
+    """Scale vacuum suction reading (matches original pyXPPanels convertSuction)."""
+    return value * 2.8
+
+
+# -- VOR / NAV predicates ------------------------------------------------
+
+def nav_gsflg_visible(value: float, _get: GetData) -> bool:
+    """GS flag visible when GS is not valid (original: value != 10)."""
+    return int(value) != 10
+
+
 # -- Identity (default) --------------------------------------------------
 
 def identity(value: float, _get: GetData) -> float:
@@ -148,6 +167,9 @@ for _name, _func in {
     "true_if_equals_5": true_if_equals_5,
     "true_if_over_1": true_if_over_1,
     "true_if_over_2": true_if_over_2,
+    "convert_lbs_to_gallons": convert_lbs_to_gallons,
+    "convert_suction": convert_suction,
+    "nav_gsflg_visible": nav_gsflg_visible,
     "identity": identity,
 }.items():
     register_convert(_name, _func)

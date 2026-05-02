@@ -1,28 +1,35 @@
-# C172 Six-Pack Panel — composes the seven C172 instruments into a
-# single Arcade window.
+# C172 Full Instrument Panel — six-pack + engine gauges + nav indicators.
 #
-# Position convention: each instrument's `position` is the panel coord
-# of the instrument's bottom-left corner. The original pyXPPanels layout
-# used a 300-px grid combined with a 0.97 zoom on the 310-px bezels;
-# until per-instrument scale is implemented we use a 310-px grid so
-# bezels don't overlap. ASI stays anchored at the original centre
-# (170, 670); the other instruments shift right/down by up to 20 px
-# from the historical positions.
+# Layout (y-up, bottom-left origin):
+#
+#   y 515–825  row 0: ASI  (15)  AH   (325)  ALT  (635)          ← six-pack top row
+#   y 205–515  row 1: TC   (15)  DG   (325)  VSI  (635)          ← six-pack bottom row
+#   y   5–205  row 2: Oil  (10)  A/V (210)  Fuel (410)  FF (610) ← small gauges
+#              RPM  (830)  — aligns with row 2, taller (280px)
+#   y 827–893  Annunciator (412) — above six-pack top row
+#
+#   Right column (x ≥ 945):
+#     VOR1   (945, 525)  310×310
+#     VOR2   (945, 235)  310×310
+#     ADF    (1141,  5)  310×310
+#     Compass(1185, 580) 310×310  (simplified rotating-disc; full
+#                                  scrolling-tape compass deferred —
+#                                  requires UV texture translation)
 #
 # Six-pack grid centres (310 spacing):
-#   row 0 (y=670):  ASI (170)   AH (480)    ALT (790)
-#   row 1 (y=360):  TC  (170)   DG  (480)   VSI (790)
-# Annunciator centre: (635, 860) — recentred between AH and ALT.
+#   row 0 (y=670):  ASI (170)   AH (480)   ALT (790)
+#   row 1 (y=360):  TC  (170)   DG (480)   VSI (790)
+# Annunciator centre: (635, 860)
 
 name: C172 Six-Pack
-size: [960, 920]
+size: [1540, 920]
 background_color: [0, 0, 0]
 
 udp:
   listen_port: 49008
 
 instruments:
-  # Top row
+  # ── Six-pack top row ──────────────────────────────────────────────────────
   - file: ../instruments/c172_airspeed.yaml
     position: [15, 515]
   - file: ../instruments/c172_artificial_horizon.yaml
@@ -30,7 +37,7 @@ instruments:
   - file: ../instruments/c172_altimeter.yaml
     position: [635, 515]
 
-  # Bottom row
+  # ── Six-pack bottom row ───────────────────────────────────────────────────
   - file: ../instruments/c172_turn_coordinator.yaml
     position: [15, 205]
   - file: ../instruments/c172_directional_gyro.yaml
@@ -38,6 +45,32 @@ instruments:
   - file: ../instruments/c172_vsi.yaml
     position: [635, 205]
 
-  # Annunciator above the six-pack, centred on the panel's x-axis
+  # ── Annunciator ───────────────────────────────────────────────────────────
   - file: ../instruments/c172_annunciator.yaml
     position: [412, 827]
+
+  # ── Engine / system gauges (small 200×200) ────────────────────────────────
+  - file: ../instruments/c172_oil_temp_pressure.yaml
+    position: [10, 5]
+  - file: ../instruments/c172_amp_vac.yaml
+    position: [210, 5]
+  - file: ../instruments/c172_fuel_quantity.yaml
+    position: [410, 5]
+  - file: ../instruments/c172_fuel_flow.yaml
+    position: [610, 5]
+
+  # ── RPM tachometer (280×280 content, 310×310 with bezel) ─────────────────
+  - file: ../instruments/c172_rpm.yaml
+    position: [830, 5]
+
+  # ── Navigation indicators ─────────────────────────────────────────────────
+  - file: ../instruments/c172_vor1.yaml
+    position: [945, 525]
+  - file: ../instruments/c172_vor2.yaml
+    position: [945, 235]
+  - file: ../instruments/c172_adf_indicator.yaml
+    position: [1141, 5]
+
+  # ── Magnetic compass (simplified disc; full tape version deferred) ─────────
+  - file: ../instruments/c172_compass.yaml
+    position: [1185, 580]

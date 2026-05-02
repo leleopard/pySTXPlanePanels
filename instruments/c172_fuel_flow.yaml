@@ -1,0 +1,62 @@
+# C172 Fuel Flow / EGT gauge.
+# Dual-needle 200×200 gauge.
+# Right needle = fuel flow (lbs/hr → GPH via convert_lbs_to_gallons).
+# Left  needle = EGT exhaust gas temperature (deg C).
+# Atlas origins (PIL):
+#   background : opengl y=848  → PIL y=1000
+#   text label : opengl y=248  → PIL y=1600
+
+name: C172 Fuel Flow / EGT
+size: [200, 200]
+
+components:
+  - name: background
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    origin: [1800, 1000]
+    cliprect: [200, 200]
+    position: [100, 100]
+
+  - name: fuel_flow_needle
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    origin: [1800, 618]
+    cliprect: [110, 18]
+    position: [156, 104]
+    rotation:
+      dataref: sim/flightmodel2/engines/fuel_flow_actual_lbshr[0]
+      convert_function: convert_lbs_to_gallons
+      table:
+        - [2.81, -65.0]
+        - [4.0,  -57.0]
+        - [15.0,  17.0]
+        - [19.0,  55.0]
+        - [19.84, 63.0]
+
+  - name: egt_needle
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    origin: [1800, 600]
+    cliprect: [110, 18]
+    position: [44, 104]
+    rotation:
+      dataref: sim/cockpit2/engine/indicators/EGT_deg_c[0]
+      table:
+        - [0,    58.0]
+        - [100,  52.0]
+        - [1700, -49.0]
+        - [1900, -62.0]
+
+  - name: border
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    origin: [1800, 400]
+    cliprect: [200, 200]
+    position: [100, 100]
+
+  - name: side_text
+    type: ImagePanel
+    texture: ../assets/c172_text_standard6.png
+    origin: [1800, 1600]
+    cliprect: [200, 200]
+    position: [100, 100]
