@@ -102,17 +102,23 @@ class InstrumentCanvas(QWidget):
         if event.button() != Qt.LeftButton:
             return
         cx, cy = event.position().x(), event.position().y()
-        name = self._hit_test(int(cx), int(cy))
-        if name:
-            self._drag_name = name
-            self._drag_start = (cx, cy)
-            comp = self._find_comp(name)
-            pos = comp.get("position", [0, 0]) if comp else [0, 0]
-            self._drag_orig = [int(pos[0]), int(pos[1])]
-            self._surface.setCursor(Qt.SizeAllCursor)
-            self.component_selected.emit(name)
-        else:
+        hits = self._hits_at(int(cx), int(cy))
+        if not hits:
             self._drag_name = None
+            return
+        # If the current selection is already the topmost hit, cycle downward
+        if self._selected_name in hits:
+            idx = hits.index(self._selected_name)
+            name = hits[(idx + 1) % len(hits)]
+        else:
+            name = hits[0]  # topmost
+        self._drag_name = name
+        self._drag_start = (cx, cy)
+        comp = self._find_comp(name)
+        pos = comp.get("position", [0, 0]) if comp else [0, 0]
+        self._drag_orig = [int(pos[0]), int(pos[1])]
+        self._surface.setCursor(Qt.SizeAllCursor)
+        self.component_selected.emit(name)
 
     def _on_move(self, event):
         if not (event.buttons() & Qt.LeftButton) or not self._drag_name:
@@ -141,20 +147,21 @@ class InstrumentCanvas(QWidget):
 
     # ── Hit testing ───────────────────────────────────────────────────────
 
-    def _hit_test(self, cx: int, cy: int) -> str | None:
-        """Return name of topmost sprite at canvas point (cx, cy), or None."""
+    def _hits_at(self, cx: int, cy: int) -> list[str]:
+        """All sprites containing canvas point (cx, cy), topmost first."""
         w, h = self._data.get("size", [310, 310])
-        for comp in reversed(self._data.get("components", [])):
+        result = []
+        for comp in reversed(self._data.get("components", [])):  # topmost first
             if comp.get("type") != "ImagePanel":
                 continue
             try:
                 _sprite, px, py = self._crop_sprite(comp, w, h)
                 cw, ch = comp.get("cliprect", [100, 100])
                 if px <= cx < px + cw and py <= cy < py + ch:
-                    return comp.get("name")
+                    result.append(comp.get("name"))
             except Exception:
                 continue
-        return None
+        return result
 
     def _find_comp(self, name: str) -> dict | None:
         for comp in self._data.get("components", []):
