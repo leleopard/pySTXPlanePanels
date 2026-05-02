@@ -60,7 +60,7 @@ components:
     cliprect: [37, 31]
     position: [201, 182]
     visibility:
-      dataref: sim/cockpit2/radios/nav1_flag_from_to_pilot
+      dataref: sim/cockpit/radios/nav1_fromto
       predicate: true_if_equals_1
 
   - name: from_indicator
@@ -70,7 +70,7 @@ components:
     cliprect: [37, 31]
     position: [201, 128]
     visibility:
-      dataref: sim/cockpit2/radios/nav1_flag_from_to_pilot
+      dataref: sim/cockpit/radios/nav1_fromto
       predicate: true_if_equals_2
 
   - name: cdi_needle
@@ -80,7 +80,7 @@ components:
     cliprect: [9, 150]
     position: [155, 157]
     translation:
-      dataref: sim/cockpit2/radios/nav1_hdef_dots
+      dataref: sim/cockpit/radios/nav1_hdef_dot
       table:
         - [-2.5, -65.0]
         - [ 2.5,  65.0]
@@ -105,7 +105,7 @@ components:
     cliprect: [300, 300]
     position: [155, 155]
     rotation:
-      dataref: sim/cockpit2/radios/nav1_obs_deg_mag_pilot
+      dataref: sim/cockpit/radios/nav1_obs_degm
       table:
         - [-360, 360.0]
         - [ 360, -360.0]

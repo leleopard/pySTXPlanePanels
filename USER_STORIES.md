@@ -98,7 +98,16 @@ This file is the living changelog for the project. It is updated on every commit
 | C172-05 | As a user, `instruments/c172_artificial_horizon.yaml` renders a working artificial horizon. | 🚧 Code path complete; visual verification pending. |
 | C172-06 | As a user, `instruments/c172_turn_coordinator.yaml` renders a working turn coordinator. | 🚧 Code path complete; visual verification pending. |
 | C172-07 | As a user, `instruments/c172_annunciator.yaml` renders the warning lights panel. | 🚧 Code path complete; visual verification pending. |
-| C172-08 | As a user, `panels/c172_six_pack.yaml` composes the six instruments + annunciator into the Cessna panel layout. | 🚧 Code path complete; visual verification pending. |
+| C172-08 | As a user, `panels/c172_six_pack.yaml` composes all instruments into the Cessna panel layout (1540×920). | 🚧 Code path complete; visual verification pending. |
+| C172-09 | As a user, `instruments/c172_oil_temp_pressure.yaml` renders oil temperature and pressure gauges. | 🚧 Code path complete; calibration tables may need tuning. |
+| C172-10 | As a user, `instruments/c172_amp_vac.yaml` renders ammeter and vacuum/suction gauges. | 🚧 Code path complete; calibration tables may need tuning. |
+| C172-11 | As a user, `instruments/c172_fuel_quantity.yaml` renders left and right tank fuel levels. | 🚧 Code path complete; calibration tables may need tuning. |
+| C172-12 | As a user, `instruments/c172_fuel_flow.yaml` renders fuel flow and EGT gauges. | 🚧 Code path complete; calibration tables may need tuning. |
+| C172-13 | As a user, `instruments/c172_rpm.yaml` renders the tachometer. | 🚧 Code path complete; visual verification pending. |
+| C172-14 | As a user, `instruments/c172_vor1.yaml` renders VOR1 CDI with course needle, glideslope, TO/FROM, and OBS rose. | 🚧 Code path complete; datarefs corrected by user. |
+| C172-15 | As a user, `instruments/c172_vor2.yaml` renders VOR2 CDI (identical layout, nav2 datarefs). | 🚧 Code path complete; datarefs may need tuning. |
+| C172-16 | As a user, `instruments/c172_adf_indicator.yaml` renders an RMI-style ADF indicator with rotating compass card. | 🚧 Code path complete; visual verification pending. |
+| C172-17 | As a user, `instruments/c172_compass.yaml` renders a simplified rotating-disc magnetic compass. | 🚧 Simplified version (no scrolling tape); UV-tape version deferred. |
 
 ---
 
@@ -120,6 +129,22 @@ The original implementation mixed Arduino-input handling and a few Python-side s
 | RADIO-08 | As a developer, the Text component supports custom TTF fonts loaded from a `font_file` path so radio readouts render in the correct LCD-style typeface (e.g. DS-Digital). | ✅ |
 | RADIO-09 | As a developer, the convert-function registry includes `divideby100` so X-Plane's hundredths-of-MHz frequency datarefs render as 118.250 MHz. | ✅ |
 
+---
+
+## EPIC 8 — gauge_designer: Instrument Configuration GUI
+
+| ID | Story | Status |
+|----|-------|--------|
+| DESIGN-01 | As a user, I can launch `python -m gauge_designer` to open a PySide6 desktop app. | ✅ |
+| DESIGN-02 | As a user, I can open any instrument YAML (File→Open or recent files list) and see all components listed on the left. | ✅ |
+| DESIGN-03 | As a user, clicking a component shows its full property tree (with nested sub-dicts expanded) on the right. | ✅ |
+| DESIGN-04 | As a user, I can launch the Arcade preview of the current instrument in `--test` mode from a Preview button; the button disables while the window is open and re-enables when it closes. | ✅ |
+| DESIGN-05 | As a user, I can edit component properties (position, origin, cliprect, table values, dataref) directly in the property tree without hand-editing YAML. | 🔲 MVP-D2 |
+| DESIGN-06 | As a user, I can add and reorder components in the list; changes are saved back to the YAML file. | 🔲 MVP-D2 |
+| DESIGN-07 | As a user, a WYSIWYG canvas renders the instrument at-size so I can see sprite positions while editing. | 🔲 MVP-D3 |
+
+---
+
 ## Out of MVP1 (Backlog)
 
 These are tracked here for visibility but are not in scope for MVP1:
@@ -128,7 +153,6 @@ These are tracked here for visibility but are not in scope for MVP1:
 - Framebuffer-based rectangular clipping
 - Vector primitives (`Line`, `Polygon`, `Arc`) for jetliner glass cockpits (737, A320)
 - Frame-based animated images
-- Standalone `gauge_designer` Qt app (WYSIWYG editor)
 - Multi-panel / multi-monitor coordination
 - Mouse interaction / draggable windows
 
@@ -174,3 +198,5 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-05-01* — fix(c172): turn coordinator bank angle 57× too large. `sim/flightmodel/position/Q` and `R` arrive in deg/s via RREF; the original DATA group 16 sent rad/s and needed `* 180/π`. Removed that factor from `calculate_turn_rate` so output stays in deg/s.
 - *2026-05-01* — feat(config): `config.yaml` for X-Plane UDP settings. Runner auto-loads it from CWD; CLI flags override. Schema: `udp.listen_host/port`, `udp.xplane_host/port`, `udp.xplane_name`. Marks UDP-01 ✅.
 - *2026-04-29* — refactor(c172): migrate annunciator panel from legacy tuples to string datarefs. All 8 warning lights now use canonical X-Plane annunciator datarefs: `low_voltage` (shared alternator+battery), `fuel_quantity`, `parking_brake_ratio`, `oil_pressure_low[0]`, `oil_temperature_high[0]`, `low_vacuum`, `autopilot_disconnect`. No DATA-Output group config needed in X-Plane. Dataref assignments documented in YAML header comment. All C172 instruments now fully migrated to string datarefs.
+- *2026-05-02* — feat(c172): engine gauges, RPM, nav indicators, compass. Added 9 instruments to complete the full C172 panel: oil temp/pressure, ammeter/vacuum, fuel quantity, fuel flow/EGT, tachometer (RPM), VOR1 CDI, VOR2 CDI, ADF RMI, magnetic compass (simplified rotating-disc). Panel size expanded to 1540×920. New convert functions: `convert_lbs_to_gallons`, `convert_suction`, `nav_gsflg_visible`. Marks C172-09..C172-17 🚧.
+- *2026-05-02* — feat(designer): MVP-D1 gauge_designer PySide6 app. `python -m gauge_designer` opens a read-only instrument viewer: component list (left) + key/value property tree with nested expansion (right) + Preview button that launches the Arcade `--test` window via subprocess (button re-enables when window closes). File→Open YAML, recent-files menu (QSettings), status bar shows path + component count + size. Marks DESIGN-01..04 ✅.
