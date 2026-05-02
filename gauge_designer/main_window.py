@@ -2,9 +2,9 @@ import yaml
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QMainWindow, QFileDialog, QMessageBox, QVBoxLayout, QWidget,
+    QMainWindow, QFileDialog, QMessageBox,
 )
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction
 
 from gauge_designer.instrument_view import InstrumentView
@@ -26,27 +26,24 @@ class MainWindow(QMainWindow):
 
         self._view = InstrumentView()
         self._view.changed.connect(self._mark_dirty)
-        self._preview = PreviewBar()
+        self._preview = PreviewBar(self)
 
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self._view)
-        layout.addWidget(self._preview)
-        self.setCentralWidget(container)
+        self.setCentralWidget(self._view)
 
         self._build_menu()
+        self._build_toolbar()
         self.statusBar().showMessage("Open an instrument YAML to begin.")
+
+    # ── Menu ─────────────────────────────────────────────────────────────
 
     def _build_menu(self):
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
 
-        open_act = QAction("&Open…", self)
-        open_act.setShortcut("Ctrl+O")
-        open_act.triggered.connect(self._open_dialog)
-        file_menu.addAction(open_act)
+        self._open_act = QAction("&Open…", self)
+        self._open_act.setShortcut("Ctrl+O")
+        self._open_act.triggered.connect(self._open_dialog)
+        file_menu.addAction(self._open_act)
 
         self._recent_menu = file_menu.addMenu("Open &Recent")
         self._refresh_recent_menu()
@@ -70,6 +67,21 @@ class MainWindow(QMainWindow):
         quit_act.triggered.connect(self.close)
         file_menu.addAction(quit_act)
 
+    # ── Toolbar ───────────────────────────────────────────────────────────
+
+    def _build_toolbar(self):
+        tb = self.addToolBar("Tools")
+        tb.setMovable(False)
+        tb.setFloatable(False)
+        tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
+        tb.addAction(self._open_act)
+        tb.addAction(self._save_act)
+        tb.addSeparator()
+        tb.addWidget(self._preview.button)
+
+    # ── Recent files ──────────────────────────────────────────────────────
+
     def _refresh_recent_menu(self):
         self._recent_menu.clear()
         recent = self._settings.value("recentFiles", []) or []
@@ -81,6 +93,8 @@ class MainWindow(QMainWindow):
             act = QAction(path, self)
             act.triggered.connect(lambda checked=False, p=path: self._load(p))
             self._recent_menu.addAction(act)
+
+    # ── File operations ───────────────────────────────────────────────────
 
     def _open_dialog(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -155,7 +169,6 @@ class MainWindow(QMainWindow):
             self._push_recent(path)
 
     def _write(self, path: str):
-        # components list is already mutated in-place; sync reference just in case
         self._instrument_data["components"] = self._view.get_components()
         try:
             with open(path, "w", encoding="utf-8") as f:
