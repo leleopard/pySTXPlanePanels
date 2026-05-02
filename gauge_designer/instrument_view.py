@@ -202,12 +202,16 @@ class InstrumentView(QWidget):
         if row < 0 or row >= len(self._components):
             return
         updated = self._form.get_data()
+        old_name = self._components[row].get("name", "")
         # update in-place so canvas references stay valid
         self._components[row].clear()
         self._components[row].update(updated)
         new_name = updated.get("name", "")
         if self._list.item(row) and self._list.item(row).text() != new_name:
             self._list.item(row).setText(new_name)
+        # if name changed, _selected_name in canvas is stale — force sync
+        if old_name != new_name:
+            self._canvas.force_selected(new_name)
         self.changed.emit()
 
     # ── Canvas callbacks ──────────────────────────────────────────────────

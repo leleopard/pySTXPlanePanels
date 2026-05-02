@@ -1,13 +1,15 @@
-"""PIL-based sprite compositor with click-to-select and drag-to-reposition.
+"""PIL-based sprite compositor with click-to-select, drag-to-reposition,
+and Ctrl+wheel zoom.
 
-Sprites are composited at their nominal positions with no rotation or translation
-applied. Visibility flags are ignored so all components are always visible.
+Sprites are composited at their nominal positions with no rotation or
+translation applied.  Visibility flags are respected (hidden set).
 The selected component is outlined in yellow.
 
 Interaction:
-  - Left-click a sprite  → selects it (component_selected signal)
-  - Left-drag a sprite   → repositions it live; component_moved emitted on release
-  - Click empty space    → no action
+  - Left-click a sprite       → selects it (component_selected signal)
+  - Left-click cycling        → repeated clicks on overlapping sprites cycle
+  - Left-drag a sprite        → repositions it live; component_moved on release
+  - Ctrl + mouse-wheel        → zoom in/out (point under cursor stays fixed)
 """
 
 import io
@@ -20,7 +22,7 @@ from PySide6.QtGui import QPixmap, QPainter
 
 
 class _CanvasSurface(QWidget):
-    """Inner widget that owns the pixmap and handles mouse events."""
+    """Inner widget that owns the scaled pixmap and forwards input to InstrumentCanvas."""
 
     def __init__(self, canvas: "InstrumentCanvas", parent=None):
         super().__init__(parent)
@@ -45,6 +47,12 @@ class _CanvasSurface(QWidget):
     def mouseReleaseEvent(self, event):
         self._canvas._on_release(event)
 
+    def wheelEvent(self, event):
+        if event.modifiers() & Qt.ControlModifier:
+            self._canvas._on_wheel(event)
+        else:
+            event.ignore()  # let QScrollArea handle plain scroll
+
 
 class InstrumentCanvas(QWidget):
     component_selected = Signal(str)        # name of clicked component
@@ -56,24 +64,24 @@ class InstrumentCanvas(QWidget):
         self._yaml_dir: str = ""
         self._selected_name: str | None = None
         self._atlas_cache: dict[str, Image.Image] = {}
-
         self._hidden: set[str] = set()
+        self._zoom: float = 1.0
 
-        # drag state
+        # drag state (stored in unzoomed canvas coordinates)
         self._drag_name: str | None = None
         self._drag_start: tuple[float, float] | None = None
         self._drag_orig: list[int] | None = None
 
         self._surface = _CanvasSurface(self)
 
-        scroll = QScrollArea()
-        scroll.setWidget(self._surface)
-        scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignCenter)
+        self._scroll = QScrollArea()
+        self._scroll.setWidget(self._surface)
+        self._scroll.setWidgetResizable(False)
+        self._scroll.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(scroll)
+        layout.addWidget(self._scroll)
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -87,6 +95,11 @@ class InstrumentCanvas(QWidget):
         if self._selected_name != name:
             self._selected_name = name
             self._render()
+
+    def force_selected(self, name: str | None):
+        """Set selected name and re-render unconditionally (needed after renames)."""
+        self._selected_name = name
+        self._render()
 
     def set_hidden(self, hidden: set[str]):
         self._hidden = hidden
@@ -103,17 +116,48 @@ class InstrumentCanvas(QWidget):
         self._drag_name = None
         self._surface.set_pixmap(QPixmap())
 
+    # ── Zoom ─────────────────────────────────────────────────────────────
+
+    def _on_wheel(self, event):
+        delta = event.angleDelta().y()
+        factor = 1.15 if delta > 0 else 1.0 / 1.15
+        old_zoom = self._zoom
+        self._zoom = max(0.2, min(4.0, self._zoom * factor))
+
+        if self._zoom == old_zoom:
+            event.accept()
+            return
+
+        # cursor position in surface (zoomed) coordinates
+        cursor_x = event.position().x()
+        cursor_y = event.position().y()
+        h_val = self._scroll.horizontalScrollBar().value()
+        v_val = self._scroll.verticalScrollBar().value()
+
+        self._render()
+
+        # keep the world-point under the cursor stationary:
+        # new_scroll = cursor * (zoom_ratio - 1) + old_scroll
+        zoom_ratio = self._zoom / old_zoom
+        self._scroll.horizontalScrollBar().setValue(
+            int(cursor_x * (zoom_ratio - 1) + h_val))
+        self._scroll.verticalScrollBar().setValue(
+            int(cursor_y * (zoom_ratio - 1) + v_val))
+
+        event.accept()
+
     # ── Mouse handling ────────────────────────────────────────────────────
 
     def _on_press(self, event):
         if event.button() != Qt.LeftButton:
             return
-        cx, cy = event.position().x(), event.position().y()
+        # convert from zoomed surface coords to unzoomed canvas coords
+        cx = event.position().x() / self._zoom
+        cy = event.position().y() / self._zoom
         hits = self._hits_at(int(cx), int(cy))
         if not hits:
             self._drag_name = None
             return
-        # If the current selection is already the topmost hit, cycle downward
         if self._selected_name in hits:
             idx = hits.index(self._selected_name)
             name = hits[(idx + 1) % len(hits)]
@@ -131,14 +175,14 @@ class InstrumentCanvas(QWidget):
         if not (event.buttons() & Qt.LeftButton) or not self._drag_name:
             return
         p = event.position()
-        dx = p.x() - self._drag_start[0]
-        dy = p.y() - self._drag_start[1]
+        dx = p.x() / self._zoom - self._drag_start[0]
+        dy = p.y() / self._zoom - self._drag_start[1]
         new_x = int(round(self._drag_orig[0] + dx))
-        new_y = int(round(self._drag_orig[1] - dy))  # canvas y-down → YAML y-up
+        new_y = int(round(self._drag_orig[1] - dy))  # y-down → y-up
         comp = self._find_comp(self._drag_name)
         if comp is not None:
             comp["position"] = [new_x, new_y]
-            self._render()  # live preview during drag
+            self._render()
 
     def _on_release(self, event):
         if event.button() != Qt.LeftButton or not self._drag_name:
@@ -155,7 +199,7 @@ class InstrumentCanvas(QWidget):
     # ── Hit testing ───────────────────────────────────────────────────────
 
     def _hits_at(self, cx: int, cy: int) -> list[str]:
-        """All sprites containing canvas point (cx, cy), topmost first."""
+        """All sprites containing unzoomed canvas point (cx, cy), topmost first."""
         w, h = self._data.get("size", [310, 310])
         result = []
         for comp in reversed(self._data.get("components", [])):  # topmost first
@@ -184,7 +228,15 @@ class InstrumentCanvas(QWidget):
         if not self._data:
             self._surface.set_pixmap(QPixmap())
             return
-        self._surface.set_pixmap(self._composite())
+        pixmap = self._composite()
+        if self._zoom != 1.0:
+            pixmap = pixmap.scaled(
+                int(pixmap.width() * self._zoom),
+                int(pixmap.height() * self._zoom),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        self._surface.set_pixmap(pixmap)
 
     def _composite(self) -> QPixmap:
         w, h = self._data.get("size", [310, 310])
@@ -221,8 +273,10 @@ class InstrumentCanvas(QWidget):
                     pos = comp.get("position", [w // 2, h // 2])
                     cx_p, cy_up = int(pos[0]), int(pos[1])
                     cy_p = h - cy_up
-                    draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)], fill=(255, 220, 0, 255), width=2)
-                    draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)], fill=(255, 220, 0, 255), width=2)
+                    draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)],
+                              fill=(255, 220, 0, 255), width=2)
+                    draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)],
+                              fill=(255, 220, 0, 255), width=2)
                 break
 
         buf = io.BytesIO()
