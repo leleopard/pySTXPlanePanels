@@ -66,6 +66,12 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self.statusBar().showMessage("Open a gauge or panel YAML to begin.")
 
+        geometry = self._settings.value("windowGeometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        else:
+            self.showMaximized()
+
     # ── Menu ─────────────────────────────────────────────────────────────
 
     def _build_menu(self):
@@ -367,4 +373,5 @@ class MainWindow(QMainWindow):
         if self._panel_dirty and not self._confirm_discard("panel"):
             event.ignore()
             return
+        self._settings.setValue("windowGeometry", self.saveGeometry())
         event.accept()
