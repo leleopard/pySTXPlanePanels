@@ -5,7 +5,7 @@ import yaml
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
-    QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
+    QStyledItemDelegate, QStyleOptionViewItem, QSpinBox, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
@@ -213,6 +213,25 @@ class InstrumentView(QWidget):
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(4)
 
+        # Instrument name header
+        self._name_header = QLabel("")
+        self._name_header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        cl.addWidget(self._name_header)
+
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(6)
+        name_row.addWidget(QLabel("Name:"))
+        self._name_edit = QLineEdit()
+        self._name_edit.editingFinished.connect(self._on_name_changed)
+        name_row.addWidget(self._name_edit)
+        cl.addLayout(name_row)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFrameShadow(QFrame.Sunken)
+        cl.addWidget(sep)
+
         # Gauge size bar — top of the editor area
         size_bar = QHBoxLayout()
         size_bar.setContentsMargins(0, 0, 0, 4)
@@ -304,6 +323,9 @@ class InstrumentView(QWidget):
     def load(self, instrument_data: dict, yaml_path: str = ""):
         self._loading = True
         self._hidden = set()
+        name = instrument_data.get("name", "")
+        self._name_header.setText(name)
+        self._name_edit.setText(name)
         self._list.clear()
         self._form.clear()
         self._components = instrument_data.get("components", [])
@@ -330,6 +352,8 @@ class InstrumentView(QWidget):
     def clear(self):
         self._loading = True
         self._hidden = set()
+        self._name_header.setText("")
+        self._name_edit.setText("")
         self._list.clear()
         self._form.clear()
         self._components = []
@@ -338,6 +362,9 @@ class InstrumentView(QWidget):
         self._editor_content.setVisible(False)
         self._loaded_path = None
         self._tree.setCurrentItem(None)
+
+    def get_name(self) -> str:
+        return self._name_edit.text().strip()
 
     def get_components(self) -> list[dict]:
         return self._components
@@ -499,6 +526,11 @@ class InstrumentView(QWidget):
         self._populate_tree(Path(self._instruments_root))
 
     # ── Gauge size ────────────────────────────────────────────────────────
+
+    def _on_name_changed(self):
+        name = self._name_edit.text().strip()
+        self._name_header.setText(name)
+        self.changed.emit()
 
     def _on_size_changed(self):
         self._canvas.set_size(self._gauge_w.value(), self._gauge_h.value())

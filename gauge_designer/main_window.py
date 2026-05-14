@@ -325,6 +325,7 @@ class MainWindow(QMainWindow):
                 self._push_recent(path)
 
     def _write_gauge(self, path: str):
+        self._gauge_data["name"] = self._gauge_view.get_name()
         self._gauge_data["components"] = self._gauge_view.get_components()
         self._gauge_data["size"] = self._gauge_view.get_size()
         try:
