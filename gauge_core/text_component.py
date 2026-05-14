@@ -142,7 +142,11 @@ class Text:
             self.label.draw()
 
 
-def _text_factory(comp: dict[str, Any], base_dir: Path) -> Text:
+def _text_factory(
+    comp: dict[str, Any],
+    base_dir: Path,
+    container_size: tuple[int, int] | None = None,  # noqa: ARG001
+) -> Text:
     # If the YAML supplies a `font_file` it's resolved relative to the
     # instrument YAML and registered with pyglet so the family name passed
     # in `font_name` resolves to the bundled TTF rather than a system font.

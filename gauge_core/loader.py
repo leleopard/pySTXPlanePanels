@@ -60,13 +60,14 @@ def load_instrument(yaml_path: str | Path) -> Instrument:
     with open(yaml_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
+    container_size: tuple[int, int] = tuple(data["size"])
     components: list[Any] = []
     for comp_def in data.get("components", []):
         ctype = comp_def.get("type")
         if not ctype:
             raise ValueError(f"Component is missing `type:` in {yaml_path}")
         factory = get_component_factory(ctype)
-        components.append(factory(comp_def, base_dir))
+        components.append(factory(comp_def, base_dir, container_size))
 
     visibility: InstrumentVisibility | None = None
     if "visibility" in data:

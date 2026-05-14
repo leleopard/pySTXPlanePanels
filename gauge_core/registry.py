@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-# A component factory takes (yaml_dict, base_dir) and returns the component
-# instance. base_dir is the directory containing the instrument YAML —
-# used for resolving relative texture paths.
-ComponentFactory = Callable[[dict[str, Any], "Path"], Any]  # noqa: F821
+# A component factory takes (yaml_dict, base_dir, container_size) and returns
+# the component instance. base_dir is the directory containing the instrument
+# YAML (used for resolving relative texture paths); container_size is the
+# instrument's declared [w, h] in pixels (passed so factories can implement
+# resize_to_container without needing a second pass).
+ComponentFactory = Callable[[dict[str, Any], "Path", "tuple[int,int] | None"], Any]  # noqa: F821
 
 # A convert function takes (raw_value, get_data) where get_data is a callable
 # that fetches another dataref's value (used for cross-dataref maths).

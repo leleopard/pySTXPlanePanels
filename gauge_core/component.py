@@ -211,15 +211,29 @@ class ImagePanel:
 
 # -- Factory + registry ---------------------------------------------------
 
-def _image_panel_factory(comp: dict[str, Any], base_dir: Path) -> ImagePanel:
+def _image_panel_factory(
+    comp: dict[str, Any],
+    base_dir: Path,
+    container_size: tuple[int, int] | None = None,
+) -> ImagePanel:
     atlas_path = (base_dir / comp["texture"]).resolve()
+    cliprect_wh = tuple(comp["cliprect"])
     panel = ImagePanel(
         name=comp["name"],
         atlas_path=atlas_path,
         origin_xy=tuple(comp["origin"]),
-        cliprect_wh=tuple(comp["cliprect"]),
+        cliprect_wh=cliprect_wh,
         position_xy=tuple(comp["position"]),
     )
+
+    if comp.get("resize_to_container") and container_size is not None:
+        cw, ch = container_size
+        sw, sh = cliprect_wh
+        if comp.get("maintain_proportions", True):
+            panel.sprite.scale = min(cw / sw, ch / sh)
+        else:
+            panel.sprite.width = float(cw)
+            panel.sprite.height = float(ch)
 
     if "rotation" in comp:
         rot = comp["rotation"]
