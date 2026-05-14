@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
+    QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
@@ -78,14 +79,41 @@ class _EyeDelegate(QStyledItemDelegate):
 
 class InstrumentView(QWidget):
     changed = Signal()
+    open_requested = Signal(str)  # emitted when user activates a file in the tree
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._components: list[dict] = []
         self._hidden: set[str] = set()
         self._loading = False
+        self._instruments_root: str = ""
+
+        # cache standard icons once (requires a live QWidget)
+        self._dir_icon = None
+        self._file_icon = None
 
         splitter = QSplitter(Qt.Horizontal)
+
+        # ── Pane 0: instrument file tree ─────────────────────────────────
+        tree_pane = QWidget()
+        tl = QVBoxLayout(tree_pane); tl.setContentsMargins(0, 0, 0, 0); tl.setSpacing(2)
+
+        tree_hdr = QHBoxLayout(); tree_hdr.setContentsMargins(0, 0, 0, 0); tree_hdr.setSpacing(4)
+        self._root_label = QLabel("(no folder)")
+        self._root_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        self._root_label.setToolTip("")
+        tree_hdr.addWidget(self._root_label, stretch=1)
+        root_btn = QPushButton("…"); root_btn.setFixedWidth(26)
+        root_btn.setToolTip("Choose instruments folder")
+        root_btn.clicked.connect(self._browse_instruments_root)
+        tree_hdr.addWidget(root_btn)
+        tl.addLayout(tree_hdr)
+
+        self._tree = QTreeWidget()
+        self._tree.setHeaderHidden(True)
+        self._tree.setColumnCount(1)
+        self._tree.itemActivated.connect(self._on_tree_activated)
+        tl.addWidget(self._tree)
 
         # ── Pane 1: component list + toolbar ────────────────────────────
         left = QWidget()
@@ -131,10 +159,11 @@ class InstrumentView(QWidget):
         self._canvas.component_selected.connect(self._on_canvas_selected)
         self._canvas.component_moved.connect(self._on_canvas_moved)
 
+        splitter.addWidget(tree_pane)
         splitter.addWidget(left)
         splitter.addWidget(mid)
         splitter.addWidget(right)
-        splitter.setSizes([180, 320, 360])
+        splitter.setSizes([200, 160, 300, 360])
 
         # Gauge size bar — sits above the component/form/canvas splitter
         size_bar = QHBoxLayout()
@@ -194,6 +223,49 @@ class InstrumentView(QWidget):
 
     def get_size(self) -> list[int]:
         return [self._gauge_w.value(), self._gauge_h.value()]
+
+    def set_instruments_root(self, path: str) -> None:
+        self._instruments_root = path
+        p = Path(path)
+        self._root_label.setText(p.name)
+        self._root_label.setToolTip(path)
+        self._populate_tree(p)
+
+    # ── Instrument tree ───────────────────────────────────────────────────
+
+    def _populate_tree(self, root: Path) -> None:
+        if self._dir_icon is None:
+            self._dir_icon = self.style().standardIcon(QStyle.SP_DirIcon)
+            self._file_icon = self.style().standardIcon(QStyle.SP_FileIcon)
+        self._tree.clear()
+        if not root.is_dir():
+            return
+        self._add_tree_items(self._tree.invisibleRootItem(), root)
+        self._tree.expandAll()
+
+    def _add_tree_items(self, parent: QTreeWidgetItem, directory: Path) -> None:
+        entries = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        for entry in entries:
+            if entry.is_dir():
+                item = QTreeWidgetItem(parent, [entry.name])
+                item.setIcon(0, self._dir_icon)
+                item.setData(0, Qt.UserRole, None)
+                self._add_tree_items(item, entry)
+            elif entry.is_file() and entry.suffix.lower() in (".yaml", ".yml"):
+                item = QTreeWidgetItem(parent, [entry.stem])
+                item.setIcon(0, self._file_icon)
+                item.setData(0, Qt.UserRole, str(entry))
+
+    def _on_tree_activated(self, item: QTreeWidgetItem, _col: int) -> None:
+        path = item.data(0, Qt.UserRole)
+        if path:
+            self.open_requested.emit(path)
+
+    def _browse_instruments_root(self) -> None:
+        start = self._instruments_root or ""
+        path = QFileDialog.getExistingDirectory(self, "Select Instruments Folder", start)
+        if path:
+            self.set_instruments_root(path)
 
     # ── Gauge size ────────────────────────────────────────────────────────
 

@@ -16,6 +16,17 @@ _TAB_GAUGE = 0
 _TAB_PANEL = 1
 
 
+def _find_instruments_root(yaml_path: str) -> str:
+    """Walk up from the YAML's directory to find an ancestor named 'instruments'."""
+    p = Path(yaml_path).parent.resolve()
+    candidate = p
+    while candidate != candidate.parent:
+        if candidate.name.lower() == "instruments":
+            return str(candidate)
+        candidate = candidate.parent
+    return str(p)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -36,6 +47,9 @@ class MainWindow(QMainWindow):
         # Widgets
         self._gauge_view = InstrumentView()
         self._gauge_view.changed.connect(self._mark_gauge_dirty)
+        self._gauge_view.open_requested.connect(
+            lambda p: (self._tabs.setCurrentIndex(_TAB_GAUGE), self._load_gauge(p))
+        )
 
         self._panel_view = PanelView()
         self._panel_view.changed.connect(self._mark_panel_dirty)
@@ -198,6 +212,7 @@ class MainWindow(QMainWindow):
         self._gauge_data = data
         self._gauge_dirty = False
         self._gauge_view.load(data, path)
+        self._gauge_view.set_instruments_root(_find_instruments_root(path))
         self._preview.set_yaml(path, data_provider=lambda: self._gauge_data)
         self._save_act.setEnabled(True)
         self._update_title()
