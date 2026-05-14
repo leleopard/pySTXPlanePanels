@@ -624,13 +624,15 @@ class InstrumentView(QWidget):
         name, ok = QInputDialog.getText(self, "Add Component", "Component name:")
         if not ok or not name.strip():
             return
+        cx = self._gauge_w.value() // 2
+        cy = self._gauge_h.value() // 2
         new_comp = {
             "name": name.strip(),
             "type": "ImagePanel",
-            "texture": "../assets/c172_text_standard6.png",
+            "texture": "",
             "origin": [0, 0],
             "cliprect": [100, 100],
-            "position": [155, 155],
+            "position": [cx, cy],
         }
         self._components.append(new_comp)
         self._list.addItem(new_comp["name"])

@@ -1,5 +1,6 @@
 """Structured form for editing an ImagePanel component."""
 
+import os
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -519,9 +520,9 @@ class PropertiesForm(QWidget):
         )
         if not path:
             return
-        try:
-            rel = Path(path).relative_to(self._yaml_dir)
-            self._tex.setText(str(rel).replace("\\", "/"))
-        except ValueError:
+        if self._yaml_dir:
+            rel = os.path.relpath(path, self._yaml_dir).replace("\\", "/")
+            self._tex.setText(rel)
+        else:
             self._tex.setText(path)
         self._emit()
