@@ -210,8 +210,8 @@ class InstrumentView(QWidget):
         # Content widget — hidden until an instrument is loaded
         self._editor_content = QWidget()
         cl = QVBoxLayout(self._editor_content)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(4)
+        cl.setContentsMargins(0, 4, 0, 0)
+        cl.setSpacing(2)
 
         # Instrument name header
         self._name_header = QLabel("")
@@ -301,7 +301,7 @@ class InstrumentView(QWidget):
         inner_splitter.addWidget(prop_pane)
         inner_splitter.addWidget(canvas_pane)
         inner_splitter.setSizes([160, 300, 360])
-        cl.addWidget(inner_splitter)
+        cl.addWidget(inner_splitter, 1)  # stretch=1: takes all remaining height
 
         self._editor_content.setVisible(False)
         el.addWidget(self._editor_content)
