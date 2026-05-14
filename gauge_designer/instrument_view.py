@@ -201,11 +201,16 @@ class InstrumentView(QWidget):
         crud_bar.addStretch()
         tl.addLayout(crud_bar)
 
-        # ── Right pane: editor area (hidden until an instrument is loaded) ──
+        # ── Right pane: always visible (provides empty space on startup) ──────
         self._editor_pane = QWidget()
         el = QVBoxLayout(self._editor_pane)
         el.setContentsMargins(0, 0, 0, 0)
-        el.setSpacing(4)
+
+        # Content widget — hidden until an instrument is loaded
+        self._editor_content = QWidget()
+        cl = QVBoxLayout(self._editor_content)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(4)
 
         # Gauge size bar — top of the editor area
         size_bar = QHBoxLayout()
@@ -224,7 +229,7 @@ class InstrumentView(QWidget):
         size_bar.addWidget(QLabel("×"))
         size_bar.addWidget(self._gauge_h)
         size_bar.addStretch()
-        el.addLayout(size_bar)
+        cl.addLayout(size_bar)
 
         # Inner splitter: components | properties | canvas
         inner_splitter = QSplitter(Qt.Horizontal)
@@ -276,7 +281,10 @@ class InstrumentView(QWidget):
         inner_splitter.addWidget(prop_pane)
         inner_splitter.addWidget(canvas_pane)
         inner_splitter.setSizes([160, 300, 360])
-        el.addWidget(inner_splitter)
+        cl.addWidget(inner_splitter)
+
+        self._editor_content.setVisible(False)
+        el.addWidget(self._editor_content)
 
         outer_splitter.addWidget(tree_pane)
         outer_splitter.addWidget(self._editor_pane)
@@ -314,6 +322,7 @@ class InstrumentView(QWidget):
         self._canvas.set_hidden(set())
         if self._components:
             self._list.setCurrentRow(0)
+        self._editor_content.setVisible(True)
 
     def clear(self):
         self._loading = True
@@ -323,6 +332,7 @@ class InstrumentView(QWidget):
         self._components = []
         self._loading = False
         self._canvas.clear()
+        self._editor_content.setVisible(False)
 
     def get_components(self) -> list[dict]:
         return self._components
