@@ -1,16 +1,31 @@
+import shutil
 from pathlib import Path
 
+import yaml
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
-    QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle,
+    QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
+from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
 from gauge_designer.properties_form import PropertiesForm
+
+# UserRole slots for tree items
+_ROLE_PATH = Qt.UserRole        # absolute path string (both files and dirs)
+_ROLE_TYPE = Qt.UserRole + 1    # "file" or "dir"
+
+_DEFAULT_ROOT = Path(__file__).parent.parent / "instruments"
+_SETTINGS_KEY = "instrumentsRoot"
+
+_INSTRUMENT_SKELETON = {
+    "name": "",
+    "size": [310, 310],
+    "components": [],
+}
 
 
 # ── Eye icon drawing ─────────────────────────────────────────────────────────
@@ -75,6 +90,69 @@ class _EyeDelegate(QStyledItemDelegate):
         return super().editorEvent(event, model, option, index)
 
 
+# ── Instrument file tree with drag-and-drop ──────────────────────────────────
+
+class _InstrumentTree(QTreeWidget):
+    """QTreeWidget that supports dragging instrument YAMLs into sub-folders."""
+
+    file_moved = Signal(str, str)  # old_path, new_path
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setHeaderHidden(True)
+        self.setColumnCount(1)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setDragDropMode(QAbstractItemView.DragDrop)
+        self.setDefaultDropAction(Qt.MoveAction)
+
+    def dragEnterEvent(self, event):
+        if event.source() is self:
+            item = self.currentItem()
+            if item and item.data(0, _ROLE_TYPE) == "file":
+                event.accept()
+                return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.source() is not self:
+            event.ignore()
+            return
+        target = self.itemAt(event.position().toPoint())
+        if target is not None and target.data(0, _ROLE_TYPE) == "dir":
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if event.source() is not self:
+            event.ignore()
+            return
+        src_item = self.currentItem()
+        if src_item is None or src_item.data(0, _ROLE_TYPE) != "file":
+            event.ignore()
+            return
+        target = self.itemAt(event.position().toPoint())
+        if target is None or target.data(0, _ROLE_TYPE) != "dir":
+            event.ignore()
+            return
+        src_path = Path(src_item.data(0, _ROLE_PATH))
+        dst_dir = Path(target.data(0, _ROLE_PATH))
+        dst_path = dst_dir / src_path.name
+        if dst_path == src_path or dst_path.exists():
+            event.ignore()
+            return
+        try:
+            shutil.move(str(src_path), str(dst_path))
+        except Exception as exc:
+            QMessageBox.critical(self, "Move Error", str(exc))
+            event.ignore()
+            return
+        self.file_moved.emit(str(src_path), str(dst_path))
+        event.accept()
+
+
 # ── Main widget ───────────────────────────────────────────────────────────────
 
 class InstrumentView(QWidget):
@@ -109,11 +187,26 @@ class InstrumentView(QWidget):
         tree_hdr.addWidget(root_btn)
         tl.addLayout(tree_hdr)
 
-        self._tree = QTreeWidget()
-        self._tree.setHeaderHidden(True)
-        self._tree.setColumnCount(1)
+        self._tree = _InstrumentTree()
         self._tree.itemActivated.connect(self._on_tree_activated)
+        self._tree.file_moved.connect(self._on_file_moved)
         tl.addWidget(self._tree)
+
+        # CRUD toolbar below tree
+        crud_bar = QHBoxLayout()
+        crud_bar.setContentsMargins(0, 2, 0, 0)
+        crud_bar.setSpacing(2)
+        for label, slot, tip in [
+            ("+ Folder",  self._new_folder,      "Create a new sub-folder"),
+            ("+ Instr",   self._new_instrument,  "Create a new instrument YAML"),
+            ("Delete",    self._delete_selected, "Delete selected file or folder"),
+        ]:
+            btn = QPushButton(label)
+            btn.setToolTip(tip)
+            btn.clicked.connect(slot)
+            crud_bar.addWidget(btn)
+        crud_bar.addStretch()
+        tl.addLayout(crud_bar)
 
         # ── Pane 1: component list + toolbar ────────────────────────────
         left = QWidget()
@@ -184,6 +277,13 @@ class InstrumentView(QWidget):
         layout.addLayout(size_bar)
         layout.addWidget(splitter)
 
+        # Load default instruments root (persisted → project default → blank)
+        saved = QSettings().value(_SETTINGS_KEY, "")
+        if saved and Path(saved).is_dir():
+            self.set_instruments_root(saved)
+        elif _DEFAULT_ROOT.is_dir():
+            self.set_instruments_root(str(_DEFAULT_ROOT))
+
     # ── Public API ───────────────────────────────────────────────────────
 
     def load(self, instrument_data: dict, yaml_path: str = ""):
@@ -249,23 +349,121 @@ class InstrumentView(QWidget):
             if entry.is_dir():
                 item = QTreeWidgetItem(parent, [entry.name])
                 item.setIcon(0, self._dir_icon)
-                item.setData(0, Qt.UserRole, None)
+                item.setData(0, _ROLE_PATH, str(entry))
+                item.setData(0, _ROLE_TYPE, "dir")
                 self._add_tree_items(item, entry)
             elif entry.is_file() and entry.suffix.lower() in (".yaml", ".yml"):
                 item = QTreeWidgetItem(parent, [entry.stem])
                 item.setIcon(0, self._file_icon)
-                item.setData(0, Qt.UserRole, str(entry))
+                item.setData(0, _ROLE_PATH, str(entry))
+                item.setData(0, _ROLE_TYPE, "file")
 
     def _on_tree_activated(self, item: QTreeWidgetItem, _col: int) -> None:
-        path = item.data(0, Qt.UserRole)
-        if path:
-            self.open_requested.emit(path)
+        if item.data(0, _ROLE_TYPE) == "file":
+            self.open_requested.emit(item.data(0, _ROLE_PATH))
+
+    def _on_file_moved(self, _old: str, _new: str) -> None:
+        self._populate_tree(Path(self._instruments_root))
 
     def _browse_instruments_root(self) -> None:
         start = self._instruments_root or ""
         path = QFileDialog.getExistingDirectory(self, "Select Instruments Folder", start)
         if path:
+            QSettings().setValue(_SETTINGS_KEY, path)
             self.set_instruments_root(path)
+
+    # ── Tree CRUD ─────────────────────────────────────────────────────────
+
+    def _target_dir(self) -> Path | None:
+        """Return the directory where a new item should be created."""
+        if not self._instruments_root:
+            return None
+        item = self._tree.currentItem()
+        if item is None:
+            return Path(self._instruments_root)
+        if item.data(0, _ROLE_TYPE) == "dir":
+            return Path(item.data(0, _ROLE_PATH))
+        return Path(item.data(0, _ROLE_PATH)).parent
+
+    def _new_folder(self) -> None:
+        parent_dir = self._target_dir()
+        if parent_dir is None:
+            QMessageBox.warning(self, "No Folder", "Select an instruments folder first.")
+            return
+        name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
+        if not ok or not name.strip():
+            return
+        new_dir = parent_dir / name.strip()
+        try:
+            new_dir.mkdir(parents=False, exist_ok=False)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+        self._populate_tree(Path(self._instruments_root))
+
+    def _new_instrument(self) -> None:
+        parent_dir = self._target_dir()
+        if parent_dir is None:
+            QMessageBox.warning(self, "No Folder", "Select an instruments folder first.")
+            return
+        name, ok = QInputDialog.getText(self, "New Instrument", "Instrument name (without .yaml):")
+        if not ok or not name.strip():
+            return
+        file_path = parent_dir / f"{name.strip()}.yaml"
+        if file_path.exists():
+            QMessageBox.warning(self, "Exists", f"'{file_path.name}' already exists.")
+            return
+        skeleton = dict(_INSTRUMENT_SKELETON)
+        skeleton["name"] = name.strip()
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                yaml.dump(skeleton, f, default_flow_style=False,
+                          allow_unicode=True, sort_keys=False)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+        self._populate_tree(Path(self._instruments_root))
+        self.open_requested.emit(str(file_path))
+
+    def _delete_selected(self) -> None:
+        item = self._tree.currentItem()
+        if item is None:
+            return
+        path = Path(item.data(0, _ROLE_PATH))
+        typ = item.data(0, _ROLE_TYPE)
+        if typ == "file":
+            reply = QMessageBox.question(
+                self, "Delete Instrument",
+                f"Delete '{path.name}'?\nThis cannot be undone.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            try:
+                path.unlink()
+            except Exception as exc:
+                QMessageBox.critical(self, "Error", str(exc))
+                return
+        elif typ == "dir":
+            if any(path.iterdir()):
+                QMessageBox.warning(
+                    self, "Not Empty",
+                    f"'{path.name}' is not empty.\nRemove its contents first."
+                )
+                return
+            reply = QMessageBox.question(
+                self, "Delete Folder",
+                f"Delete empty folder '{path.name}'?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            try:
+                path.rmdir()
+            except Exception as exc:
+                QMessageBox.critical(self, "Error", str(exc))
+                return
+        self._populate_tree(Path(self._instruments_root))
 
     # ── Gauge size ────────────────────────────────────────────────────────
 
