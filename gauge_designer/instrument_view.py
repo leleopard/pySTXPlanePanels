@@ -475,6 +475,8 @@ class InstrumentView(QWidget):
             except Exception as exc:
                 QMessageBox.critical(self, "Error", str(exc))
                 return
+            if self._loaded_path == str(path.resolve()):
+                self.clear()
         elif typ == "dir":
             if any(path.iterdir()):
                 QMessageBox.warning(
