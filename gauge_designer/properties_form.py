@@ -156,6 +156,11 @@ class _Section(QWidget):
         hl.addWidget(w1); hl.addWidget(w2)
         self._form.addRow(label, box)
 
+    def row_widget(self, widget: QWidget) -> QWidget:
+        """Full-width row spanning both label and field columns."""
+        self._form.addRow(widget)
+        return widget
+
     @property
     def active(self) -> bool:
         return self._chk.isChecked() if self._optional else True
@@ -262,6 +267,17 @@ class PropertiesForm(QWidget):
             w.valueChanged.connect(self._emit)
         self._tex_sec.row_pair("Origin X  /  Y", self._orig_x, self._orig_y)
 
+        self._resize_chk = QCheckBox("Fit to gauge size")
+        self._resize_chk.toggled.connect(self._on_resize_toggled)
+        self._resize_chk.toggled.connect(self._emit)
+        self._tex_sec.row_widget(self._resize_chk)
+
+        self._prop_chk = QCheckBox("Maintain proportions")
+        self._prop_chk.setChecked(True)
+        self._prop_chk.setEnabled(False)
+        self._prop_chk.toggled.connect(self._emit)
+        self._tex_sec.row_widget(self._prop_chk)
+
         self._vbox.addWidget(self._tex_sec)
 
     def _mk_rotation(self):
@@ -340,7 +356,8 @@ class PropertiesForm(QWidget):
     def load(self, comp: dict):
         self._loading = True
         known = {"name", "type", "position", "texture", "cliprect", "origin",
-                 "rotation", "translation", "visibility"}
+                 "rotation", "translation", "visibility",
+                 "resize_to_container", "maintain_proportions"}
         self._extra = {k: v for k, v in comp.items() if k not in known}
 
         self._name.setText(str(comp.get("name", "")))
@@ -356,6 +373,13 @@ class PropertiesForm(QWidget):
         self._clip_w.setValue(int(cr[0])); self._clip_h.setValue(int(cr[1]))
         orig = comp.get("origin", [0, 0])
         self._orig_x.setValue(int(orig[0])); self._orig_y.setValue(int(orig[1]))
+
+        resize = bool(comp.get("resize_to_container", False))
+        self._resize_chk.blockSignals(True)
+        self._resize_chk.setChecked(resize)
+        self._resize_chk.blockSignals(False)
+        self._prop_chk.setEnabled(resize)
+        self._prop_chk.setChecked(bool(comp.get("maintain_proportions", True)))
 
         rot = comp.get("rotation")
         self._rot_sec.set_active(rot is not None)
@@ -412,6 +436,10 @@ class PropertiesForm(QWidget):
             data["texture"] = self._tex.text().strip()
             data["origin"]  = [self._orig_x.value(), self._orig_y.value()]
             data["cliprect"] = [self._clip_w.value(), self._clip_h.value()]
+            if self._resize_chk.isChecked():
+                data["resize_to_container"] = True
+                if not self._prop_chk.isChecked():
+                    data["maintain_proportions"] = False
 
         if self._rot_sec.active:
             rot: dict = {"dataref": self._rot_dr.text().strip()}
@@ -453,6 +481,9 @@ class PropertiesForm(QWidget):
         self._tex.clear()
         self._clip_w.setValue(0); self._clip_h.setValue(0)
         self._orig_x.setValue(0); self._orig_y.setValue(0)
+        self._resize_chk.setChecked(False)
+        self._prop_chk.setChecked(True)
+        self._prop_chk.setEnabled(False)
         self._rot_sec.set_active(False)
         self._tr_sec.set_active(False)
         self._vis_sec.set_active(False)
@@ -467,6 +498,11 @@ class PropertiesForm(QWidget):
 
     def _on_type_changed(self, ct: str):
         self._tex_sec.show_body(ct == "ImagePanel")
+
+    def _on_resize_toggled(self, on: bool):
+        self._prop_chk.setEnabled(on)
+        if not on:
+            self._prop_chk.setChecked(True)
 
     def _on_tr_fixed(self, on: bool):
         self._tr_angle.setEnabled(on)

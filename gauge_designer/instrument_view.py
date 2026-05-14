@@ -3,7 +3,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
-    QStyledItemDelegate, QStyleOptionViewItem,
+    QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
@@ -136,8 +136,23 @@ class InstrumentView(QWidget):
         splitter.addWidget(right)
         splitter.setSizes([180, 320, 360])
 
+        # Gauge size bar — sits above the component/form/canvas splitter
+        size_bar = QHBoxLayout()
+        size_bar.setContentsMargins(0, 0, 0, 4)
+        size_bar.setSpacing(4)
+        size_bar.addWidget(QLabel("Gauge size:"))
+        self._gauge_w = QSpinBox(); self._gauge_w.setRange(1, 9999); self._gauge_w.setFixedWidth(70)
+        self._gauge_h = QSpinBox(); self._gauge_h.setRange(1, 9999); self._gauge_h.setFixedWidth(70)
+        self._gauge_w.valueChanged.connect(self._on_size_changed)
+        self._gauge_h.valueChanged.connect(self._on_size_changed)
+        size_bar.addWidget(self._gauge_w)
+        size_bar.addWidget(QLabel("×"))
+        size_bar.addWidget(self._gauge_h)
+        size_bar.addStretch()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
+        layout.addLayout(size_bar)
         layout.addWidget(splitter)
 
     # ── Public API ───────────────────────────────────────────────────────
@@ -151,6 +166,12 @@ class InstrumentView(QWidget):
         for comp in self._components:
             self._list.addItem(comp.get("name", "(unnamed)"))
             self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
+
+        w, h = instrument_data.get("size", [310, 310])
+        self._gauge_w.blockSignals(True); self._gauge_h.blockSignals(True)
+        self._gauge_w.setValue(int(w)); self._gauge_h.setValue(int(h))
+        self._gauge_w.blockSignals(False); self._gauge_h.blockSignals(False)
+
         self._loading = False
         yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
         self._form.set_yaml_dir(yaml_dir)
@@ -170,6 +191,15 @@ class InstrumentView(QWidget):
 
     def get_components(self) -> list[dict]:
         return self._components
+
+    def get_size(self) -> list[int]:
+        return [self._gauge_w.value(), self._gauge_h.value()]
+
+    # ── Gauge size ────────────────────────────────────────────────────────
+
+    def _on_size_changed(self):
+        self._canvas.set_size(self._gauge_w.value(), self._gauge_h.value())
+        self.changed.emit()
 
     # ── Visibility toggle ─────────────────────────────────────────────────
 

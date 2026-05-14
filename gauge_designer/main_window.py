@@ -170,6 +170,7 @@ class MainWindow(QMainWindow):
 
     def _write(self, path: str):
         self._instrument_data["components"] = self._view.get_components()
+        self._instrument_data["size"] = self._view.get_size()
         try:
             with open(path, "w", encoding="utf-8") as f:
                 yaml.dump(

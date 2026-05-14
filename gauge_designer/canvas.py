@@ -108,6 +108,11 @@ class InstrumentCanvas(QWidget):
     def refresh(self):
         self._render()
 
+    def set_size(self, w: int, h: int):
+        if self._data:
+            self._data["size"] = [w, h]
+            self._render()
+
     def clear(self):
         self._data = {}
         self._selected_name = None
@@ -208,8 +213,8 @@ class InstrumentCanvas(QWidget):
             if comp.get("name") in self._hidden:
                 continue
             try:
-                _sprite, px, py = self._crop_sprite(comp, w, h)
-                cw, ch = comp.get("cliprect", [100, 100])
+                sprite, px, py = self._crop_sprite(comp, w, h)
+                cw, ch = sprite.size
                 if px <= cx < px + cw and py <= cy < py + ch:
                     result.append(comp.get("name"))
             except Exception:
@@ -297,6 +302,17 @@ class InstrumentCanvas(QWidget):
         px, py = comp.get("position", [0, 0])
 
         sprite = atlas.crop((ox, oy, ox + cw, oy + ch))
+
+        if comp.get("resize_to_container"):
+            if comp.get("maintain_proportions", True):
+                scale = min(canvas_w / cw, canvas_h / ch)
+                new_w = max(1, int(round(cw * scale)))
+                new_h = max(1, int(round(ch * scale)))
+            else:
+                new_w, new_h = canvas_w, canvas_h
+            sprite = sprite.resize((new_w, new_h), Image.LANCZOS)
+            cw, ch = new_w, new_h
+
         paste_x = int(round(px - cw / 2))
         paste_y = int(round((canvas_h - py) - ch / 2))
 
