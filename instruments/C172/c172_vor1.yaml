@@ -28,7 +28,7 @@ size: [310, 310]
 components:
   - name: nav_flag
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [44, 1939]
     cliprect: [40, 74]
     position: [177, 206]
@@ -38,7 +38,7 @@ components:
 
   - name: gs_flag
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [44, 2014]
     cliprect: [45, 27]
     position: [110, 178]
@@ -48,14 +48,14 @@ components:
 
   - name: background
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [0, 1200]
     cliprect: [300, 300]
     position: [155, 155]
 
   - name: to_indicator
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [8, 1979]
     cliprect: [37, 31]
     position: [201, 182]
@@ -65,7 +65,7 @@ components:
 
   - name: from_indicator
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [8, 2010]
     cliprect: [37, 31]
     position: [201, 128]
@@ -75,7 +75,7 @@ components:
 
   - name: cdi_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [0, 1889]
     cliprect: [9, 150]
     position: [155, 157]
@@ -88,7 +88,7 @@ components:
 
   - name: gs_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [0, 2040]
     cliprect: [148, 8]
     position: [155, 155]
@@ -100,7 +100,7 @@ components:
 
   - name: compass_rose
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [300, 1200]
     cliprect: [300, 300]
     position: [155, 155]
@@ -112,14 +112,14 @@ components:
 
   - name: dir_arrows
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [600, 1200]
     cliprect: [300, 300]
     position: [155, 155]
 
   - name: bezel
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1200, 1500]
     cliprect: [310, 310]
     position: [155, 155]

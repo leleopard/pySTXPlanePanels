@@ -25,14 +25,14 @@ size: [446, 66]
 components:
   - name: panel_background
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [446, 66]
     origin: [300, 1801]
     position: [223, 33]
 
   - name: alternator
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 24]
     origin: [300, 1868]
     position: [68, 46]
@@ -42,7 +42,7 @@ components:
 
   - name: battery
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 24]
     origin: [407, 1868]
     position: [175, 46]
@@ -52,7 +52,7 @@ components:
 
   - name: low_fuel
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 24]
     origin: [514, 1868]
     position: [282, 46]
@@ -62,7 +62,7 @@ components:
 
   - name: brakes
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 24]
     origin: [621, 1868]
     position: [389, 46]
@@ -72,7 +72,7 @@ components:
 
   - name: oil_pressure
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 25]
     origin: [300, 1892]
     position: [68, 21]
@@ -82,7 +82,7 @@ components:
 
   - name: oil_temp
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 25]
     origin: [407, 1892]
     position: [175, 21]
@@ -92,7 +92,7 @@ components:
 
   - name: low_vacuum
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 25]
     origin: [514, 1892]
     position: [282, 21]
@@ -102,7 +102,7 @@ components:
 
   - name: ap_disconnect
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     cliprect: [107, 25]
     origin: [621, 1892]
     position: [389, 21]

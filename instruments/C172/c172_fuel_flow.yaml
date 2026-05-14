@@ -12,14 +12,14 @@ size: [200, 200]
 components:
   - name: background
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 1000]
     cliprect: [200, 200]
     position: [100, 100]
 
   - name: fuel_flow_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 618]
     cliprect: [110, 18]
     position: [156, 104]
@@ -35,7 +35,7 @@ components:
 
   - name: egt_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 600]
     cliprect: [110, 18]
     position: [44, 104]
@@ -49,14 +49,14 @@ components:
 
   - name: border
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 400]
     cliprect: [200, 200]
     position: [100, 100]
 
   - name: side_text
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 1600]
     cliprect: [200, 200]
     position: [100, 100]

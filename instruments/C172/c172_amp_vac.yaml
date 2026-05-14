@@ -13,14 +13,14 @@ size: [200, 200]
 components:
   - name: background
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 1200]
     cliprect: [200, 200]
     position: [100, 100]
 
   - name: amp_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 618]
     cliprect: [110, 18]
     position: [160, 100]
@@ -33,7 +33,7 @@ components:
 
   - name: vacuum_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 600]
     cliprect: [110, 18]
     position: [44, 102]
@@ -51,14 +51,14 @@ components:
 
   - name: border
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 400]
     cliprect: [200, 200]
     position: [100, 100]
 
   - name: side_text
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 1800]
     cliprect: [200, 200]
     position: [100, 100]

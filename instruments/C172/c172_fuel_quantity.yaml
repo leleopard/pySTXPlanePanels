@@ -14,14 +14,14 @@ size: [200, 200]
 components:
   - name: background
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 0]
     cliprect: [200, 200]
     position: [100, 100]
 
   - name: right_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 618]
     cliprect: [110, 18]
     position: [157, 104]
@@ -35,7 +35,7 @@ components:
 
   - name: left_needle
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 600]
     cliprect: [110, 18]
     position: [45, 105]
@@ -49,14 +49,14 @@ components:
 
   - name: border
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 400]
     cliprect: [200, 200]
     position: [100, 100]
 
   - name: side_text
     type: ImagePanel
-    texture: ../assets/c172_text_standard6.png
+    texture: ../../assets/c172_text_standard6.png
     origin: [1800, 200]
     cliprect: [200, 200]
     position: [100, 100]
