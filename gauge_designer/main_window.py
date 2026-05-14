@@ -43,8 +43,8 @@ class MainWindow(QMainWindow):
         self._preview = PreviewBar(self)
 
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._gauge_view, "Gauge")
-        self._tabs.addTab(self._panel_view, "Panel")
+        self._tabs.addTab(self._gauge_view, "Instruments")
+        self._tabs.addTab(self._panel_view, "Panels")
         self._tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self._tabs)
 
