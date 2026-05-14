@@ -278,8 +278,6 @@ class InstrumentView(QWidget):
         inner_splitter.setSizes([160, 300, 360])
         el.addWidget(inner_splitter)
 
-        self._editor_pane.setVisible(False)
-
         outer_splitter.addWidget(tree_pane)
         outer_splitter.addWidget(self._editor_pane)
         outer_splitter.setSizes([220, 840])
@@ -317,8 +315,6 @@ class InstrumentView(QWidget):
         if self._components:
             self._list.setCurrentRow(0)
 
-        self._editor_pane.setVisible(True)
-
     def clear(self):
         self._loading = True
         self._hidden = set()
@@ -327,7 +323,6 @@ class InstrumentView(QWidget):
         self._components = []
         self._loading = False
         self._canvas.clear()
-        self._editor_pane.setVisible(False)
 
     def get_components(self) -> list[dict]:
         return self._components
