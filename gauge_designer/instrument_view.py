@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings
+from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
@@ -19,7 +19,6 @@ _ROLE_PATH = Qt.UserRole        # absolute path string (both files and dirs)
 _ROLE_TYPE = Qt.UserRole + 1    # "file" or "dir"
 
 _DEFAULT_ROOT = Path(__file__).parent.parent / "instruments"
-_SETTINGS_KEY = "instrumentsRoot"
 
 _INSTRUMENT_SKELETON = {
     "name": "",
@@ -170,29 +169,23 @@ class InstrumentView(QWidget):
         self._dir_icon = None
         self._file_icon = None
 
-        splitter = QSplitter(Qt.Horizontal)
+        outer_splitter = QSplitter(Qt.Horizontal)
 
-        # ── Pane 0: instrument file tree ─────────────────────────────────
+        # ── Left pane: instrument file tree (always visible, full height) ──
         tree_pane = QWidget()
-        tl = QVBoxLayout(tree_pane); tl.setContentsMargins(0, 0, 0, 0); tl.setSpacing(2)
+        tl = QVBoxLayout(tree_pane)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(2)
 
-        tree_hdr = QHBoxLayout(); tree_hdr.setContentsMargins(0, 0, 0, 0); tree_hdr.setSpacing(4)
-        self._root_label = QLabel("(no folder)")
-        self._root_label.setStyleSheet("font-size: 10px; color: #aaa;")
-        self._root_label.setToolTip("")
-        tree_hdr.addWidget(self._root_label, stretch=1)
-        root_btn = QPushButton("…"); root_btn.setFixedWidth(26)
-        root_btn.setToolTip("Choose instruments folder")
-        root_btn.clicked.connect(self._browse_instruments_root)
-        tree_hdr.addWidget(root_btn)
-        tl.addLayout(tree_hdr)
+        tree_lbl = QLabel("Instruments")
+        tree_lbl.setStyleSheet("font-weight: bold; color: black;")
+        tl.addWidget(tree_lbl)
 
         self._tree = _InstrumentTree()
         self._tree.itemActivated.connect(self._on_tree_activated)
         self._tree.file_moved.connect(self._on_file_moved)
         tl.addWidget(self._tree)
 
-        # CRUD toolbar below tree
         crud_bar = QHBoxLayout()
         crud_bar.setContentsMargins(0, 2, 0, 0)
         crud_bar.setSpacing(2)
@@ -208,18 +201,45 @@ class InstrumentView(QWidget):
         crud_bar.addStretch()
         tl.addLayout(crud_bar)
 
-        # ── Pane 1: component list + toolbar ────────────────────────────
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.addWidget(QLabel("Components"))
+        # ── Right pane: editor area (hidden until an instrument is loaded) ──
+        self._editor_pane = QWidget()
+        el = QVBoxLayout(self._editor_pane)
+        el.setContentsMargins(0, 0, 0, 0)
+        el.setSpacing(4)
+
+        # Gauge size bar — top of the editor area
+        size_bar = QHBoxLayout()
+        size_bar.setContentsMargins(0, 0, 0, 4)
+        size_bar.setSpacing(4)
+        size_bar.addWidget(QLabel("Gauge size:"))
+        self._gauge_w = QSpinBox()
+        self._gauge_w.setRange(1, 9999)
+        self._gauge_w.setFixedWidth(90)
+        self._gauge_h = QSpinBox()
+        self._gauge_h.setRange(1, 9999)
+        self._gauge_h.setFixedWidth(90)
+        self._gauge_w.valueChanged.connect(self._on_size_changed)
+        self._gauge_h.valueChanged.connect(self._on_size_changed)
+        size_bar.addWidget(self._gauge_w)
+        size_bar.addWidget(QLabel("×"))
+        size_bar.addWidget(self._gauge_h)
+        size_bar.addStretch()
+        el.addLayout(size_bar)
+
+        # Inner splitter: components | properties | canvas
+        inner_splitter = QSplitter(Qt.Horizontal)
+
+        # components pane
+        comp_pane = QWidget()
+        comp_layout = QVBoxLayout(comp_pane)
+        comp_layout.setContentsMargins(0, 0, 0, 0)
+        comp_layout.addWidget(QLabel("Components"))
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
         self._delegate = _EyeDelegate(self._list)
         self._delegate.visibility_toggled.connect(self._on_visibility_toggled)
         self._list.setItemDelegate(self._delegate)
-        left_layout.addWidget(self._list)
-
+        comp_layout.addWidget(self._list)
         btn_bar = QHBoxLayout()
         btn_bar.setSpacing(2)
         for label, slot in [("▲", self._move_up), ("▼", self._move_down),
@@ -229,59 +249,47 @@ class InstrumentView(QWidget):
             btn.clicked.connect(slot)
             btn_bar.addWidget(btn)
         btn_bar.addStretch()
-        left_layout.addLayout(btn_bar)
+        comp_layout.addLayout(btn_bar)
 
-        # ── Pane 2: properties form ──────────────────────────────────────
-        mid = QWidget()
-        mid_layout = QVBoxLayout(mid)
-        mid_layout.setContentsMargins(0, 0, 0, 0)
-        mid_layout.addWidget(QLabel("Properties"))
+        # properties pane
+        prop_pane = QWidget()
+        prop_layout = QVBoxLayout(prop_pane)
+        prop_layout.setContentsMargins(0, 0, 0, 0)
+        prop_layout.addWidget(QLabel("Properties"))
         self._form = PropertiesForm()
         self._form.changed.connect(self._on_form_changed)
-        mid_layout.addWidget(self._form)
+        prop_layout.addWidget(self._form)
 
-        # ── Pane 3: canvas preview ───────────────────────────────────────
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(QLabel("Preview"))
+        # canvas pane
+        canvas_pane = QWidget()
+        canvas_layout = QVBoxLayout(canvas_pane)
+        canvas_layout.setContentsMargins(0, 0, 0, 0)
+        canvas_layout.addWidget(QLabel("Preview"))
         self._canvas = InstrumentCanvas()
-        right_layout.addWidget(self._canvas)
+        canvas_layout.addWidget(self._canvas)
 
         self.changed.connect(self._canvas.refresh)
         self._canvas.component_selected.connect(self._on_canvas_selected)
         self._canvas.component_moved.connect(self._on_canvas_moved)
 
-        splitter.addWidget(tree_pane)
-        splitter.addWidget(left)
-        splitter.addWidget(mid)
-        splitter.addWidget(right)
-        splitter.setSizes([200, 160, 300, 360])
+        inner_splitter.addWidget(comp_pane)
+        inner_splitter.addWidget(prop_pane)
+        inner_splitter.addWidget(canvas_pane)
+        inner_splitter.setSizes([160, 300, 360])
+        el.addWidget(inner_splitter)
 
-        # Gauge size bar — sits above the component/form/canvas splitter
-        size_bar = QHBoxLayout()
-        size_bar.setContentsMargins(0, 0, 0, 4)
-        size_bar.setSpacing(4)
-        size_bar.addWidget(QLabel("Gauge size:"))
-        self._gauge_w = QSpinBox(); self._gauge_w.setRange(1, 9999); self._gauge_w.setFixedWidth(90)
-        self._gauge_h = QSpinBox(); self._gauge_h.setRange(1, 9999); self._gauge_h.setFixedWidth(90)
-        self._gauge_w.valueChanged.connect(self._on_size_changed)
-        self._gauge_h.valueChanged.connect(self._on_size_changed)
-        size_bar.addWidget(self._gauge_w)
-        size_bar.addWidget(QLabel("×"))
-        size_bar.addWidget(self._gauge_h)
-        size_bar.addStretch()
+        self._editor_pane.setVisible(False)
+
+        outer_splitter.addWidget(tree_pane)
+        outer_splitter.addWidget(self._editor_pane)
+        outer_splitter.setSizes([220, 840])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.addLayout(size_bar)
-        layout.addWidget(splitter)
+        layout.addWidget(outer_splitter)
 
-        # Load default instruments root (persisted → project default → blank)
-        saved = QSettings().value(_SETTINGS_KEY, "")
-        if saved and Path(saved).is_dir():
-            self.set_instruments_root(saved)
-        elif _DEFAULT_ROOT.is_dir():
+        # Load default instruments root from project structure
+        if _DEFAULT_ROOT.is_dir():
             self.set_instruments_root(str(_DEFAULT_ROOT))
 
     # ── Public API ───────────────────────────────────────────────────────
@@ -309,6 +317,8 @@ class InstrumentView(QWidget):
         if self._components:
             self._list.setCurrentRow(0)
 
+        self._editor_pane.setVisible(True)
+
     def clear(self):
         self._loading = True
         self._hidden = set()
@@ -317,6 +327,7 @@ class InstrumentView(QWidget):
         self._components = []
         self._loading = False
         self._canvas.clear()
+        self._editor_pane.setVisible(False)
 
     def get_components(self) -> list[dict]:
         return self._components
@@ -326,10 +337,7 @@ class InstrumentView(QWidget):
 
     def set_instruments_root(self, path: str) -> None:
         self._instruments_root = path
-        p = Path(path)
-        self._root_label.setText(p.name)
-        self._root_label.setToolTip(path)
-        self._populate_tree(p)
+        self._populate_tree(Path(path))
 
     # ── Instrument tree ───────────────────────────────────────────────────
 
@@ -365,13 +373,6 @@ class InstrumentView(QWidget):
     def _on_file_moved(self, _old: str, _new: str) -> None:
         self._populate_tree(Path(self._instruments_root))
 
-    def _browse_instruments_root(self) -> None:
-        start = self._instruments_root or ""
-        path = QFileDialog.getExistingDirectory(self, "Select Instruments Folder", start)
-        if path:
-            QSettings().setValue(_SETTINGS_KEY, path)
-            self.set_instruments_root(path)
-
     # ── Tree CRUD ─────────────────────────────────────────────────────────
 
     def _target_dir(self) -> Path | None:
@@ -388,14 +389,12 @@ class InstrumentView(QWidget):
     def _new_folder(self) -> None:
         parent_dir = self._target_dir()
         if parent_dir is None:
-            QMessageBox.warning(self, "No Folder", "Select an instruments folder first.")
             return
         name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
         if not ok or not name.strip():
             return
-        new_dir = parent_dir / name.strip()
         try:
-            new_dir.mkdir(parents=False, exist_ok=False)
+            (parent_dir / name.strip()).mkdir(parents=False, exist_ok=False)
         except Exception as exc:
             QMessageBox.critical(self, "Error", str(exc))
             return
@@ -404,7 +403,6 @@ class InstrumentView(QWidget):
     def _new_instrument(self) -> None:
         parent_dir = self._target_dir()
         if parent_dir is None:
-            QMessageBox.warning(self, "No Folder", "Select an instruments folder first.")
             return
         name, ok = QInputDialog.getText(self, "New Instrument", "Instrument name (without .yaml):")
         if not ok or not name.strip():
