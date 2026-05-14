@@ -1,0 +1,78 @@
+name: C172 Airspeed Indicator
+size:
+- 310
+- 310
+components:
+- name: airspeed_background
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: ../assets/c172_text_standard6.png
+  origin:
+  - 0
+  - 300
+  cliprect:
+  - 300
+  - 300
+- name: airspeed_needle
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: ../assets/c172_text_standard6.png
+  origin:
+  - 730
+  - 1500
+  cliprect:
+  - 40
+  - 300
+  rotation:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 0
+    - - 40
+      - 30
+    - - 50
+      - 50
+    - - 60
+      - 70
+    - - 70
+      - 90
+    - - 80
+      - 115
+    - - 90
+      - 140.5
+    - - 95
+      - 151
+    - - 100
+      - 162.5
+    - - 105
+      - 174
+    - - 110
+      - 185
+    - - 115
+      - 196
+    - - 120
+      - 207.5
+    - - 130
+      - 222.5
+    - - 140
+      - 237.5
+    - - 160
+      - 267.5
+    - - 200
+      - 317.5
+- name: airspeed_bezel
+  type: ImagePanel
+  texture: ../assets/c172_text_standard6.png
+  cliprect:
+  - 310
+  - 310
+  origin:
+  - 1200
+  - 1500
+  position:
+  - 155
+  - 155
