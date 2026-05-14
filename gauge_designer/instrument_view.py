@@ -164,6 +164,7 @@ class InstrumentView(QWidget):
         self._hidden: set[str] = set()
         self._loading = False
         self._instruments_root: str = ""
+        self._loaded_path: str | None = None
 
         # cache standard icons once (requires a live QWidget)
         self._dir_icon = None
@@ -323,6 +324,8 @@ class InstrumentView(QWidget):
         if self._components:
             self._list.setCurrentRow(0)
         self._editor_content.setVisible(True)
+        self._loaded_path = str(Path(yaml_path).resolve()) if yaml_path else None
+        self._sync_tree_selection()
 
     def clear(self):
         self._loading = True
@@ -333,6 +336,8 @@ class InstrumentView(QWidget):
         self._loading = False
         self._canvas.clear()
         self._editor_content.setVisible(False)
+        self._loaded_path = None
+        self._tree.setCurrentItem(None)
 
     def get_components(self) -> list[dict]:
         return self._components
@@ -355,6 +360,27 @@ class InstrumentView(QWidget):
             return
         self._add_tree_items(self._tree.invisibleRootItem(), root)
         self._tree.expandAll()
+        self._sync_tree_selection()
+
+    def _sync_tree_selection(self) -> None:
+        """Highlight the tree item whose path matches the currently loaded file."""
+        if not self._loaded_path:
+            return
+
+        def search(parent: QTreeWidgetItem) -> bool:
+            for i in range(parent.childCount()):
+                item = parent.child(i)
+                if item.data(0, _ROLE_TYPE) == "file":
+                    item_path = str(Path(item.data(0, _ROLE_PATH)).resolve())
+                    if item_path == self._loaded_path:
+                        self._tree.setCurrentItem(item)
+                        self._tree.scrollToItem(item)
+                        return True
+                if search(item):
+                    return True
+            return False
+
+        search(self._tree.invisibleRootItem())
 
     def _add_tree_items(self, parent: QTreeWidgetItem, directory: Path) -> None:
         entries = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
@@ -375,7 +401,9 @@ class InstrumentView(QWidget):
         if item.data(0, _ROLE_TYPE) == "file":
             self.open_requested.emit(item.data(0, _ROLE_PATH))
 
-    def _on_file_moved(self, _old: str, _new: str) -> None:
+    def _on_file_moved(self, old: str, new: str) -> None:
+        if self._loaded_path == str(Path(old).resolve()):
+            self._loaded_path = str(Path(new).resolve())
         self._populate_tree(Path(self._instruments_root))
 
     # ── Tree CRUD ─────────────────────────────────────────────────────────
