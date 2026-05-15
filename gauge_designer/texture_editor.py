@@ -155,16 +155,17 @@ class TextureEditorDialog(QDialog):
 
         bar = QHBoxLayout()
         bar.setSpacing(6)
-        for label, widget in [
+        for item in [
             ("Origin X:", self._orig_x), ("Y:", self._orig_y),
             None,
             ("Clip W:",   self._clip_w), ("H:", self._clip_h),
             None,
             ("Grid X:",   self._grid_x), ("Y:", self._grid_y),
         ]:
-            if label is None:
+            if item is None:
                 bar.addSpacing(16)
             else:
+                label, widget = item
                 bar.addWidget(QLabel(label))
                 bar.addWidget(widget)
         bar.addStretch()
