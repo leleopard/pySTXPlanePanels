@@ -3,14 +3,14 @@
 Displays the full texture with:
 - Semi-transparent overlay everywhere except the selected clip region
 - Optional grid overlay (configurable X/Y spacing)
-- Ctrl+wheel to zoom
+- Ctrl+wheel to zoom (mirrored in zoom spinbox)
 - Crosshair cursor with live texture-coordinate readout
 """
 
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QSpinBox,
     QScrollArea, QWidget, QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Signal
@@ -21,6 +21,7 @@ class _TextureView(QWidget):
     """Custom widget that renders the texture with clip overlay and grid."""
 
     mouse_pos_changed = Signal(int, int)  # texture-space x, y; (-1,-1) on leave
+    zoom_changed = Signal(float)          # new zoom factor
 
     def __init__(self, pixmap: QPixmap,
                  orig_x: QSpinBox, orig_y: QSpinBox,
@@ -46,6 +47,7 @@ class _TextureView(QWidget):
         self._zoom = max(0.05, min(8.0, zoom))
         self._update_size()
         self.update()
+        self.zoom_changed.emit(self._zoom)
 
     def refresh(self):
         self.update()
@@ -166,36 +168,41 @@ class TextureEditorDialog(QDialog):
         self._orig_y = _sb(val=origin_y)
         self._clip_w = _sb(lo=1, val=clip_w)
         self._clip_h = _sb(lo=1, val=clip_h)
-        self._grid_x = _sb(lo=0, hi=2048, val=0)
-        self._grid_y = _sb(lo=0, hi=2048, val=0)
+        self._grid_x = _sb(lo=0, hi=2048, val=100)
+        self._grid_y = _sb(lo=0, hi=2048, val=100)
 
-        # ── Controls: two rows ─────────────────────────────────────────────
-        def _row(*items) -> QHBoxLayout:
-            row = QHBoxLayout()
-            row.setSpacing(6)
-            for item in items:
-                if item is None:
-                    row.addSpacing(16)
-                else:
-                    label, widget = item
-                    row.addWidget(QLabel(label))
-                    row.addWidget(widget)
-            row.addStretch()
-            return row
+        self._zoom_sb = QSpinBox()
+        self._zoom_sb.setRange(5, 800)
+        self._zoom_sb.setSuffix(" %")
+        self._zoom_sb.setValue(50)
+        self._zoom_sb.setFixedWidth(90)
+        self._zoom_sb.setSingleStep(5)
 
-        row1 = _row(
-            ("Origin X:", self._orig_x), ("Y:", self._orig_y),
-            None,
-            ("Grid X:", self._grid_x), ("Y:", self._grid_y),
-        )
-        row2 = _row(
-            ("Clip W:", self._clip_w), ("H:", self._clip_h),
-        )
+        # ── Controls grid ──────────────────────────────────────────────────
+        #   Col:  0           1           2     3           4(stretch)  5         6           7     8
+        #   Row0: Origin X:  [orig_x]    Y:   [orig_y]                Grid X:  [grid_x]    Y:   [grid_y]
+        #   Row1: Clip W:    [clip_w]    H:   [clip_h]                Zoom:    [zoom_sb]
+        grid = QGridLayout()
+        grid.setSpacing(6)
+        grid.setColumnStretch(4, 1)  # gap between left and right groups
 
-        controls = QVBoxLayout()
-        controls.setSpacing(4)
-        controls.addLayout(row1)
-        controls.addLayout(row2)
+        grid.addWidget(QLabel("Origin X:"), 0, 0)
+        grid.addWidget(self._orig_x,        0, 1)
+        grid.addWidget(QLabel("Y:"),        0, 2)
+        grid.addWidget(self._orig_y,        0, 3)
+
+        grid.addWidget(QLabel("Clip W:"),   1, 0)
+        grid.addWidget(self._clip_w,        1, 1)
+        grid.addWidget(QLabel("H:"),        1, 2)
+        grid.addWidget(self._clip_h,        1, 3)
+
+        grid.addWidget(QLabel("Grid X:"),   0, 5)
+        grid.addWidget(self._grid_x,        0, 6)
+        grid.addWidget(QLabel("Y:"),        0, 7)
+        grid.addWidget(self._grid_y,        0, 8)
+
+        grid.addWidget(QLabel("Zoom:"),     1, 5)
+        grid.addWidget(self._zoom_sb,       1, 6)
 
         # ── Texture view ───────────────────────────────────────────────────
         self._view = _TextureView(
@@ -205,19 +212,22 @@ class TextureEditorDialog(QDialog):
             self._grid_x, self._grid_y,
         )
 
+        for sb in (self._orig_x, self._orig_y,
+                   self._clip_w, self._clip_h,
+                   self._grid_x, self._grid_y):
+            sb.valueChanged.connect(self._view.refresh)
+
+        self._view.zoom_changed.connect(self._on_zoom_changed)
+        self._zoom_sb.valueChanged.connect(self._on_zoom_spinbox)
+
         if not pixmap.isNull():
             fit = min(1.0, 580 / max(pixmap.height(), 1))
-            self._view.set_zoom(fit)
+            self._view.set_zoom(fit)  # emits zoom_changed → updates _zoom_sb
 
         scroll = QScrollArea()
         scroll.setWidget(self._view)
         scroll.setWidgetResizable(False)
         scroll.setAlignment(Qt.AlignCenter)
-
-        for sb in (self._orig_x, self._orig_y,
-                   self._clip_w, self._clip_h,
-                   self._grid_x, self._grid_y):
-            sb.valueChanged.connect(self._view.refresh)
 
         # ── Coordinate label ───────────────────────────────────────────────
         self._coord_label = QLabel("X: —   Y: —")
@@ -232,10 +242,20 @@ class TextureEditorDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
-        layout.addLayout(controls)
+        layout.addLayout(grid)
         layout.addWidget(scroll, 1)
         layout.addWidget(self._coord_label)
         layout.addWidget(btns)
+
+    def _on_zoom_changed(self, zoom: float):
+        self._zoom_sb.blockSignals(True)
+        self._zoom_sb.setValue(round(zoom * 100))
+        self._zoom_sb.blockSignals(False)
+
+    def _on_zoom_spinbox(self, value: int):
+        self._view.zoom_changed.disconnect(self._on_zoom_changed)
+        self._view.set_zoom(value / 100.0)
+        self._view.zoom_changed.connect(self._on_zoom_changed)
 
     def _on_mouse_pos(self, x: int, y: int):
         if x < 0:
