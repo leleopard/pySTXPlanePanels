@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
-    QPushButton, QCheckBox,
+    QPushButton, QCheckBox, QDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QFileDialog,
 )
@@ -250,8 +250,16 @@ class PropertiesForm(QWidget):
         tex_row = QWidget()
         hl = QHBoxLayout(tex_row)
         hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
+        self._tex_edit_btn = QPushButton("Edit"); self._tex_edit_btn.setFixedWidth(38)
+        self._tex_edit_btn.setToolTip("Open texture editor")
+        self._tex_edit_btn.setEnabled(False)
+        self._tex_edit_btn.clicked.connect(self._open_texture_editor)
+        hl.addWidget(self._tex_edit_btn)
         self._tex = QLineEdit()
         self._tex.editingFinished.connect(self._emit)
+        self._tex.textChanged.connect(
+            lambda t: self._tex_edit_btn.setEnabled(bool(t.strip()))
+        )
         hl.addWidget(self._tex)
         btn = QPushButton("…"); btn.setFixedWidth(26)
         btn.clicked.connect(self._browse_tex)
@@ -507,6 +515,28 @@ class PropertiesForm(QWidget):
 
     def _on_tr_fixed(self, on: bool):
         self._tr_angle.setEnabled(on)
+
+    def _open_texture_editor(self):
+        tex_rel = self._tex.text().strip()
+        if not tex_rel:
+            return
+        tex_abs = str((Path(self._yaml_dir) / tex_rel).resolve()) if self._yaml_dir else tex_rel
+        from gauge_designer.texture_editor import TextureEditorDialog
+        dlg = TextureEditorDialog(
+            texture_path=tex_abs,
+            clip_w=self._clip_w.value(),
+            clip_h=self._clip_h.value(),
+            origin_x=self._orig_x.value(),
+            origin_y=self._orig_y.value(),
+            parent=self,
+        )
+        if dlg.exec() == QDialog.Accepted:
+            cw, ch, ox, oy = dlg.get_values()
+            self._loading = True
+            self._clip_w.setValue(cw); self._clip_h.setValue(ch)
+            self._orig_x.setValue(ox); self._orig_y.setValue(oy)
+            self._loading = False
+            self._emit()
 
     def _browse_tex(self):
         start = self._yaml_dir
