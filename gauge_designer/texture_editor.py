@@ -4,6 +4,7 @@ Displays the full texture with:
 - Semi-transparent overlay everywhere except the selected clip region
 - Optional grid overlay (configurable X/Y spacing)
 - Ctrl+wheel to zoom
+- Crosshair cursor with live texture-coordinate readout
 """
 
 from pathlib import Path
@@ -12,12 +13,14 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox,
     QScrollArea, QWidget, QDialogButtonBox,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QPixmap, QColor, QPen
 
 
 class _TextureView(QWidget):
     """Custom widget that renders the texture with clip overlay and grid."""
+
+    mouse_pos_changed = Signal(int, int)  # texture-space x, y; (-1,-1) on leave
 
     def __init__(self, pixmap: QPixmap,
                  orig_x: QSpinBox, orig_y: QSpinBox,
@@ -33,6 +36,8 @@ class _TextureView(QWidget):
         self._grid_x = grid_x
         self._grid_y = grid_y
         self._zoom = 0.5
+        self.setCursor(Qt.CrossCursor)
+        self.setMouseTracking(True)
         self._update_size()
 
     # ── Public ────────────────────────────────────────────────────────────
@@ -55,6 +60,17 @@ class _TextureView(QWidget):
                 max(1, int(self._pixmap.width()  * self._zoom)),
                 max(1, int(self._pixmap.height() * self._zoom)),
             )
+
+    def mouseMoveEvent(self, event):
+        if not self._pixmap.isNull():
+            tx = int(event.position().x() / self._zoom)
+            ty = int(event.position().y() / self._zoom)
+            self.mouse_pos_changed.emit(tx, ty)
+        event.ignore()
+
+    def leaveEvent(self, event):
+        self.mouse_pos_changed.emit(-1, -1)
+        event.ignore()
 
     def wheelEvent(self, event):
         if event.modifiers() & Qt.ControlModifier:
@@ -142,10 +158,10 @@ class TextureEditorDialog(QDialog):
             s = QSpinBox()
             s.setRange(lo, hi)
             s.setValue(val)
-            s.setFixedWidth(72)
+            s.setFixedWidth(90)
             return s
 
-        # ── Controls bar ───────────────────────────────────────────────────
+        # ── Spinboxes ──────────────────────────────────────────────────────
         self._orig_x = _sb(val=origin_x)
         self._orig_y = _sb(val=origin_y)
         self._clip_w = _sb(lo=1, val=clip_w)
@@ -153,22 +169,33 @@ class TextureEditorDialog(QDialog):
         self._grid_x = _sb(lo=0, hi=2048, val=0)
         self._grid_y = _sb(lo=0, hi=2048, val=0)
 
-        bar = QHBoxLayout()
-        bar.setSpacing(6)
-        for item in [
+        # ── Controls: two rows ─────────────────────────────────────────────
+        def _row(*items) -> QHBoxLayout:
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            for item in items:
+                if item is None:
+                    row.addSpacing(16)
+                else:
+                    label, widget = item
+                    row.addWidget(QLabel(label))
+                    row.addWidget(widget)
+            row.addStretch()
+            return row
+
+        row1 = _row(
             ("Origin X:", self._orig_x), ("Y:", self._orig_y),
             None,
-            ("Clip W:",   self._clip_w), ("H:", self._clip_h),
-            None,
-            ("Grid X:",   self._grid_x), ("Y:", self._grid_y),
-        ]:
-            if item is None:
-                bar.addSpacing(16)
-            else:
-                label, widget = item
-                bar.addWidget(QLabel(label))
-                bar.addWidget(widget)
-        bar.addStretch()
+            ("Grid X:", self._grid_x), ("Y:", self._grid_y),
+        )
+        row2 = _row(
+            ("Clip W:", self._clip_w), ("H:", self._clip_h),
+        )
+
+        controls = QVBoxLayout()
+        controls.setSpacing(4)
+        controls.addLayout(row1)
+        controls.addLayout(row2)
 
         # ── Texture view ───────────────────────────────────────────────────
         self._view = _TextureView(
@@ -192,6 +219,10 @@ class TextureEditorDialog(QDialog):
                    self._grid_x, self._grid_y):
             sb.valueChanged.connect(self._view.refresh)
 
+        # ── Coordinate label ───────────────────────────────────────────────
+        self._coord_label = QLabel("X: —   Y: —")
+        self._view.mouse_pos_changed.connect(self._on_mouse_pos)
+
         # ── Buttons ────────────────────────────────────────────────────────
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
@@ -201,9 +232,16 @@ class TextureEditorDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
-        layout.addLayout(bar)
+        layout.addLayout(controls)
         layout.addWidget(scroll, 1)
+        layout.addWidget(self._coord_label)
         layout.addWidget(btns)
+
+    def _on_mouse_pos(self, x: int, y: int):
+        if x < 0:
+            self._coord_label.setText("X: —   Y: —")
+        else:
+            self._coord_label.setText(f"X: {x}   Y: {y}")
 
     def get_values(self) -> tuple[int, int, int, int]:
         """Returns (clip_w, clip_h, origin_x, origin_y)."""
