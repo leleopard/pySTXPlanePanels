@@ -93,6 +93,10 @@ class ImagePanel:
         self._vis_dataref: Any | None = None
         self._vis_predicate: Callable | None = None
 
+        # viewport clip (screen-space scissor rectangle: x, y, w, h)
+        # specified in instrument coordinates; shifted by apply_offset.
+        self._viewport: tuple[float, float, float, float] | None = None
+
     # -- transform setters -------------------------------------------------
 
     def set_rotation(
@@ -125,6 +129,10 @@ class ImagePanel:
         self._tr_angle_deg = translation_angle_deg
         self._tr_add_to_rotation_deg = float(add_angle_to_rotation_deg)
 
+    def set_viewport(self, x: float, y: float, w: float, h: float) -> None:
+        """Fix a scissor rectangle (instrument-space coords) that clips this sprite."""
+        self._viewport = (x, y, w, h)
+
     def set_visibility(self, dataref: Any, predicate: str) -> None:
         self._vis_dataref = _as_dataref(dataref)
         self._vis_predicate = get_convert(predicate)
@@ -137,6 +145,9 @@ class ImagePanel:
         self._base_y += dy
         self.sprite.center_x = self._base_x
         self.sprite.center_y = self._base_y
+        if self._viewport is not None:
+            vx, vy, vw, vh = self._viewport
+            self._viewport = (vx + dx, vy + dy, vw, vh)
 
     # -- per-frame update --------------------------------------------------
 
@@ -202,10 +213,16 @@ class ImagePanel:
             self.sprite.visible = bool(self._vis_predicate(value, get_data))
 
     def draw(self) -> None:
-        # Single-sprite draw. Fine for the C172 panel's ~30 sprites; if
-        # batching becomes worth it later, panel-level SpriteLists can be
-        # introduced behind this same interface.
-        if self.sprite.visible:
+        if not self.sprite.visible:
+            return
+        if self._viewport is not None:
+            vx, vy, vw, vh = self._viewport
+            ctx = arcade.get_window().ctx
+            ctx.enable(ctx.SCISSOR_TEST)
+            ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
+            arcade.draw_sprite(self.sprite)
+            ctx.disable(ctx.SCISSOR_TEST)
+        else:
             arcade.draw_sprite(self.sprite)
 
 
@@ -248,13 +265,20 @@ def _image_panel_factory(
 
     if "translation" in comp:
         tr = comp["translation"]
+        angle = tr.get("translation_angle")
+        if angle is None and "axis" in tr:
+            angle = 90.0 if tr["axis"] == "y" else 0.0
         panel.set_translation(
             dataref=tr["dataref"],
             table=tr["table"],
             convert_function=tr.get("convert_function"),
-            translation_angle_deg=tr.get("translation_angle"),
+            translation_angle_deg=angle,
             add_angle_to_rotation_deg=tr.get("add_angle_to_rotation", 0.0),
         )
+
+    if "viewport" in comp:
+        vx, vy, vw, vh = comp["viewport"]
+        panel.set_viewport(float(vx), float(vy), float(vw), float(vh))
 
     if "visibility" in comp:
         vis = comp["visibility"]
