@@ -12,6 +12,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+
+class _NoScrollComboBox(QComboBox):
+    """QComboBox that ignores mouse-wheel events to prevent accidental changes."""
+
+    def wheelEvent(self, event):
+        event.ignore()
+
 # ── Registry data ─────────────────────────────────────────────────────────────
 
 _NONE = "(none)"
@@ -229,7 +236,7 @@ class PropertiesForm(QWidget):
         self._name.editingFinished.connect(self._emit)
         s.row("Name", self._name)
 
-        self._type = QComboBox()
+        self._type = _NoScrollComboBox()
         self._type.addItems(_COMP_TYPES)
         self._type.currentTextChanged.connect(self._on_type_changed)
         self._type.currentTextChanged.connect(self._emit)
@@ -296,7 +303,7 @@ class PropertiesForm(QWidget):
         self._rot_dr = QLineEdit(); self._rot_dr.editingFinished.connect(self._emit)
         self._rot_sec.row("Dataref", self._rot_dr)
 
-        self._rot_fn = QComboBox(); self._rot_fn.addItems(_VALUE_FUNCS)
+        self._rot_fn = _NoScrollComboBox(); self._rot_fn.addItems(_VALUE_FUNCS)
         self._rot_fn.currentTextChanged.connect(self._emit)
         self._rot_sec.row("Convert fn", self._rot_fn)
 
@@ -318,7 +325,7 @@ class PropertiesForm(QWidget):
         self._tr_dr = QLineEdit(); self._tr_dr.editingFinished.connect(self._emit)
         self._tr_sec.row("Dataref", self._tr_dr)
 
-        self._tr_fn = QComboBox(); self._tr_fn.addItems(_VALUE_FUNCS)
+        self._tr_fn = _NoScrollComboBox(); self._tr_fn.addItems(_VALUE_FUNCS)
         self._tr_fn.currentTextChanged.connect(self._emit)
         self._tr_sec.row("Convert fn", self._tr_fn)
 
@@ -354,7 +361,7 @@ class PropertiesForm(QWidget):
         self._vis_dr = QLineEdit(); self._vis_dr.editingFinished.connect(self._emit)
         self._vis_sec.row("Dataref", self._vis_dr)
 
-        self._vis_pred = QComboBox(); self._vis_pred.addItems(_PREDICATES)
+        self._vis_pred = _NoScrollComboBox(); self._vis_pred.addItems(_PREDICATES)
         self._vis_pred.currentTextChanged.connect(self._emit)
         self._vis_sec.row("Predicate", self._vis_pred)
 
