@@ -35,6 +35,7 @@ def _load_config(config_path: str | None) -> dict:
     return data.get("udp", {})
 
 from gauge_core.loader import load_instrument
+from gauge_core.mock_source import DEFAULT_MOCK_PORT, MockDataSource
 from gauge_core.panel import Panel, load_panel, panel_from_instrument
 
 
@@ -212,6 +213,18 @@ def main(argv: list[str] | None = None) -> int:
         "value across all gauges. No UDP.",
     )
     p.add_argument(
+        "--mock",
+        action="store_true",
+        help="Mock mode: receive per-dataref values from the test harness "
+        "(gauge_test_harness) over a local UDP socket. No X-Plane needed.",
+    )
+    p.add_argument(
+        "--mock-port",
+        type=int,
+        default=DEFAULT_MOCK_PORT,
+        help=f"Local UDP port MockDataSource listens on (default {DEFAULT_MOCK_PORT}).",
+    )
+    p.add_argument(
         "--config",
         default=None,
         help=f"Path to config YAML (default: ./{_DEFAULT_CONFIG} if present)",
@@ -245,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
         listen_port = panel.udp_listen_port
 
     udp: UDPDataSource | None = None
+    mock: MockDataSource | None = None
     if args.test:
         data_source = TestDataSource()
         window = PanelWindow(
@@ -253,6 +267,14 @@ def main(argv: list[str] | None = None) -> int:
             is_test_mode=True,
         )
         data_source.window = window
+    elif args.mock:
+        mock = MockDataSource(port=args.mock_port)
+        mock.start()
+        window = PanelWindow(
+            panel=panel,
+            get_data=mock,
+            is_test_mode=True,
+        )
     else:
         udp = UDPDataSource(
             listen=(listen_host, listen_port),
@@ -276,6 +298,11 @@ def main(argv: list[str] | None = None) -> int:
         if udp is not None:
             try:
                 udp.quit()
+            except Exception:
+                pass
+        if mock is not None:
+            try:
+                mock.stop()
             except Exception:
                 pass
 
