@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.mock_source import DEFAULT_MOCK_PORT
+from gauge_core.registry import get_convert
 
 
 # ── Dataref descriptor ────────────────────────────────────────────────────────
@@ -49,13 +50,15 @@ from gauge_core.mock_source import DEFAULT_MOCK_PORT
 @dataclass
 class _DatarefInfo:
     dataref: str
-    # first lookup table found for this dataref (used for Output column)
+    # first lookup table found (used for Output column)
     table: list[list[float]] = field(default_factory=list)
+    # convert function name applied before the table (None = raw value goes in)
+    convert_fn: str | None = None
     # human-readable uses: "InstrName / CompName (rotation)", …
     used_by: list[str] = field(default_factory=list)
-    # suggested spinbox range derived from the table's input column
-    input_min: float = -1000.0
-    input_max: float = 1000.0
+    # spinbox range — derived from table inputs when no convert_fn; wide fallback otherwise
+    input_min: float = 0.0
+    input_max: float = 50000.0
 
 
 def _dr_key(raw: Any) -> str:
@@ -81,16 +84,31 @@ def _collect_from_instrument(
 ) -> None:
     """Extract datarefs from a parsed instrument YAML dict."""
 
-    def _register(raw_dr: Any, table: list, label: str) -> None:
+    def _register(raw_dr: Any, table: list, label: str,
+                  convert_fn: str | None = None) -> None:
         key = _dr_key(raw_dr)
         if key not in registry:
-            lo, hi = _table_range(table)
+            if convert_fn is None:
+                lo, hi = _table_range(table)
+            else:
+                lo, hi = 0.0, 50000.0  # raw range unknown; wide fallback
             registry[key] = _DatarefInfo(
                 dataref=key,
                 table=table,
+                convert_fn=convert_fn,
                 input_min=lo,
                 input_max=hi,
             )
+        else:
+            info = registry[key]
+            # If we previously stored a convert-fn entry, upgrade to a
+            # direct table entry when we find one — gives a tighter range.
+            if convert_fn is None and info.convert_fn is not None:
+                lo, hi = _table_range(table)
+                info.table = table
+                info.convert_fn = None
+                info.input_min = lo
+                info.input_max = hi
         registry[key].used_by.append(label)
 
     # instrument-level visibility
@@ -105,12 +123,14 @@ def _collect_from_instrument(
         if "rotation" in comp:
             rot = comp["rotation"]
             _register(rot["dataref"], rot.get("table", []),
-                      f"{label_base}  (rotation)")
+                      f"{label_base}  (rotation)",
+                      convert_fn=rot.get("convert_function"))
 
         if "translation" in comp:
             tr = comp["translation"]
             _register(tr["dataref"], tr.get("table", []),
-                      f"{label_base}  (translation)")
+                      f"{label_base}  (translation)",
+                      convert_fn=tr.get("convert_function"))
 
         if "visibility" in comp:
             vis = comp["visibility"]
@@ -259,7 +279,12 @@ class TestHarnessWindow(QMainWindow):
     def _on_value_changed(self, row: int, info: _DatarefInfo, value: float) -> None:
         # Update output column
         if info.table:
-            output = lookup_piecewise(info.table, value)
+            table_input = value
+            if info.convert_fn:
+                fn = get_convert(info.convert_fn)
+                if fn is not None:
+                    table_input = float(fn(value, lambda _: 0.0))
+            output = lookup_piecewise(info.table, table_input)
             item = self._table.item(row, _COL_OUTPUT)
             if item is not None:
                 item.setText(f"{output:.2f}")
