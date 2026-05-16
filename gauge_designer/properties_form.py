@@ -213,6 +213,7 @@ class PropertiesForm(QWidget):
         self._mk_texture()
         self._mk_rotation()
         self._mk_translation()
+        self._mk_viewport()
         self._mk_visibility()
         self._vbox.addStretch()
 
@@ -354,6 +355,22 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._tr_sec)
 
+    def _mk_viewport(self):
+        self._vp_sec = _Section("Viewport clip", optional=True)
+        self._vp_sec.toggled.connect(self._emit)
+
+        self._vp_x = _sb(0, 4096); self._vp_y = _sb(0, 4096)
+        for w in (self._vp_x, self._vp_y):
+            w.valueChanged.connect(self._emit)
+        self._vp_sec.row_pair("X  /  Y", self._vp_x, self._vp_y)
+
+        self._vp_w = _sb(0, 4096); self._vp_h = _sb(0, 4096)
+        for w in (self._vp_w, self._vp_h):
+            w.valueChanged.connect(self._emit)
+        self._vp_sec.row_pair("W  /  H", self._vp_w, self._vp_h)
+
+        self._vbox.addWidget(self._vp_sec)
+
     def _mk_visibility(self):
         self._vis_sec = _Section("Visibility", optional=True)
         self._vis_sec.toggled.connect(self._emit)
@@ -372,7 +389,7 @@ class PropertiesForm(QWidget):
     def load(self, comp: dict):
         self._loading = True
         known = {"name", "type", "position", "texture", "cliprect", "origin",
-                 "rotation", "translation", "visibility",
+                 "rotation", "translation", "viewport", "visibility",
                  "resize_to_container", "maintain_proportions"}
         self._extra = {k: v for k, v in comp.items() if k not in known}
 
@@ -429,6 +446,15 @@ class PropertiesForm(QWidget):
             self._tr_angle.setValue(0.0); self._tr_angle.setEnabled(False)
             self._tr_add.setValue(0.0); self._tr_tbl.load([])
 
+        vp = comp.get("viewport")
+        self._vp_sec.set_active(vp is not None)
+        if vp:
+            self._vp_x.setValue(int(vp[0])); self._vp_y.setValue(int(vp[1]))
+            self._vp_w.setValue(int(vp[2])); self._vp_h.setValue(int(vp[3]))
+        else:
+            self._vp_x.setValue(0); self._vp_y.setValue(0)
+            self._vp_w.setValue(0); self._vp_h.setValue(0)
+
         vis = comp.get("visibility")
         self._vis_sec.set_active(vis is not None)
         if vis:
@@ -481,6 +507,12 @@ class PropertiesForm(QWidget):
             tr["table"] = self._tr_tbl.get_data()
             data["translation"] = tr
 
+        if self._vp_sec.active:
+            data["viewport"] = [
+                self._vp_x.value(), self._vp_y.value(),
+                self._vp_w.value(), self._vp_h.value(),
+            ]
+
         if self._vis_sec.active:
             data["visibility"] = {
                 "dataref":   self._vis_dr.text().strip(),
@@ -502,6 +534,7 @@ class PropertiesForm(QWidget):
         self._prop_chk.setEnabled(False)
         self._rot_sec.set_active(False)
         self._tr_sec.set_active(False)
+        self._vp_sec.set_active(False)
         self._vis_sec.set_active(False)
         self._extra = {}
         self._loading = False
