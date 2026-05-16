@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import gauge_core.convert as _convert_reg  # noqa: F401 — registers convert functions
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.mock_source import DEFAULT_MOCK_PORT
 from gauge_core.registry import get_convert
