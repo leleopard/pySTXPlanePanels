@@ -30,47 +30,47 @@ udp:
 
 instruments:
   # ── Six-pack top row ──────────────────────────────────────────────────────
-  - file: ../instruments/c172_airspeed.yaml
+  - file: ../instruments/C172/c172_airspeed.yaml
     position: [15, 515]
-  - file: ../instruments/c172_artificial_horizon.yaml
+  - file: ../instruments/C172/c172_artificial_horizon.yaml
     position: [325, 515]
-  - file: ../instruments/c172_altimeter.yaml
+  - file: ../instruments/C172/c172_altimeter.yaml
     position: [635, 515]
 
   # ── Six-pack bottom row ───────────────────────────────────────────────────
-  - file: ../instruments/c172_turn_coordinator.yaml
+  - file: ../instruments/C172/c172_turn_coordinator.yaml
     position: [15, 205]
-  - file: ../instruments/c172_directional_gyro.yaml
+  - file: ../instruments/C172/c172_directional_gyro.yaml
     position: [325, 205]
-  - file: ../instruments/c172_vsi.yaml
+  - file: ../instruments/C172/c172_vsi.yaml
     position: [635, 205]
 
   # ── Annunciator ───────────────────────────────────────────────────────────
-  - file: ../instruments/c172_annunciator.yaml
+  - file: ../instruments/C172/c172_annunciator.yaml
     position: [412, 827]
 
   # ── Engine / system gauges (small 200×200) ────────────────────────────────
-  - file: ../instruments/c172_oil_temp_pressure.yaml
+  - file: ../instruments/C172/c172_oil_temp_pressure.yaml
     position: [10, 5]
-  - file: ../instruments/c172_amp_vac.yaml
+  - file: ../instruments/C172/c172_amp_vac.yaml
     position: [210, 5]
-  - file: ../instruments/c172_fuel_quantity.yaml
+  - file: ../instruments/C172/c172_fuel_quantity.yaml
     position: [410, 5]
-  - file: ../instruments/c172_fuel_flow.yaml
+  - file: ../instruments/C172/c172_fuel_flow.yaml
     position: [610, 5]
 
   # ── RPM tachometer (280×280 content, 310×310 with bezel) ─────────────────
-  - file: ../instruments/c172_rpm.yaml
+  - file: ../instruments/C172/c172_rpm.yaml
     position: [830, 5]
 
   # ── Navigation indicators ─────────────────────────────────────────────────
-  - file: ../instruments/c172_vor1.yaml
+  - file: ../instruments/C172/c172_vor1.yaml
     position: [945, 525]
-  - file: ../instruments/c172_vor2.yaml
+  - file: ../instruments/C172/c172_vor2.yaml
     position: [945, 235]
-  - file: ../instruments/c172_adf_indicator.yaml
+  - file: ../instruments/C172/c172_adf_indicator.yaml
     position: [1141, 5]
 
   # ── Magnetic compass (simplified disc; full tape version deferred) ─────────
-  - file: ../instruments/c172_compass.yaml
+  - file: ../instruments/C172/c172_compass.yaml
     position: [1185, 580]
