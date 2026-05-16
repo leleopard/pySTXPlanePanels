@@ -16,7 +16,7 @@ import io
 from pathlib import Path
 
 from PIL import Image, ImageDraw
-from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout
+from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QPainter
 
@@ -28,6 +28,8 @@ class _CanvasSurface(QWidget):
         super().__init__(parent)
         self._canvas = canvas
         self._pixmap = QPixmap()
+        self.setCursor(Qt.CrossCursor)
+        self.setMouseTracking(True)
 
     def set_pixmap(self, pixmap: QPixmap):
         self._pixmap = pixmap
@@ -46,6 +48,10 @@ class _CanvasSurface(QWidget):
 
     def mouseReleaseEvent(self, event):
         self._canvas._on_release(event)
+
+    def leaveEvent(self, event):
+        self._canvas._on_leave()
+        super().leaveEvent(event)
 
     def wheelEvent(self, event):
         if event.modifiers() & Qt.ControlModifier:
@@ -79,9 +85,14 @@ class InstrumentCanvas(QWidget):
         self._scroll.setWidgetResizable(False)
         self._scroll.setAlignment(Qt.AlignCenter)
 
+        self._coord_label = QLabel("")
+        self._coord_label.setAlignment(Qt.AlignLeft)
+        self._coord_label.setStyleSheet("font-size: 11px; color: #aaa; padding: 1px 4px;")
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._scroll)
+        layout.addWidget(self._coord_label)
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -177,11 +188,16 @@ class InstrumentCanvas(QWidget):
         self.component_selected.emit(name)
 
     def _on_move(self, event):
+        p = event.position()
+        canvas_x = p.x() / self._zoom
+        canvas_y = p.y() / self._zoom
+        _w, ih = self._data.get("size", [310, 310]) if self._data else [310, 310]
+        self._coord_label.setText(f"X {int(round(canvas_x))}  Y {ih - int(round(canvas_y))}")
+
         if not (event.buttons() & Qt.LeftButton) or not self._drag_name:
             return
-        p = event.position()
-        dx = p.x() / self._zoom - self._drag_start[0]
-        dy = p.y() / self._zoom - self._drag_start[1]
+        dx = canvas_x - self._drag_start[0]
+        dy = canvas_y - self._drag_start[1]
         new_x = int(round(self._drag_orig[0] + dx))
         new_y = int(round(self._drag_orig[1] - dy))  # y-down → y-up
         comp = self._find_comp(self._drag_name)
@@ -189,10 +205,13 @@ class InstrumentCanvas(QWidget):
             comp["position"] = [new_x, new_y]
             self._render()
 
+    def _on_leave(self):
+        self._coord_label.setText("")
+
     def _on_release(self, event):
         if event.button() != Qt.LeftButton or not self._drag_name:
             return
-        self._surface.unsetCursor()
+        self._surface.setCursor(Qt.CrossCursor)
         comp = self._find_comp(self._drag_name)
         if comp is not None:
             x, y = comp.get("position", [0, 0])
