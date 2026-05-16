@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDoubleSpinBox,
@@ -179,6 +179,12 @@ _COL_USED_BY = 3
 
 
 class TestHarnessWindow(QMainWindow):
+    closed = Signal()
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
+
     def __init__(self, yaml_path: str, port: int = DEFAULT_MOCK_PORT, parent=None):
         super().__init__(parent)
         self._port = port

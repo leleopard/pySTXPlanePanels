@@ -374,5 +374,6 @@ class MainWindow(QMainWindow):
         if self._panel_dirty and not self._confirm_discard("panel"):
             event.ignore()
             return
+        self._gauge_view.stop_test()
         self._settings.setValue("windowGeometry", self.saveGeometry())
         event.accept()
