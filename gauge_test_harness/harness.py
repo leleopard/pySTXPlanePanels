@@ -28,6 +28,7 @@ from typing import Any
 import yaml
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -193,8 +194,8 @@ class TestHarnessWindow(QMainWindow):
         self._table.setColumnWidth(_COL_DATAREF, 320)
         self._table.setColumnWidth(_COL_VALUE,   110)
         self._table.setColumnWidth(_COL_OUTPUT,   90)
-        self._table.setSelectionBehavior(self._table.SelectRows)
-        self._table.setEditTriggers(self._table.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         vbox.addWidget(self._table, 1)
 
         # ── footer bar ────────────────────────────────────────────────────
