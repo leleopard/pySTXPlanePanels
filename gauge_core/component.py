@@ -218,10 +218,9 @@ class ImagePanel:
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             ctx = arcade.get_window().ctx
-            ctx.enable(ctx.SCISSOR_TEST)
             ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
             arcade.draw_sprite(self.sprite)
-            ctx.disable(ctx.SCISSOR_TEST)
+            ctx.scissor = None
         else:
             arcade.draw_sprite(self.sprite)
 
