@@ -235,8 +235,8 @@ class PanelCanvas(QWidget):
                     sc = float(inst_entry.get("scale", 1.0))
                     iw = int(round(iw * sc))
                     ih = int(round(ih * sc))
-                    il = gx + col * cw
-                    it = ph - gy - (rows - 1 - row) * ch - ih
+                    il = int(gx + col * cw + (cw - iw) / 2)
+                    it = int(ph - gy - (rows - row) * ch + (ch - ih) / 2)
                     ir = il + iw - 1
                     ib = it + ih - 1
                     # Color follows the instrument (file-based), not the cell

@@ -105,10 +105,11 @@ def _load_grid(grid: dict, base_dir: Path, panel: "Panel") -> None:
         inst_path = (base_dir / inst_entry["file"]).resolve()
         inst = load_instrument(inst_path)
         scale = float(inst_entry.get("scale", 1.0))
-        ox = gx + col * cw
-        # Row 0 = top row visually; in y-up coords the top of the grid is
-        # gy + rows*ch, so row 0 occupies [gy+(rows-1)*ch, gy+rows*ch].
-        oy = gy + (rows - 1 - row) * ch
+        iw = inst.size[0] * scale
+        ih = inst.size[1] * scale
+        ox = gx + col * cw + (cw - iw) / 2
+        # Row 0 = top row; in y-up coords the top of the grid is gy+rows*ch.
+        oy = gy + (rows - 1 - row) * ch + (ch - ih) / 2
         for comp in inst.components:
             if scale != 1.0:
                 comp.apply_scale(scale)
