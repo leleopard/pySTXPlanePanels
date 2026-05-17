@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from PySide6.QtCore import QSettings
+
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
 from gauge_designer.panel_canvas import PanelCanvas
 
@@ -119,7 +121,8 @@ class PanelView(QWidget):
         size_bar.addWidget(self._panel_h)
         size_bar.addStretch()
 
-        splitter = QSplitter(Qt.Horizontal)
+        self._splitter = QSplitter(Qt.Horizontal)
+        splitter = self._splitter
 
         # ── Pane 1: tree + toolbar ─────────────────────────────────────────
         left = QWidget()
@@ -185,6 +188,16 @@ class PanelView(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.addLayout(size_bar)
         layout.addWidget(splitter)
+
+    # ── State persistence ──────────────────────────────────────────────────
+
+    def save_state(self, settings: QSettings):
+        settings.setValue("panelView/splitterState", self._splitter.saveState())
+
+    def restore_state(self, settings: QSettings):
+        state = settings.value("panelView/splitterState")
+        if state:
+            self._splitter.restoreState(state)
 
     # ── Public API ─────────────────────────────────────────────────────────
 
