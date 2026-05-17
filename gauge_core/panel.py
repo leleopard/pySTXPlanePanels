@@ -1,17 +1,26 @@
 """Panel YAML schema and loader.
 
 A panel composes one or more instruments at positions inside a single
-window. The schema:
+window. Two entry types are supported in the `instruments` list:
 
-    name: C172 Six Pack
-    size: [W, H]
-    background_color: [r, g, b]   # optional, 0..255
-    instruments:
-      - file: instruments/c172_airspeed.yaml
-        position: [px, py]        # bottom-left of the instrument in panel coords
+Plain instrument:
+    - file: instruments/c172_airspeed.yaml
+      position: [px, py]          # bottom-left in panel coords (y-up)
+      scale: 0.9                  # optional
 
-Component-local positions inside each instrument are translated by the
-instrument's panel position when the panel is loaded.
+Grid layout (cells computed from col/row + cell size):
+    - grid:
+        name: "Nav Radios"        # optional label
+        position: [px, py]        # bottom-left of the grid origin
+        columns: 2
+        rows: 1
+        cell_width: 310
+        cell_height: 310
+        instruments:
+          - file: instruments/c172_vor1.yaml
+            col: 0
+            row: 0
+            scale: 0.9            # optional
 """
 
 from __future__ import annotations
@@ -63,19 +72,44 @@ def load_panel(yaml_path: str | Path) -> Panel:
     )
 
     for entry in data.get("instruments", []):
-        inst_path = (base_dir / entry["file"]).resolve()
-        inst = load_instrument(inst_path)
+        if "grid" in entry:
+            _load_grid(entry["grid"], base_dir, panel)
+        else:
+            _load_instrument(entry, base_dir, panel)
 
-        scale = float(entry.get("scale", 1.0))
-        offset_x, offset_y = float(entry["position"][0]), float(entry["position"][1])
+    return panel
+
+
+def _load_instrument(entry: dict, base_dir: Path, panel: "Panel") -> None:
+    inst_path = (base_dir / entry["file"]).resolve()
+    inst = load_instrument(inst_path)
+    scale = float(entry.get("scale", 1.0))
+    ox, oy = float(entry["position"][0]), float(entry["position"][1])
+    for comp in inst.components:
+        if scale != 1.0:
+            comp.apply_scale(scale)
+        comp.apply_offset(ox, oy)
+    panel.instruments.append(inst)
+
+
+def _load_grid(grid: dict, base_dir: Path, panel: "Panel") -> None:
+    gx = float(grid["position"][0])
+    gy = float(grid["position"][1])
+    cw = float(grid.get("cell_width", 310))
+    ch = float(grid.get("cell_height", 310))
+    for inst_entry in grid.get("instruments", []):
+        col = int(inst_entry.get("col", 0))
+        row = int(inst_entry.get("row", 0))
+        inst_path = (base_dir / inst_entry["file"]).resolve()
+        inst = load_instrument(inst_path)
+        scale = float(inst_entry.get("scale", 1.0))
+        ox = gx + col * cw
+        oy = gy + row * ch
         for comp in inst.components:
             if scale != 1.0:
                 comp.apply_scale(scale)
-            comp.apply_offset(offset_x, offset_y)
-
+            comp.apply_offset(ox, oy)
         panel.instruments.append(inst)
-
-    return panel
 
 
 def panel_from_instrument(inst: Instrument) -> Panel:

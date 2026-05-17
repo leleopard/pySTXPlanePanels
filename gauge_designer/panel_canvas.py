@@ -149,15 +149,24 @@ class PanelCanvas(QWidget):
         pw, ph = self._data.get("size", [1540, 920])
         hit = -1
         for i, entry in enumerate(self._data.get("instruments", [])):
-            ix, iy = entry.get("position", [0, 0])
-            iw, ih = self._inst_size(entry.get("file", ""))
-            scale = float(entry.get("scale", 1.0))
-            iw = int(round(iw * scale))
-            ih = int(round(ih * scale))
-            left = ix
-            top = ph - iy - ih  # y-up → y-down
-            if left <= cx < left + iw and top <= cy < top + ih:
-                hit = i        # take last hit (topmost in draw order)
+            if "grid" in entry:
+                g = entry["grid"]
+                gx, gy = g.get("position", [0, 0])
+                gw = g.get("columns", 1) * g.get("cell_width", 310)
+                gh = g.get("rows", 1) * g.get("cell_height", 310)
+                left, top = gx, ph - gy - gh
+                if left <= cx < left + gw and top <= cy < top + gh:
+                    hit = i
+            else:
+                ix, iy = entry.get("position", [0, 0])
+                iw, ih = self._inst_size(entry.get("file", ""))
+                scale = float(entry.get("scale", 1.0))
+                iw = int(round(iw * scale))
+                ih = int(round(ih * scale))
+                left = ix
+                top = ph - iy - ih  # y-up → y-down
+                if left <= cx < left + iw and top <= cy < top + ih:
+                    hit = i        # take last hit (topmost in draw order)
         if hit != self._selected_idx:
             self._selected_idx = hit
             self._render()
@@ -186,26 +195,75 @@ class PanelCanvas(QWidget):
         draw = ImageDraw.Draw(canvas)
 
         for i, entry in enumerate(self._data.get("instruments", [])):
-            ix, iy = entry.get("position", [0, 0])
-            iw, ih = self._inst_size(entry.get("file", ""))
-            scale = float(entry.get("scale", 1.0))
-            iw = int(round(iw * scale))
-            ih = int(round(ih * scale))
-            left = ix
-            top = ph - iy - ih
-            right = left + iw - 1
-            bottom = top + ih - 1
             is_sel = (i == self._selected_idx)
+            sel_outline = (255, 220, 0, 255)
+            def_outline = (160, 160, 160, 200)
 
-            fill = _PALETTE[i % len(_PALETTE)]
-            outline = (255, 220, 0, 255) if is_sel else (160, 160, 160, 200)
-            lw = 3 if is_sel else 1
+            if "grid" in entry:
+                g = entry["grid"]
+                gx, gy = g.get("position", [0, 0])
+                cols = g.get("columns", 1)
+                rows = g.get("rows", 1)
+                cw = g.get("cell_width", 310)
+                ch = g.get("cell_height", 310)
+                gw = cols * cw
+                gh = rows * ch
+                gl = gx
+                gt = ph - gy - gh
+                gr = gl + gw - 1
+                gb = gt + gh - 1
 
-            draw.rectangle([left, top, right, bottom], fill=fill)
-            draw.rectangle([left, top, right, bottom], outline=outline, width=lw)
+                draw.rectangle([gl, gt, gr, gb], fill=(30, 30, 60, 120),
+                               outline=sel_outline if is_sel else (100, 120, 200, 180),
+                               width=3 if is_sel else 1)
 
-            label = Path(entry.get("file", "?")).stem
-            draw.text((left + 5, top + 5), label, fill=(255, 255, 255, 230), font=_FONT)
+                for c in range(1, cols):
+                    x = gl + c * cw
+                    draw.line([(x, gt), (x, gb)], fill=(80, 100, 160, 160), width=1)
+                for r in range(1, rows):
+                    y = gt + r * ch
+                    draw.line([(gl, y), (gr, y)], fill=(80, 100, 160, 160), width=1)
+
+                grid_name = g.get("name", "")
+                label = f"[{grid_name}]" if grid_name else "[Grid]"
+                draw.text((gl + 5, gt + 5), label, fill=(160, 190, 255, 220), font=_FONT)
+
+                for j, inst_entry in enumerate(g.get("instruments", [])):
+                    col = inst_entry.get("col", 0)
+                    row = inst_entry.get("row", 0)
+                    iw, ih = self._inst_size(inst_entry.get("file", ""))
+                    sc = float(inst_entry.get("scale", 1.0))
+                    iw = int(round(iw * sc))
+                    ih = int(round(ih * sc))
+                    il = gx + col * cw
+                    it = ph - gy - row * ch - ih
+                    ir = il + iw - 1
+                    ib = it + ih - 1
+                    fill = _PALETTE[j % len(_PALETTE)]
+                    draw.rectangle([il, it, ir, ib], fill=fill)
+                    draw.rectangle([il, it, ir, ib], outline=(180, 180, 180, 180), width=1)
+                    inst_label = Path(inst_entry.get("file", "?")).stem
+                    draw.text((il + 5, it + 5), inst_label, fill=(255, 255, 255, 230), font=_FONT)
+            else:
+                ix, iy = entry.get("position", [0, 0])
+                iw, ih = self._inst_size(entry.get("file", ""))
+                scale = float(entry.get("scale", 1.0))
+                iw = int(round(iw * scale))
+                ih = int(round(ih * scale))
+                left = ix
+                top = ph - iy - ih
+                right = left + iw - 1
+                bottom = top + ih - 1
+
+                fill = _PALETTE[i % len(_PALETTE)]
+                outline = sel_outline if is_sel else def_outline
+                lw = 3 if is_sel else 1
+
+                draw.rectangle([left, top, right, bottom], fill=fill)
+                draw.rectangle([left, top, right, bottom], outline=outline, width=lw)
+
+                label = Path(entry.get("file", "?")).stem
+                draw.text((left + 5, top + 5), label, fill=(255, 255, 255, 230), font=_FONT)
 
         buf = io.BytesIO()
         canvas.save(buf, format="PNG")
