@@ -182,8 +182,10 @@ class PanelView(QWidget):
         super().__init__(parent)
         self._instruments: list[dict] = []
         self._yaml_dir: str = ""
+        self._yaml_path: str = ""
         self._loading = False
         self._sel_path: tuple[int, ...] | None = None
+        self._zoom_cache: dict[str, float] = {}
 
         # ── Outer splitter: panels file tree | editor area ─────────────────
         self._outer_splitter = QSplitter(Qt.Horizontal)
@@ -321,6 +323,7 @@ class PanelView(QWidget):
     def save_state(self, settings: QSettings):
         settings.setValue("panelView/outerSplitterState", self._outer_splitter.saveState())
         settings.setValue("panelView/innerSplitterState", self._splitter.saveState())
+        settings.setValue("panelView/zoomCache", self._zoom_cache)
 
     def restore_state(self, settings: QSettings):
         outer = settings.value("panelView/outerSplitterState")
@@ -329,6 +332,9 @@ class PanelView(QWidget):
         inner = settings.value("panelView/innerSplitterState")
         if inner:
             self._splitter.restoreState(inner)
+        raw = settings.value("panelView/zoomCache", {})
+        if isinstance(raw, dict):
+            self._zoom_cache = {k: float(v) for k, v in raw.items()}
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -337,6 +343,7 @@ class PanelView(QWidget):
 
     def load(self, panel_data: dict, yaml_path: str = ""):
         self._loading = True
+        self._yaml_path = yaml_path
         self._yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
         self._instruments = panel_data.setdefault("instruments", [])
 
@@ -352,6 +359,13 @@ class PanelView(QWidget):
         self._canvas.load(panel_data, self._yaml_dir)
         if self._instruments:
             self._select_path((0,))
+
+        # Restore per-panel zoom (default 0.3 for new panels).
+        zoom = self._zoom_cache.get(yaml_path, 0.3) if yaml_path else 0.3
+        self._zoom_sb.blockSignals(True)
+        self._zoom_sb.setValue(zoom)
+        self._zoom_sb.blockSignals(False)
+        self._canvas.set_zoom(zoom)
 
         self._editor_area.setVisible(True)
         if yaml_path:
@@ -526,9 +540,15 @@ class PanelView(QWidget):
         self._zoom_sb.blockSignals(True)
         self._zoom_sb.setValue(z)
         self._zoom_sb.blockSignals(False)
+        self._save_zoom(z)
 
     def _on_zoom_spinbox_changed(self, value: float):
         self._canvas.set_zoom(value)
+        self._save_zoom(value)
+
+    def _save_zoom(self, z: float):
+        if self._yaml_path:
+            self._zoom_cache[self._yaml_path] = z
 
     # ── Canvas selection sync ──────────────────────────────────────────────
 
