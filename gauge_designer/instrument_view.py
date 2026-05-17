@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QStyleOptionViewItem, QSpinBox, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint
+from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
@@ -174,7 +174,8 @@ class InstrumentView(QWidget):
         self._dir_icon = None
         self._file_icon = None
 
-        outer_splitter = QSplitter(Qt.Horizontal)
+        self._outer_splitter = QSplitter(Qt.Horizontal)
+        outer_splitter = self._outer_splitter
 
         # ── Left pane: instrument file tree (always visible, full height) ──
         tree_pane = QWidget()
@@ -261,7 +262,8 @@ class InstrumentView(QWidget):
         cl.addLayout(size_bar)
 
         # Inner splitter: components | properties | canvas
-        inner_splitter = QSplitter(Qt.Horizontal)
+        self._inner_splitter = QSplitter(Qt.Horizontal)
+        inner_splitter = self._inner_splitter
 
         # components pane
         comp_pane = QWidget()
@@ -326,6 +328,20 @@ class InstrumentView(QWidget):
         # Load default instruments root from project structure
         if _DEFAULT_ROOT.is_dir():
             self.set_instruments_root(str(_DEFAULT_ROOT))
+
+    # ── State persistence ────────────────────────────────────────────────
+
+    def save_state(self, settings: QSettings):
+        settings.setValue("instrumentView/outerSplitter", self._outer_splitter.saveState())
+        settings.setValue("instrumentView/innerSplitter", self._inner_splitter.saveState())
+
+    def restore_state(self, settings: QSettings):
+        outer = settings.value("instrumentView/outerSplitter")
+        inner = settings.value("instrumentView/innerSplitter")
+        if outer:
+            self._outer_splitter.restoreState(outer)
+        if inner:
+            self._inner_splitter.restoreState(inner)
 
     # ── Public API ───────────────────────────────────────────────────────
 

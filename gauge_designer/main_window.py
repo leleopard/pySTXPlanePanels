@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         else:
             self.showMaximized()
+        self._gauge_view.restore_state(self._settings)
         self._panel_view.restore_state(self._settings)
 
     # ── Menu ─────────────────────────────────────────────────────────────
@@ -377,5 +378,6 @@ class MainWindow(QMainWindow):
             return
         self._gauge_view.stop_test()
         self._settings.setValue("windowGeometry", self.saveGeometry())
+        self._gauge_view.save_state(self._settings)
         self._panel_view.save_state(self._settings)
         event.accept()
