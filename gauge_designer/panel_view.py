@@ -135,14 +135,6 @@ class _InstrumentTree(QTreeWidget):
         if source is None or source.data(0, _ROLE_TYPE) != "instrument":
             event.ignore()
             return
-        target = self.itemAt(event.position().toPoint())
-        if source.parent() is not None:
-            if target is None:
-                event.ignore()
-                return
-            if target.parent() is None and target.data(0, _ROLE_TYPE) != "grid":
-                event.ignore()
-                return
         super().dragMoveEvent(event)
 
     def dropEvent(self, event):
