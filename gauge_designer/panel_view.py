@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, Signal, QSettings
 
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
 from gauge_designer.panel_canvas import PanelCanvas
+from gauge_designer.ui_utils import header_label
 
 _ROLE_TYPE = Qt.UserRole          # "instrument" | "grid"
 
@@ -187,7 +188,7 @@ class PanelView(QWidget):
         pl = QVBoxLayout(panels_pane)
         pl.setContentsMargins(0, 0, 0, 0)
         pl.setSpacing(2)
-        pl.addWidget(QLabel("Panels"))
+        pl.addWidget(header_label("Panels"))
         self._file_tree = _PanelFileTree()
         self._file_tree.file_activated.connect(self.open_requested)
         pl.addWidget(self._file_tree)
@@ -224,7 +225,7 @@ class PanelView(QWidget):
         # Pane 1: instrument tree + toolbar
         left = QWidget()
         ll = QVBoxLayout(left); ll.setContentsMargins(0, 0, 0, 0)
-        ll.addWidget(QLabel("Instruments"))
+        ll.addWidget(header_label("Instruments"))
         self._tree = _InstrumentTree(self)
         self._tree.currentItemChanged.connect(self._on_tree_selection_changed)
         ll.addWidget(self._tree)
@@ -246,7 +247,7 @@ class PanelView(QWidget):
         # Pane 2: stacked properties forms
         mid = QWidget()
         ml = QVBoxLayout(mid); ml.setContentsMargins(0, 0, 0, 0)
-        ml.addWidget(QLabel("Properties"))
+        ml.addWidget(header_label("Properties"))
         self._stack = QStackedWidget()
 
         self._inst_form = PanelForm()
@@ -268,7 +269,7 @@ class PanelView(QWidget):
         # Pane 3: layout canvas
         right = QWidget()
         rl = QVBoxLayout(right); rl.setContentsMargins(0, 0, 0, 0); rl.setSpacing(2)
-        rl.addWidget(QLabel("Layout"))
+        rl.addWidget(header_label("Layout"))
 
         ctrl_bar = QHBoxLayout(); ctrl_bar.setContentsMargins(0, 0, 0, 0); ctrl_bar.setSpacing(6)
         self._coord_label = QLabel("x: —    y: —")

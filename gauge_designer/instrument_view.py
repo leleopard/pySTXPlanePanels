@@ -15,6 +15,7 @@ from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
 from gauge_designer.properties_form import PropertiesForm
+from gauge_designer.ui_utils import header_label
 
 # UserRole slots for tree items
 _ROLE_PATH = Qt.UserRole        # absolute path string (both files and dirs)
@@ -183,9 +184,7 @@ class InstrumentView(QWidget):
         tl.setContentsMargins(0, 0, 0, 0)
         tl.setSpacing(2)
 
-        tree_lbl = QLabel("Instruments")
-        tree_lbl.setStyleSheet("font-weight: bold; color: black;")
-        tl.addWidget(tree_lbl)
+        tl.addWidget(header_label("Instruments"))
 
         self._tree = _InstrumentTree()
         self._tree.itemActivated.connect(self._on_tree_activated)
@@ -269,7 +268,7 @@ class InstrumentView(QWidget):
         comp_pane = QWidget()
         comp_layout = QVBoxLayout(comp_pane)
         comp_layout.setContentsMargins(0, 0, 0, 0)
-        comp_layout.addWidget(QLabel("Components"))
+        comp_layout.addWidget(header_label("Components"))
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
         self._delegate = _EyeDelegate(self._list)
@@ -291,7 +290,7 @@ class InstrumentView(QWidget):
         prop_pane = QWidget()
         prop_layout = QVBoxLayout(prop_pane)
         prop_layout.setContentsMargins(0, 0, 0, 0)
-        prop_layout.addWidget(QLabel("Properties"))
+        prop_layout.addWidget(header_label("Properties"))
         self._form = PropertiesForm()
         self._form.changed.connect(self._on_form_changed)
         prop_layout.addWidget(self._form)
@@ -300,7 +299,7 @@ class InstrumentView(QWidget):
         canvas_pane = QWidget()
         canvas_layout = QVBoxLayout(canvas_pane)
         canvas_layout.setContentsMargins(0, 0, 0, 0)
-        canvas_layout.addWidget(QLabel("Preview"))
+        canvas_layout.addWidget(header_label("Preview"))
         self._canvas = InstrumentCanvas()
         canvas_layout.addWidget(self._canvas)
 
