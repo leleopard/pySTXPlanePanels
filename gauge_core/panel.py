@@ -95,11 +95,12 @@ def _load_instrument(entry: dict, base_dir: Path, panel: "Panel") -> None:
 def _load_grid(grid: dict, base_dir: Path, panel: "Panel") -> None:
     gx = float(grid["position"][0])
     gy = float(grid["position"][1])
+    cols = int(grid.get("columns", 1))
     cw = float(grid.get("cell_width", 310))
     ch = float(grid.get("cell_height", 310))
-    for inst_entry in grid.get("instruments", []):
-        col = int(inst_entry.get("col", 0))
-        row = int(inst_entry.get("row", 0))
+    for idx, inst_entry in enumerate(grid.get("instruments", [])):
+        col = idx % cols
+        row = idx // cols
         inst_path = (base_dir / inst_entry["file"]).resolve()
         inst = load_instrument(inst_path)
         scale = float(inst_entry.get("scale", 1.0))

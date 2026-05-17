@@ -229,8 +229,8 @@ class PanelCanvas(QWidget):
                 draw.text((gl + 5, gt + 5), label, fill=(160, 190, 255, 220), font=_FONT)
 
                 for j, inst_entry in enumerate(g.get("instruments", [])):
-                    col = inst_entry.get("col", 0)
-                    row = inst_entry.get("row", 0)
+                    col = j % cols
+                    row = j // cols
                     iw, ih = self._inst_size(inst_entry.get("file", ""))
                     sc = float(inst_entry.get("scale", 1.0))
                     iw = int(round(iw * sc))

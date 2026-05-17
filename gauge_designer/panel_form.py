@@ -204,7 +204,11 @@ class GridForm(QWidget):
 
 
 class GridInstrumentForm(QWidget):
-    """Properties form for an instrument entry inside a grid."""
+    """Properties form for an instrument entry inside a grid.
+
+    Grid position is determined entirely by list order (first = top-left,
+    filling left-to-right then top-to-bottom), so there are no col/row fields.
+    """
     changed = Signal()
 
     def __init__(self, parent=None):
@@ -227,17 +231,6 @@ class GridInstrumentForm(QWidget):
         frl.addWidget(btn)
         form.addRow("File", file_row)
 
-        cr_row = QWidget()
-        crl = QHBoxLayout(cr_row); crl.setContentsMargins(0,0,0,0); crl.setSpacing(4)
-        self._col = QSpinBox(); self._col.setRange(0, 99); self._col.setFixedWidth(60)
-        self._row_sb = QSpinBox(); self._row_sb.setRange(0, 99); self._row_sb.setFixedWidth(60)
-        for w in (self._col, self._row_sb):
-            w.valueChanged.connect(self._emit)
-        crl.addWidget(QLabel("Col")); crl.addWidget(self._col)
-        crl.addWidget(QLabel("Row")); crl.addWidget(self._row_sb)
-        crl.addStretch()
-        form.addRow("Cell position", cr_row)
-
         self._scale = QDoubleSpinBox()
         self._scale.setRange(0.01, 10.0); self._scale.setDecimals(3)
         self._scale.setSingleStep(0.05); self._scale.setValue(1.0)
@@ -245,23 +238,19 @@ class GridInstrumentForm(QWidget):
         self._scale.valueChanged.connect(self._emit)
         form.addRow("Scale", self._scale)
 
+        form.addRow(QLabel("Drag to reorder within the grid."))
+
     def set_yaml_dir(self, d: str):
         self._yaml_dir = d
 
     def load(self, entry: dict):
         self._loading = True
         self._file.setText(str(entry.get("file", "")))
-        self._col.setValue(int(entry.get("col", 0)))
-        self._row_sb.setValue(int(entry.get("row", 0)))
         self._scale.setValue(float(entry.get("scale", 1.0)))
         self._loading = False
 
     def get_data(self) -> dict:
-        data: dict = {
-            "file": self._file.text().strip(),
-            "col": self._col.value(),
-            "row": self._row_sb.value(),
-        }
+        data: dict = {"file": self._file.text().strip()}
         scale = round(self._scale.value(), 3)
         if abs(scale - 1.0) > 1e-4:
             data["scale"] = scale
@@ -270,7 +259,6 @@ class GridInstrumentForm(QWidget):
     def clear(self):
         self._loading = True
         self._file.clear()
-        self._col.setValue(0); self._row_sb.setValue(0)
         self._scale.setValue(1.0)
         self._loading = False
 

@@ -198,10 +198,6 @@ class PanelView(QWidget):
         self._panel_w.setValue(int(w)); self._panel_h.setValue(int(h))
         self._panel_w.blockSignals(False); self._panel_h.blockSignals(False)
 
-        for entry in self._instruments:
-            if "grid" in entry:
-                self._sort_grid(entry["grid"])
-
         self._loading = False
         self._inst_form.set_yaml_dir(self._yaml_dir)
         self._grid_inst_form.set_yaml_dir(self._yaml_dir)
@@ -235,13 +231,6 @@ class PanelView(QWidget):
 
     # ── Tree helpers ────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _sort_grid(grid: dict) -> None:
-        """Sort a grid's instruments in-place: top row to bottom, left to right."""
-        grid.setdefault("instruments", []).sort(
-            key=lambda e: (e.get("row", 0), e.get("col", 0))
-        )
-
     def _rebuild_tree(self, select_path: tuple | None = None):
         self._tree.blockSignals(True)
         self._tree.clear()
@@ -249,8 +238,6 @@ class PanelView(QWidget):
         for i, entry in enumerate(self._instruments):
             if "grid" in entry:
                 g = entry["grid"]
-                # Sort in place so tree order == data model order.
-                self._sort_grid(g)
                 name = g.get("name", "") or f"Grid {i}"
                 item = QTreeWidgetItem([f"[{name}]"])
                 item.setData(0, _ROLE_TYPE, "grid")
@@ -366,13 +353,12 @@ class PanelView(QWidget):
             return
         i, j = self._sel_path
         updated = self._grid_inst_form.get_data()
-        grid = self._instruments[i]["grid"]
-        target_entry = grid["instruments"][j]
-        target_entry.clear()
-        target_entry.update(updated)
-        self._sort_grid(grid)
-        new_j = next(k for k, e in enumerate(grid["instruments"]) if e is target_entry)
-        self._rebuild_tree(select_path=(i, new_j))
+        grid_insts = self._instruments[i]["grid"]["instruments"]
+        grid_insts[j].clear()
+        grid_insts[j].update(updated)
+        parent = self._tree.topLevelItem(i)
+        if parent and parent.child(j):
+            parent.child(j).setText(0, Path(updated.get("file", "?")).stem)
         self._canvas.refresh()
         self.changed.emit()
 
@@ -391,7 +377,7 @@ class PanelView(QWidget):
         drop_pos: QAbstractItemView.DropIndicatorPosition,
     ):
         # Fast path: dragging one grid instrument onto a sibling in the same
-        # grid — swap their col/row so the tree order changes meaningfully.
+        # grid — swap their list positions (position = list order, no col/row).
         if (
             len(src_path) == 2
             and target_item is not None
@@ -403,15 +389,8 @@ class PanelView(QWidget):
             tgt_child = tpar.indexOfChild(target_item)
             if tgt_top == src_top and tgt_child != src_child:
                 insts = self._instruments[src_top]["grid"]["instruments"]
-                src_e = insts[src_child]
-                tgt_e = insts[tgt_child]
-                src_e["col"], tgt_e["col"] = tgt_e.get("col", 0), src_e.get("col", 0)
-                src_e["row"], tgt_e["row"] = tgt_e.get("row", 0), src_e.get("row", 0)
-                self._sort_grid(self._instruments[src_top]["grid"])
-                new_j = next(
-                    k for k, e in enumerate(insts) if e is src_e
-                )
-                self._rebuild_tree(select_path=(src_top, new_j))
+                insts[src_child], insts[tgt_child] = insts[tgt_child], insts[src_child]
+                self._rebuild_tree(select_path=(src_top, tgt_child))
                 self._canvas.refresh()
                 self.changed.emit()
                 return
@@ -476,26 +455,11 @@ class PanelView(QWidget):
             new_path: tuple = (idx,)
         else:
             tg = self._instruments[target_grid_top]["grid"]
-            used = {(e.get("col", 0), e.get("row", 0)) for e in tg["instruments"]}
-            cols = tg.get("columns", 1)
-            rows = tg.get("rows", 1)
-            cell = (0, 0)
-            found = False
-            for r in range(rows):
-                for c in range(cols):
-                    if (c, r) not in used:
-                        cell = (c, r)
-                        found = True
-                        break
-                if found:
-                    break
-            new_inst: dict = {"file": inst_file, "col": cell[0], "row": cell[1]}
+            new_inst: dict = {"file": inst_file}
             if abs(inst_scale - 1.0) > 1e-4:
                 new_inst["scale"] = inst_scale
             tg["instruments"].append(new_inst)
-            self._sort_grid(tg)
-            new_j = next(k for k, e in enumerate(tg["instruments"]) if e is new_inst)
-            new_path = (target_grid_top, new_j)
+            new_path = (target_grid_top, len(tg["instruments"]) - 1)
 
         self._rebuild_tree(select_path=new_path)
         self._canvas.refresh()
