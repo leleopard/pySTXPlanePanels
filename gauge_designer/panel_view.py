@@ -26,7 +26,12 @@ _ROLE_TYPE = Qt.UserRole          # "instrument" | "grid"
 
 
 class _InstrumentTree(QTreeWidget):
-    """QTreeWidget that intercepts drops to keep the data model in sync."""
+    """QTreeWidget that intercepts drops to keep the data model in sync.
+
+    Uses DragDrop mode (not InternalMove) so Qt's startDrag() never tries
+    to remove source items from the model after a MoveAction — we rebuild
+    the whole tree ourselves in _handle_tree_drop.
+    """
 
     def __init__(self, panel_view: "PanelView", parent=None):
         super().__init__(parent)
@@ -35,8 +40,32 @@ class _InstrumentTree(QTreeWidget):
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
-        self.setDragDropMode(QAbstractItemView.InternalMove)
+        self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+
+    # ── drag validation ───────────────────────────────────────────────────
+
+    def dragEnterEvent(self, event):
+        if self.currentItem() and self.currentItem().data(0, _ROLE_TYPE) == "instrument":
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        source = self.currentItem()
+        if source is None or source.data(0, _ROLE_TYPE) != "instrument":
+            event.ignore()
+            return
+        target = self.itemAt(event.position().toPoint())
+        # Grid instruments must not escape their grid via an empty-space drop.
+        if source.parent() is not None:
+            if target is None:
+                event.ignore()
+                return
+            if target.parent() is None and target.data(0, _ROLE_TYPE) != "grid":
+                event.ignore()
+                return
+        super().dragMoveEvent(event)
 
     def dropEvent(self, event):
         source = self.currentItem()
@@ -47,6 +76,11 @@ class _InstrumentTree(QTreeWidget):
         target = self.itemAt(event.position().toPoint())
         drop_pos = self.dropIndicatorPosition()
 
+        # Guard: grid instruments must not escape to top-level via empty drop.
+        if source.parent() is not None and target is None:
+            event.ignore()
+            return
+
         # Compute source path from current tree state (BEFORE any modifications)
         src_parent = source.parent()
         if src_parent is None:
@@ -56,7 +90,9 @@ class _InstrumentTree(QTreeWidget):
                         src_parent.indexOfChild(source))
 
         self._pv._handle_tree_drop(src_path, target, drop_pos)
-        event.accept()          # we rebuilt the tree; skip Qt's default move
+        # DragDrop mode: we rebuilt the tree; tell Qt the source stays put.
+        event.setDropAction(Qt.IgnoreAction)
+        event.accept()
 
 
 class PanelView(QWidget):
@@ -354,6 +390,32 @@ class PanelView(QWidget):
         target_item,
         drop_pos: QAbstractItemView.DropIndicatorPosition,
     ):
+        # Fast path: dragging one grid instrument onto a sibling in the same
+        # grid — swap their col/row so the tree order changes meaningfully.
+        if (
+            len(src_path) == 2
+            and target_item is not None
+            and target_item.parent() is not None
+        ):
+            src_top, src_child = src_path
+            tpar = target_item.parent()
+            tgt_top = self._tree.indexOfTopLevelItem(tpar)
+            tgt_child = tpar.indexOfChild(target_item)
+            if tgt_top == src_top and tgt_child != src_child:
+                insts = self._instruments[src_top]["grid"]["instruments"]
+                src_e = insts[src_child]
+                tgt_e = insts[tgt_child]
+                src_e["col"], tgt_e["col"] = tgt_e.get("col", 0), src_e.get("col", 0)
+                src_e["row"], tgt_e["row"] = tgt_e.get("row", 0), src_e.get("row", 0)
+                self._sort_grid(self._instruments[src_top]["grid"])
+                new_j = next(
+                    k for k, e in enumerate(insts) if e is src_e
+                )
+                self._rebuild_tree(select_path=(src_top, new_j))
+                self._canvas.refresh()
+                self.changed.emit()
+                return
+
         # Extract the instrument file/scale before removing it.
         if len(src_path) == 1:
             src_top = src_path[0]
