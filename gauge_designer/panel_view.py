@@ -257,11 +257,13 @@ class PanelView(QWidget):
             btn.clicked.connect(slot)
             btn_bar.addWidget(btn)
         btn_bar.addSpacing(6)
-        for label, tip, slot in [
-            ("▲", "Move Up",   self._move_up),
-            ("▼", "Move Down", self._move_down),
+        for icon_name, tip, slot in [
+            ("menu-up",   "Move Up",   self._move_up),
+            ("menu-down", "Move Down", self._move_down),
         ]:
-            btn = QPushButton(label)
+            btn = QPushButton()
+            btn.setIcon(make_svg_icon(icon_name))
+            btn.setIconSize(QSize(20, 20))
             btn.setFixedSize(28, 28)
             btn.setToolTip(tip)
             btn.clicked.connect(slot)
