@@ -302,7 +302,7 @@ class PropertiesForm(QWidget):
         self._rot_sec.toggled.connect(self._emit)
 
         self._rot_dr = QLineEdit(); self._rot_dr.editingFinished.connect(self._emit)
-        self._rot_sec.row("Dataref", self._rot_dr)
+        self._rot_sec.row("Dataref", self._dr_field(self._rot_dr))
 
         self._rot_fn = _NoScrollComboBox(); self._rot_fn.addItems(_VALUE_FUNCS)
         self._rot_fn.currentTextChanged.connect(self._emit)
@@ -324,7 +324,7 @@ class PropertiesForm(QWidget):
         self._tr_sec.toggled.connect(self._emit)
 
         self._tr_dr = QLineEdit(); self._tr_dr.editingFinished.connect(self._emit)
-        self._tr_sec.row("Dataref", self._tr_dr)
+        self._tr_sec.row("Dataref", self._dr_field(self._tr_dr))
 
         self._tr_fn = _NoScrollComboBox(); self._tr_fn.addItems(_VALUE_FUNCS)
         self._tr_fn.currentTextChanged.connect(self._emit)
@@ -376,7 +376,7 @@ class PropertiesForm(QWidget):
         self._vis_sec.toggled.connect(self._emit)
 
         self._vis_dr = QLineEdit(); self._vis_dr.editingFinished.connect(self._emit)
-        self._vis_sec.row("Dataref", self._vis_dr)
+        self._vis_sec.row("Dataref", self._dr_field(self._vis_dr))
 
         self._vis_pred = _NoScrollComboBox(); self._vis_pred.addItems(_PREDICATES)
         self._vis_pred.currentTextChanged.connect(self._emit)
@@ -555,6 +555,29 @@ class PropertiesForm(QWidget):
 
     def _on_tr_fixed(self, on: bool):
         self._tr_angle.setEnabled(on)
+
+    def _dr_field(self, lineedit: QLineEdit) -> QWidget:
+        """Wrap a dataref QLineEdit with a '…' browse button."""
+        box = QWidget()
+        hl = QHBoxLayout(box)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(2)
+        hl.addWidget(lineedit)
+        btn = QPushButton("…")
+        btn.setFixedWidth(26)
+        btn.setToolTip("Browse X-Plane datarefs")
+        btn.clicked.connect(lambda: self._pick_dataref(lineedit))
+        hl.addWidget(btn)
+        return box
+
+    def _pick_dataref(self, lineedit: QLineEdit) -> None:
+        from gauge_designer.dataref_picker import DatarefPickerDialog
+        dlg = DatarefPickerDialog(current=lineedit.text().strip(), parent=self)
+        if dlg.exec() == QDialog.Accepted:
+            dr = dlg.selected_dataref()
+            if dr:
+                lineedit.setText(dr)
+                self._emit()
 
     def _open_texture_editor(self):
         tex_rel = self._tex.text().strip()
