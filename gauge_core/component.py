@@ -97,6 +97,9 @@ class ImagePanel:
         # specified in instrument coordinates; shifted by apply_offset.
         self._viewport: tuple[float, float, float, float] | None = None
 
+        # scale factor applied by panel composition (default 1.0)
+        self._inst_scale: float = 1.0
+
     # -- transform setters -------------------------------------------------
 
     def set_rotation(
@@ -139,6 +142,21 @@ class ImagePanel:
         if self._vis_predicate is None:
             raise ValueError("visibility requires a predicate name")
 
+    def apply_scale(self, scale: float) -> None:
+        """Scale the component around the instrument origin. Called before apply_offset."""
+        self._inst_scale = scale
+        self._base_x *= scale
+        self._base_y *= scale
+        self.sprite.center_x = self._base_x
+        self.sprite.center_y = self._base_y
+        self.sprite.scale = (self.sprite.scale or 1.0) * scale
+        if self._rot_center is not None:
+            rcx, rcy = self._rot_center
+            self._rot_center = (rcx * scale, rcy * scale)
+        if self._viewport is not None:
+            vx, vy, vw, vh = self._viewport
+            self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
+
     def apply_offset(self, dx: float, dy: float) -> None:
         """Shift the component's base position. Used by panel composition."""
         self._base_x += dx
@@ -180,8 +198,8 @@ class ImagePanel:
                 # original OpenGL renderer.
                 angle_rad = math.radians(rotation_deg + self._tr_add_to_rotation_deg)
 
-            tx = amount * math.sin(angle_rad)
-            ty = amount * math.cos(angle_rad)
+            tx = amount * math.sin(angle_rad) * self._inst_scale
+            ty = amount * math.cos(angle_rad) * self._inst_scale
 
         # off-centre rotation pivot
         if self._rot_center is not None:

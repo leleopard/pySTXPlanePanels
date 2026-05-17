@@ -54,7 +54,7 @@ class PanelForm(QWidget):
         self._scale.setDecimals(3)
         self._scale.setSingleStep(0.05)
         self._scale.setValue(1.0)
-        self._scale.setFixedWidth(80)
+        self._scale.setMinimumWidth(90)
         self._scale.valueChanged.connect(self._emit)
         form.addRow("Scale", self._scale)
 

@@ -151,6 +151,9 @@ class PanelCanvas(QWidget):
         for i, entry in enumerate(self._data.get("instruments", [])):
             ix, iy = entry.get("position", [0, 0])
             iw, ih = self._inst_size(entry.get("file", ""))
+            scale = float(entry.get("scale", 1.0))
+            iw = int(round(iw * scale))
+            ih = int(round(ih * scale))
             left = ix
             top = ph - iy - ih  # y-up → y-down
             if left <= cx < left + iw and top <= cy < top + ih:
@@ -185,6 +188,9 @@ class PanelCanvas(QWidget):
         for i, entry in enumerate(self._data.get("instruments", [])):
             ix, iy = entry.get("position", [0, 0])
             iw, ih = self._inst_size(entry.get("file", ""))
+            scale = float(entry.get("scale", 1.0))
+            iw = int(round(iw * scale))
+            ih = int(round(ih * scale))
             left = ix
             top = ph - iy - ih
             right = left + iw - 1

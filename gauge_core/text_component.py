@@ -115,6 +115,13 @@ class Text:
     def set_visible(self, visible: bool) -> None:
         self.visible = visible
 
+    def apply_scale(self, scale: float) -> None:
+        """Scale the label position and size around the instrument origin."""
+        self._x *= scale
+        self._y *= scale
+        self.label.font_size *= scale
+        self._pos_dirty = True
+
     def apply_offset(self, dx: float, dy: float) -> None:
         """Shift the label position. Used by panel composition."""
         self._x += dx

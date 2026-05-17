@@ -66,8 +66,11 @@ def load_panel(yaml_path: str | Path) -> Panel:
         inst_path = (base_dir / entry["file"]).resolve()
         inst = load_instrument(inst_path)
 
+        scale = float(entry.get("scale", 1.0))
         offset_x, offset_y = float(entry["position"][0]), float(entry["position"][1])
         for comp in inst.components:
+            if scale != 1.0:
+                comp.apply_scale(scale)
             comp.apply_offset(offset_x, offset_y)
 
         panel.instruments.append(inst)
