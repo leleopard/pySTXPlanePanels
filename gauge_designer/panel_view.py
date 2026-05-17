@@ -1,12 +1,10 @@
 """Panel tab — compose and edit a panel YAML (list of instruments at positions).
 
-The instrument tree supports two entry types:
-  - Plain instrument entries (file / position / scale)
-  - Grid layout entries  (expandable; contain instrument entries with col/row)
-
-Instruments can be dragged from anywhere in the tree and dropped onto a grid
-node (to place them inside it) or onto the blank tree area / a plain
-instrument row (to make them top-level).
+Left pane: file tree listing panel YAMLs under the panels root (double-click to open).
+Right area (hidden until a panel is loaded):
+  - instrument tree (plain entries + grid layout entries with drag-and-drop)
+  - stacked properties forms (plain instrument / grid header / grid instrument)
+  - PIL layout canvas
 """
 
 from pathlib import Path
@@ -14,18 +12,99 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QTreeWidget, QTreeWidgetItem, QAbstractItemView,
     QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QMessageBox, QSpinBox, QFileDialog,
+    QMessageBox, QSpinBox, QDoubleSpinBox, QFileDialog,
 )
-from PySide6.QtCore import Qt, Signal
-
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import Qt, Signal, QSettings
 
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
 from gauge_designer.panel_canvas import PanelCanvas
 
-# UserRole stored on every tree item to distinguish types quickly.
 _ROLE_TYPE = Qt.UserRole          # "instrument" | "grid"
 
+_DEFAULT_PANELS_ROOT = Path(__file__).parent.parent / "panels"
+
+
+# ---------------------------------------------------------------------------
+# Panels file-browser tree
+# ---------------------------------------------------------------------------
+
+class _PanelFileTree(QTreeWidget):
+    """Lists panel YAML files under a root directory.
+
+    Double-clicking a file emits file_activated(absolute_path).
+    Subdirectories are shown as expandable nodes.
+    """
+    file_activated = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._root: str = ""
+        self.setHeaderHidden(True)
+        self.setAnimated(True)
+        self.itemDoubleClicked.connect(self._on_double_click)
+
+    def set_root(self, root: str):
+        self._root = root
+        self._reload()
+
+    def _reload(self):
+        self.clear()
+        if not self._root:
+            return
+        root_path = Path(self._root)
+        if not root_path.is_dir():
+            return
+        self._populate(root_path, None)
+
+    def _populate(self, directory: Path, parent):
+        try:
+            entries = sorted(directory.iterdir(),
+                             key=lambda p: (p.is_file(), p.name.lower()))
+        except PermissionError:
+            return
+        for entry in entries:
+            if entry.is_dir() and not entry.name.startswith('.'):
+                dir_item = QTreeWidgetItem([entry.name])
+                dir_item.setData(0, Qt.UserRole, None)
+                if parent is None:
+                    self.addTopLevelItem(dir_item)
+                else:
+                    parent.addChild(dir_item)
+                self._populate(entry, dir_item)
+                dir_item.setExpanded(True)
+            elif entry.suffix.lower() in ('.yaml', '.yml'):
+                file_item = QTreeWidgetItem([entry.stem])
+                file_item.setData(0, Qt.UserRole, str(entry))
+                if parent is None:
+                    self.addTopLevelItem(file_item)
+                else:
+                    parent.addChild(file_item)
+
+    def _on_double_click(self, item, _col):
+        path = item.data(0, Qt.UserRole)
+        if path:
+            self.file_activated.emit(path)
+
+    def highlight(self, path: str):
+        """Select the item whose UserRole data matches path."""
+        def _walk(item):
+            if item.data(0, Qt.UserRole) == path:
+                self.setCurrentItem(item)
+                self.scrollToItem(item)
+                return True
+            for i in range(item.childCount()):
+                if _walk(item.child(i)):
+                    return True
+            return False
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            if _walk(root.child(i)):
+                break
+
+
+# ---------------------------------------------------------------------------
+# Instrument tree (with drag-and-drop for reordering / grid placement)
+# ---------------------------------------------------------------------------
 
 class _InstrumentTree(QTreeWidget):
     """QTreeWidget that intercepts drops to keep the data model in sync.
@@ -45,8 +124,6 @@ class _InstrumentTree(QTreeWidget):
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
 
-    # ── drag validation ───────────────────────────────────────────────────
-
     def dragEnterEvent(self, event):
         if self.currentItem() and self.currentItem().data(0, _ROLE_TYPE) == "instrument":
             event.accept()
@@ -59,7 +136,6 @@ class _InstrumentTree(QTreeWidget):
             event.ignore()
             return
         target = self.itemAt(event.position().toPoint())
-        # Grid instruments must not escape their grid via an empty-space drop.
         if source.parent() is not None:
             if target is None:
                 event.ignore()
@@ -78,12 +154,10 @@ class _InstrumentTree(QTreeWidget):
         target = self.itemAt(event.position().toPoint())
         drop_pos = self.dropIndicatorPosition()
 
-        # Guard: grid instruments must not escape to top-level via empty drop.
         if source.parent() is not None and target is None:
             event.ignore()
             return
 
-        # Compute source path from current tree state (BEFORE any modifications)
         src_parent = source.parent()
         if src_parent is None:
             src_path = (self.indexOfTopLevelItem(source),)
@@ -92,39 +166,68 @@ class _InstrumentTree(QTreeWidget):
                         src_parent.indexOfChild(source))
 
         self._pv._handle_tree_drop(src_path, target, drop_pos)
-        # DragDrop mode: we rebuilt the tree; tell Qt the source stays put.
         event.setDropAction(Qt.IgnoreAction)
         event.accept()
 
 
+# ---------------------------------------------------------------------------
+# Main panel view
+# ---------------------------------------------------------------------------
+
 class PanelView(QWidget):
     changed = Signal()
+    open_requested = Signal(str)  # emitted when a panel file is double-clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._instruments: list[dict] = []
         self._yaml_dir: str = ""
         self._loading = False
-        self._sel_path: tuple[int, ...] | None = None  # (i,) or (i,j)
+        self._sel_path: tuple[int, ...] | None = None
 
-        # ── Panel size bar ─────────────────────────────────────────────────
+        # ── Outer splitter: panels file tree | editor area ─────────────────
+        self._outer_splitter = QSplitter(Qt.Horizontal)
+
+        # ── Left pane: panels file tree ────────────────────────────────────
+        panels_pane = QWidget()
+        pl = QVBoxLayout(panels_pane)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(2)
+        pl.addWidget(QLabel("Panels"))
+        self._file_tree = _PanelFileTree()
+        self._file_tree.file_activated.connect(self.open_requested)
+        pl.addWidget(self._file_tree)
+
+        # ── Right area: editor (hidden until a panel is loaded) ────────────
+        self._editor_area = QWidget()
+        ea = QVBoxLayout(self._editor_area)
+        ea.setContentsMargins(0, 0, 0, 0)
+        ea.setSpacing(4)
+        self._editor_area.setVisible(False)
+
+        # Panel size bar
         size_bar = QHBoxLayout()
         size_bar.setContentsMargins(0, 0, 0, 4)
         size_bar.setSpacing(4)
         size_bar.addWidget(QLabel("Panel size:"))
-        self._panel_w = QSpinBox(); self._panel_w.setRange(1, 9999); self._panel_w.setFixedWidth(90)
-        self._panel_h = QSpinBox(); self._panel_h.setRange(1, 9999); self._panel_h.setFixedWidth(90)
+        self._panel_w = QSpinBox()
+        self._panel_w.setRange(1, 9999)
+        self._panel_w.setFixedWidth(90)
+        self._panel_h = QSpinBox()
+        self._panel_h.setRange(1, 9999)
+        self._panel_h.setFixedWidth(90)
         self._panel_w.valueChanged.connect(self._on_size_changed)
         self._panel_h.valueChanged.connect(self._on_size_changed)
         size_bar.addWidget(self._panel_w)
         size_bar.addWidget(QLabel("×"))
         size_bar.addWidget(self._panel_h)
         size_bar.addStretch()
+        ea.addLayout(size_bar)
 
+        # Inner 3-way splitter: instrument tree | properties | canvas
         self._splitter = QSplitter(Qt.Horizontal)
-        splitter = self._splitter
 
-        # ── Pane 1: tree + toolbar ─────────────────────────────────────────
+        # Pane 1: instrument tree + toolbar
         left = QWidget()
         ll = QVBoxLayout(left); ll.setContentsMargins(0, 0, 0, 0)
         ll.addWidget(QLabel("Instruments"))
@@ -140,16 +243,13 @@ class PanelView(QWidget):
             ("▼",     self._move_down),
         ]:
             btn = QPushButton(label)
-            if len(label) <= 1:
-                btn.setFixedWidth(32)
-            else:
-                btn.setFixedWidth(46)
+            btn.setFixedWidth(32 if len(label) <= 1 else 46)
             btn.clicked.connect(slot)
             btn_bar.addWidget(btn)
         btn_bar.addStretch()
         ll.addLayout(btn_bar)
 
-        # ── Pane 2: stacked properties forms ──────────────────────────────
+        # Pane 2: stacked properties forms
         mid = QWidget()
         ml = QVBoxLayout(mid); ml.setContentsMargins(0, 0, 0, 0)
         ml.addWidget(QLabel("Properties"))
@@ -164,42 +264,76 @@ class PanelView(QWidget):
         self._grid_inst_form = GridInstrumentForm()
         self._grid_inst_form.changed.connect(self._on_grid_inst_form_changed)
 
-        self._stack.addWidget(self._inst_form)     # index 0
-        self._stack.addWidget(self._grid_form)     # index 1
-        self._stack.addWidget(self._grid_inst_form)  # index 2
+        self._stack.addWidget(self._inst_form)        # index 0
+        self._stack.addWidget(self._grid_form)        # index 1
+        self._stack.addWidget(self._grid_inst_form)   # index 2
 
         ml.addWidget(self._stack)
         ml.addStretch()
 
-        # ── Pane 3: canvas ─────────────────────────────────────────────────
+        # Pane 3: layout canvas
         right = QWidget()
-        rl = QVBoxLayout(right); rl.setContentsMargins(0, 0, 0, 0)
+        rl = QVBoxLayout(right); rl.setContentsMargins(0, 0, 0, 0); rl.setSpacing(2)
         rl.addWidget(QLabel("Layout"))
+
+        ctrl_bar = QHBoxLayout(); ctrl_bar.setContentsMargins(0, 0, 0, 0); ctrl_bar.setSpacing(6)
+        self._coord_label = QLabel("x: —    y: —")
+        self._coord_label.setMinimumWidth(130)
+        ctrl_bar.addWidget(self._coord_label)
+        ctrl_bar.addStretch()
+        ctrl_bar.addWidget(QLabel("Zoom:"))
+        self._zoom_sb = QDoubleSpinBox()
+        self._zoom_sb.setRange(0.05, 4.0)
+        self._zoom_sb.setSingleStep(0.05)
+        self._zoom_sb.setDecimals(2)
+        self._zoom_sb.setValue(0.3)
+        self._zoom_sb.setFixedWidth(70)
+        ctrl_bar.addWidget(self._zoom_sb)
+        rl.addLayout(ctrl_bar)
+
         self._canvas = PanelCanvas()
         self._canvas.instrument_selected.connect(self._on_canvas_selected)
+        self._canvas.mouse_moved.connect(self._on_canvas_mouse_moved)
+        self._canvas.mouse_left.connect(self._on_canvas_mouse_left)
+        self._canvas.zoom_changed.connect(self._on_canvas_zoom_changed)
+        self._zoom_sb.valueChanged.connect(self._on_zoom_spinbox_changed)
         rl.addWidget(self._canvas)
 
-        splitter.addWidget(left)
-        splitter.addWidget(mid)
-        splitter.addWidget(right)
-        splitter.setSizes([200, 280, 420])
+        self._splitter.addWidget(left)
+        self._splitter.addWidget(mid)
+        self._splitter.addWidget(right)
+        self._splitter.setSizes([200, 280, 420])
+        ea.addWidget(self._splitter)
+
+        self._outer_splitter.addWidget(panels_pane)
+        self._outer_splitter.addWidget(self._editor_area)
+        self._outer_splitter.setSizes([180, 920])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.addLayout(size_bar)
-        layout.addWidget(splitter)
+        layout.addWidget(self._outer_splitter)
+
+        if _DEFAULT_PANELS_ROOT.is_dir():
+            self._file_tree.set_root(str(_DEFAULT_PANELS_ROOT))
 
     # ── State persistence ──────────────────────────────────────────────────
 
     def save_state(self, settings: QSettings):
-        settings.setValue("panelView/splitterState", self._splitter.saveState())
+        settings.setValue("panelView/outerSplitterState", self._outer_splitter.saveState())
+        settings.setValue("panelView/innerSplitterState", self._splitter.saveState())
 
     def restore_state(self, settings: QSettings):
-        state = settings.value("panelView/splitterState")
-        if state:
-            self._splitter.restoreState(state)
+        outer = settings.value("panelView/outerSplitterState")
+        if outer:
+            self._outer_splitter.restoreState(outer)
+        inner = settings.value("panelView/innerSplitterState")
+        if inner:
+            self._splitter.restoreState(inner)
 
     # ── Public API ─────────────────────────────────────────────────────────
+
+    def set_panels_root(self, root: str):
+        self._file_tree.set_root(root)
 
     def load(self, panel_data: dict, yaml_path: str = ""):
         self._loading = True
@@ -219,6 +353,10 @@ class PanelView(QWidget):
         if self._instruments:
             self._select_path((0,))
 
+        self._editor_area.setVisible(True)
+        if yaml_path:
+            self._file_tree.highlight(yaml_path)
+
     def clear(self):
         self._loading = True
         self._instruments = []
@@ -228,6 +366,7 @@ class PanelView(QWidget):
         self._inst_form.clear()
         self._loading = False
         self._canvas.clear()
+        self._editor_area.setVisible(False)
 
     def get_instruments(self) -> list[dict]:
         return self._instruments
@@ -375,6 +514,22 @@ class PanelView(QWidget):
         self._canvas.refresh()
         self.changed.emit()
 
+    # ── Canvas overlay (coords + zoom) ────────────────────────────────────
+
+    def _on_canvas_mouse_moved(self, x: int, y: int):
+        self._coord_label.setText(f"x: {x}    y: {y}")
+
+    def _on_canvas_mouse_left(self):
+        self._coord_label.setText("x: —    y: —")
+
+    def _on_canvas_zoom_changed(self, z: float):
+        self._zoom_sb.blockSignals(True)
+        self._zoom_sb.setValue(z)
+        self._zoom_sb.blockSignals(False)
+
+    def _on_zoom_spinbox_changed(self, value: float):
+        self._canvas.set_zoom(value)
+
     # ── Canvas selection sync ──────────────────────────────────────────────
 
     def _on_canvas_selected(self, idx: int):
@@ -389,8 +544,7 @@ class PanelView(QWidget):
         target_item,
         drop_pos: QAbstractItemView.DropIndicatorPosition,
     ):
-        # Fast path: dragging one grid instrument onto a sibling in the same
-        # grid — swap their list positions (position = list order, no col/row).
+        # Fast path: same-grid reorder — swap list positions.
         if (
             len(src_path) == 2
             and target_item is not None
@@ -408,7 +562,6 @@ class PanelView(QWidget):
                 self.changed.emit()
                 return
 
-        # Extract the instrument file/scale before removing it.
         if len(src_path) == 1:
             src_top = src_path[0]
             entry = self._instruments[src_top]
@@ -423,7 +576,6 @@ class PanelView(QWidget):
             inst_scale = entry.get("scale", 1.0)
             src_is_toplevel = False
 
-        # Resolve target BEFORE removing source (indices are still valid).
         if target_item is None:
             target_type = "toplevel_append"
             target_top = len(self._instruments)
@@ -445,10 +597,8 @@ class PanelView(QWidget):
                 target_grid_top = self._tree.indexOfTopLevelItem(tpar)
                 target_top = target_grid_top
 
-        # Remove source from data model.
         if src_is_toplevel:
             self._instruments.pop(src_top)
-            # Adjust target indices if source was ahead of target.
             if target_type in ("toplevel_append", "toplevel_insert"):
                 if target_top > src_top:
                     target_top -= 1
@@ -458,7 +608,6 @@ class PanelView(QWidget):
         else:
             self._instruments[src_top]["grid"]["instruments"].pop(src_child)
 
-        # Insert at destination.
         if target_type in ("toplevel_append", "toplevel_insert"):
             new_entry: dict = {"file": inst_file, "position": [0, 0]}
             if abs(inst_scale - 1.0) > 1e-4:
@@ -532,7 +681,7 @@ class PanelView(QWidget):
             self._instruments.pop(i)
         elif len(self._sel_path) == 2:
             i, j = self._sel_path
-            label = Path(self._instruments[i]["grid"]["instruments"][j].get("file","?")).stem
+            label = Path(self._instruments[i]["grid"]["instruments"][j].get("file", "?")).stem
             if QMessageBox.question(
                 self, "Remove", f"Remove '{label}' from grid?",
                 QMessageBox.Yes | QMessageBox.No,

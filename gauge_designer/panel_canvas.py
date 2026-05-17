@@ -36,6 +36,8 @@ class _Surface(QWidget):
         super().__init__(parent)
         self._canvas = canvas
         self._pixmap = QPixmap()
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CrossCursor)
 
     def set_pixmap(self, pixmap: QPixmap):
         self._pixmap = pixmap
@@ -49,6 +51,13 @@ class _Surface(QWidget):
     def mousePressEvent(self, event):
         self._canvas._on_press(event)
 
+    def mouseMoveEvent(self, event):
+        self._canvas._on_mouse_move(event)
+
+    def leaveEvent(self, event):
+        self._canvas._on_mouse_leave()
+        super().leaveEvent(event)
+
     def wheelEvent(self, event):
         if event.modifiers() & Qt.ControlModifier:
             self._canvas._on_wheel(event)
@@ -57,7 +66,10 @@ class _Surface(QWidget):
 
 
 class PanelCanvas(QWidget):
-    instrument_selected = Signal(int)  # index into instruments list
+    instrument_selected = Signal(int)   # index into instruments list
+    mouse_moved = Signal(int, int)      # panel-space x, y (y-up)
+    mouse_left = Signal()
+    zoom_changed = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -104,6 +116,23 @@ class PanelCanvas(QWidget):
         self._size_cache.clear()
         self._surface.set_pixmap(QPixmap())
 
+    def set_zoom(self, z: float):
+        self._zoom = max(0.05, min(4.0, z))
+        self._render()
+
+    # ── Mouse tracking ────────────────────────────────────────────────────
+
+    def _on_mouse_move(self, event):
+        if not self._data:
+            return
+        _pw, ph = self._data.get("size", [1540, 920])
+        px = event.position().x() / self._zoom
+        py = event.position().y() / self._zoom
+        self.mouse_moved.emit(int(px), int(ph - py))
+
+    def _on_mouse_leave(self):
+        self.mouse_left.emit()
+
     # ── Instrument size lookup ────────────────────────────────────────────
 
     def _inst_size(self, file_rel: str) -> tuple[int, int]:
@@ -137,6 +166,7 @@ class PanelCanvas(QWidget):
         ratio = self._zoom / old_zoom
         self._scroll.horizontalScrollBar().setValue(int(cx * (ratio - 1) + hv))
         self._scroll.verticalScrollBar().setValue(int(cy * (ratio - 1) + vv))
+        self.zoom_changed.emit(self._zoom)
         event.accept()
 
     # ── Hit testing ───────────────────────────────────────────────────────
