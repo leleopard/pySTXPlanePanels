@@ -46,7 +46,7 @@ def _load_bold_font(size: int) -> ImageFont.ImageFont:
     except TypeError:
         return ImageFont.load_default()
 
-_FONT = _load_bold_font(22)
+_FONT = _load_bold_font(11)
 
 
 class _Surface(QWidget):
