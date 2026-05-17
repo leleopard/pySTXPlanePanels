@@ -8,6 +8,7 @@ Three form types:
 
 from pathlib import Path
 
+from gauge_designer.ui_utils import flip_y
 from PySide6.QtWidgets import (
     QWidget, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSpinBox, QDoubleSpinBox, QFileDialog,
@@ -21,6 +22,7 @@ class PanelForm(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._yaml_dir: str = ""
+        self._ref_height: int = 920
         self._loading = False
 
         form = QFormLayout(self)
@@ -67,18 +69,21 @@ class PanelForm(QWidget):
     def set_yaml_dir(self, d: str):
         self._yaml_dir = d
 
+    def set_ref_height(self, h: int):
+        self._ref_height = h
+
     def load(self, entry: dict):
         self._loading = True
         self._file.setText(str(entry.get("file", "")))
         pos = entry.get("position", [0, 0])
         self._pos_x.setValue(int(pos[0]))
-        self._pos_y.setValue(int(pos[1]))
+        self._pos_y.setValue(flip_y(int(pos[1]), self._ref_height))
         self._scale.setValue(float(entry.get("scale", 1.0)))
         self._loading = False
 
     def get_data(self) -> dict:
         data: dict = {"file": self._file.text().strip()}
-        data["position"] = [self._pos_x.value(), self._pos_y.value()]
+        data["position"] = [self._pos_x.value(), flip_y(self._pos_y.value(), self._ref_height)]
         scale = round(self._scale.value(), 3)
         if abs(scale - 1.0) > 1e-4:
             data["scale"] = scale
@@ -120,6 +125,7 @@ class GridForm(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._ref_height: int = 920
         self._loading = False
 
         form = QFormLayout(self)
@@ -162,12 +168,15 @@ class GridForm(QWidget):
         szl.addStretch()
         form.addRow("Cell W × H", sz_row)
 
+    def set_ref_height(self, h: int):
+        self._ref_height = h
+
     def load(self, grid_cfg: dict):
         self._loading = True
         self._name.setText(grid_cfg.get("name", ""))
         pos = grid_cfg.get("position", [0, 0])
         self._pos_x.setValue(int(pos[0]))
-        self._pos_y.setValue(int(pos[1]))
+        self._pos_y.setValue(flip_y(int(pos[1]), self._ref_height))
         self._cols.setValue(int(grid_cfg.get("columns", 1)))
         self._rows_sb.setValue(int(grid_cfg.get("rows", 1)))
         self._cell_w.setValue(int(grid_cfg.get("cell_width", 310)))
@@ -176,7 +185,7 @@ class GridForm(QWidget):
 
     def get_data(self) -> dict:
         data: dict = {
-            "position": [self._pos_x.value(), self._pos_y.value()],
+            "position": [self._pos_x.value(), flip_y(self._pos_y.value(), self._ref_height)],
             "columns": self._cols.value(),
             "rows": self._rows_sb.value(),
             "cell_width": self._cell_w.value(),

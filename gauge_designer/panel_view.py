@@ -445,6 +445,8 @@ class PanelView(QWidget):
 
         self._loading = False
         self._inst_form.set_yaml_dir(self._yaml_dir)
+        self._inst_form.set_ref_height(int(h))
+        self._grid_form.set_ref_height(int(h))
         self._grid_inst_form.set_yaml_dir(self._yaml_dir)
         self._rebuild_tree()
         self._canvas.load(panel_data, self._yaml_dir)
@@ -496,8 +498,17 @@ class PanelView(QWidget):
 
     def _on_size_changed(self):
         if not self._loading:
-            self._canvas.set_size(self._panel_w.value(), self._panel_h.value())
+            h = self._panel_h.value()
+            self._inst_form.set_ref_height(h)
+            self._grid_form.set_ref_height(h)
+            self._canvas.set_size(self._panel_w.value(), h)
             self.changed.emit()
+
+    def refresh_form(self):
+        """Re-populate the active form using the current coord convention."""
+        current = self._tree.currentItem()
+        if current:
+            self._on_tree_selection_changed(current, None)
 
     # ── Tree helpers ────────────────────────────────────────────────────────
 

@@ -15,6 +15,8 @@ from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QPainter
 
+from gauge_designer.ui_utils import flip_y
+
 
 _PALETTE = [
     (70, 130, 190, 170),
@@ -146,7 +148,8 @@ class PanelCanvas(QWidget):
         _pw, ph = self._data.get("size", [1540, 920])
         px = event.position().x() / self._zoom
         py = event.position().y() / self._zoom
-        self.mouse_moved.emit(int(px), int(ph - py))
+        # py is y-down from canvas top; convert to y-up then apply display convention
+        self.mouse_moved.emit(int(px), flip_y(int(ph - py), ph))
 
     def _on_mouse_leave(self):
         self.mouse_left.emit()

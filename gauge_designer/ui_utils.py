@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QLabel, QSizePolicy
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtGui import QIcon, QPainter, QPixmap
-from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtCore import QByteArray, Qt, QSettings
 
 _HEADER_COLOR = "#6682c5"
 
@@ -23,6 +23,20 @@ def header_label(text: str) -> QLabel:
     lbl.setStyleSheet(_HEADER_STYLE)
     lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     return lbl
+
+
+def is_y_down() -> bool:
+    """Return True when the user has chosen the top-left / y-down convention."""
+    return QSettings().value("preferences/coordSystem", "y_up") == "y_down"
+
+
+def flip_y(y: int | float, height: int | float) -> int:
+    """Convert a Y coordinate between y-up and y-down conventions.
+
+    Self-inverse: flip_y(flip_y(y, h), h) == y.
+    When y-up is active the value is returned unchanged.
+    """
+    return int(height - y) if is_y_down() else int(y)
 
 
 def make_svg_icon(name: str, color: str = _HEADER_COLOR, size: int = 20) -> QIcon:

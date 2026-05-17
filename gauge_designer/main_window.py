@@ -92,6 +92,13 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self):
         menu = self.menuBar()
+
+        edit_menu = menu.addMenu("&Edit")
+        prefs_act = QAction("&Preferences…", self)
+        prefs_act.setShortcut("Ctrl+,")
+        prefs_act.triggered.connect(self._open_preferences)
+        edit_menu.addAction(prefs_act)
+
         file_menu = menu.addMenu("&File")
 
         self._open_gauge_act = QAction("Open &Gauge…", self)
@@ -125,6 +132,19 @@ class MainWindow(QMainWindow):
         quit_act.setShortcut("Ctrl+Q")
         quit_act.triggered.connect(self.close)
         file_menu.addAction(quit_act)
+
+    def _open_preferences(self):
+        from gauge_designer.preferences_dialog import PreferencesDialog
+        dlg = PreferencesDialog(self)
+        if dlg.exec():
+            self._on_prefs_changed()
+
+    def _on_prefs_changed(self):
+        idx = self._tabs.currentIndex()
+        if idx == _TAB_GAUGE:
+            self._gauge_view.refresh_form()
+        else:
+            self._panel_view.refresh_form()
 
     # ── Toolbar ───────────────────────────────────────────────────────────
 

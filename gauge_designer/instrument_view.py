@@ -365,6 +365,7 @@ class InstrumentView(QWidget):
         self._loading = False
         yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
         self._form.set_yaml_dir(yaml_dir)
+        self._form.set_ref_height(int(h))
         self._canvas.load(instrument_data, yaml_dir)
         self._canvas.set_hidden(set())
         if self._components:
@@ -560,8 +561,15 @@ class InstrumentView(QWidget):
         self.changed.emit()
 
     def _on_size_changed(self):
+        self._form.set_ref_height(self._gauge_h.value())
         self._canvas.set_size(self._gauge_w.value(), self._gauge_h.value())
         self.changed.emit()
+
+    def refresh_form(self):
+        """Re-populate the active form using the current coord convention."""
+        row = self._list.currentRow()
+        if row >= 0:
+            self._on_row_changed(row)
 
     # ── Visibility toggle ─────────────────────────────────────────────────
 

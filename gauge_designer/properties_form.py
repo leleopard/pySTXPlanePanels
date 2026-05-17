@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from gauge_designer.ui_utils import flip_y
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
@@ -200,6 +201,7 @@ class PropertiesForm(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._yaml_dir: str = ""
+        self._ref_height: int = 310
         self._extra: dict = {}
         self._loading = False
 
@@ -228,6 +230,9 @@ class PropertiesForm(QWidget):
 
     def set_yaml_dir(self, d: str):
         self._yaml_dir = d
+
+    def set_ref_height(self, h: int):
+        self._ref_height = h
 
     # ── Section builders ──────────────────────────────────────────────────
 
@@ -399,7 +404,8 @@ class PropertiesForm(QWidget):
         self._tex_sec.show_body(ct == "ImagePanel")
 
         pos = comp.get("position", [0, 0])
-        self._px.setValue(int(pos[0])); self._py.setValue(int(pos[1]))
+        self._px.setValue(int(pos[0]))
+        self._py.setValue(flip_y(int(pos[1]), self._ref_height))
 
         self._tex.setText(str(comp.get("texture", "")))
         cr = comp.get("cliprect", [0, 0])
@@ -472,7 +478,7 @@ class PropertiesForm(QWidget):
         data: dict = {}
         data["name"] = self._name.text().strip()
         data["type"] = self._type.currentText()
-        data["position"] = [self._px.value(), self._py.value()]
+        data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
         if data["type"] == "ImagePanel":
             data["texture"] = self._tex.text().strip()
