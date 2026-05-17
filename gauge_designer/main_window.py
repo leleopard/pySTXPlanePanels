@@ -27,6 +27,17 @@ def _find_instruments_root(yaml_path: str) -> str:
     return str(p)
 
 
+def _find_panels_root(yaml_path: str) -> str:
+    """Walk up from the YAML's directory to find an ancestor named 'panels'."""
+    p = Path(yaml_path).parent.resolve()
+    candidate = p
+    while candidate != candidate.parent:
+        if candidate.name.lower() == "panels":
+            return str(candidate)
+        candidate = candidate.parent
+    return str(p)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -53,6 +64,9 @@ class MainWindow(QMainWindow):
 
         self._panel_view = PanelView()
         self._panel_view.changed.connect(self._mark_panel_dirty)
+        self._panel_view.open_requested.connect(
+            lambda p: (self._tabs.setCurrentIndex(_TAB_PANEL), self._load_panel(p))
+        )
 
         self._preview = PreviewBar(self)
 
@@ -249,6 +263,7 @@ class MainWindow(QMainWindow):
         self._panel_path = path
         self._panel_data = data
         self._panel_dirty = False
+        self._panel_view.set_panels_root(_find_panels_root(path))
         self._panel_view.load(data, path)
         self._preview.set_yaml(path, data_provider=lambda: self._panel_data)
         self._save_act.setEnabled(True)
