@@ -149,7 +149,8 @@ class ImagePanel:
         self._base_y *= scale
         self.sprite.center_x = self._base_x
         self.sprite.center_y = self._base_y
-        self.sprite.scale = (self.sprite.scale or 1.0) * scale
+        self.sprite.scale_x *= scale
+        self.sprite.scale_y *= scale
         if self._rot_center is not None:
             rcx, rcy = self._rot_center
             self._rot_center = (rcx * scale, rcy * scale)
