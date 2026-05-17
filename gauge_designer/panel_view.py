@@ -244,7 +244,7 @@ class PanelView(QWidget):
                 item.setFlags(
                     Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDropEnabled
                 )
-                for inst_e in g["instruments"]:
+                for inst_e in g.get("instruments", []):
                     child = QTreeWidgetItem([Path(inst_e.get("file", "?")).stem])
                     child.setData(0, _ROLE_TYPE, "instrument")
                     child.setFlags(

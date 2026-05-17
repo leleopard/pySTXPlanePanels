@@ -239,7 +239,9 @@ class PanelCanvas(QWidget):
                     it = ph - gy - row * ch - ih
                     ir = il + iw - 1
                     ib = it + ih - 1
-                    fill = _PALETTE[j % len(_PALETTE)]
+                    # Color follows the instrument (file-based), not the cell
+                    # position — so swapping instruments produces a visible change.
+                    fill = _PALETTE[abs(hash(inst_entry.get("file", str(j)))) % len(_PALETTE)]
                     draw.rectangle([il, it, ir, ib], fill=fill)
                     draw.rectangle([il, it, ir, ib], outline=(180, 180, 180, 180), width=1)
                     inst_label = Path(inst_entry.get("file", "?")).stem
@@ -255,7 +257,7 @@ class PanelCanvas(QWidget):
                 right = left + iw - 1
                 bottom = top + ih - 1
 
-                fill = _PALETTE[i % len(_PALETTE)]
+                fill = _PALETTE[abs(hash(entry.get("file", str(i)))) % len(_PALETTE)]
                 outline = sel_outline if is_sel else def_outline
                 lw = 3 if is_sel else 1
 
