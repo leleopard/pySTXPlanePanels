@@ -9,10 +9,11 @@ Right area (hidden until a panel is loaded):
 
 from pathlib import Path
 
+import yaml
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QTreeWidget, QTreeWidgetItem, QAbstractItemView,
     QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QMessageBox, QSpinBox, QDoubleSpinBox, QFileDialog,
+    QMessageBox, QInputDialog, QSpinBox, QDoubleSpinBox, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal, QSettings, QSize
 
@@ -176,6 +177,7 @@ class PanelView(QWidget):
         self._instruments: list[dict] = []
         self._yaml_dir: str = ""
         self._yaml_path: str = ""
+        self._panels_root: str = str(_DEFAULT_PANELS_ROOT)
         self._loading = False
         self._sel_path: tuple[int, ...] | None = None
         self._zoom_cache: dict[str, float] = {}
@@ -187,8 +189,26 @@ class PanelView(QWidget):
         panels_pane = QWidget()
         pl = QVBoxLayout(panels_pane)
         pl.setContentsMargins(0, 0, 0, 0)
-        pl.setSpacing(2)
+        pl.setSpacing(0)
         pl.addWidget(header_label("Panels"))
+
+        panels_btn_bar = QHBoxLayout()
+        panels_btn_bar.setContentsMargins(2, 2, 2, 2)
+        panels_btn_bar.setSpacing(2)
+        for icon_name, tip, slot in [
+            ("plus-circle-outline", "New Panel",    self._new_panel),
+            ("trash-can-outline",   "Delete Panel", self._delete_panel),
+        ]:
+            btn = QPushButton()
+            btn.setIcon(make_svg_icon(icon_name))
+            btn.setIconSize(QSize(20, 20))
+            btn.setFixedSize(28, 28)
+            btn.setToolTip(tip)
+            btn.clicked.connect(slot)
+            panels_btn_bar.addWidget(btn)
+        panels_btn_bar.addStretch()
+        pl.addLayout(panels_btn_bar)
+
         self._file_tree = _PanelFileTree()
         self._file_tree.file_activated.connect(self.open_requested)
         pl.addWidget(self._file_tree)
@@ -363,7 +383,50 @@ class PanelView(QWidget):
     # ── Public API ─────────────────────────────────────────────────────────
 
     def set_panels_root(self, root: str):
+        self._panels_root = root
         self._file_tree.set_root(root)
+
+    def _new_panel(self):
+        root = Path(self._panels_root)
+        name, ok = QInputDialog.getText(self, "New Panel", "Panel name (without .yaml):")
+        if not ok or not name.strip():
+            return
+        file_path = root / f"{name.strip()}.yaml"
+        if file_path.exists():
+            QMessageBox.warning(self, "Exists", f"'{file_path.name}' already exists.")
+            return
+        data = {"name": name.strip(), "size": [1540, 920], "instruments": []}
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+        self._file_tree.set_root(str(root))
+        self.open_requested.emit(str(file_path))
+
+    def _delete_panel(self):
+        item = self._file_tree.currentItem()
+        if item is None:
+            return
+        path = item.data(0, Qt.UserRole)
+        if not path:
+            return
+        reply = QMessageBox.question(
+            self, "Delete Panel",
+            f"Delete '{Path(path).name}'?\nThis cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            Path(path).unlink()
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+        if self._yaml_path == path:
+            self.clear()
+        self._file_tree.set_root(self._panels_root)
 
     def load(self, panel_data: dict, yaml_path: str = ""):
         self._loading = True
