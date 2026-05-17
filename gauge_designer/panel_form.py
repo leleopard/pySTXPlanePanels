@@ -143,8 +143,8 @@ class GridForm(QWidget):
 
         cr_row = QWidget()
         crl = QHBoxLayout(cr_row); crl.setContentsMargins(0,0,0,0); crl.setSpacing(4)
-        self._cols = QSpinBox(); self._cols.setRange(1, 99); self._cols.setFixedWidth(60)
-        self._rows_sb = QSpinBox(); self._rows_sb.setRange(1, 99); self._rows_sb.setFixedWidth(60)
+        self._cols = QSpinBox(); self._cols.setRange(1, 99); self._cols.setFixedWidth(70)
+        self._rows_sb = QSpinBox(); self._rows_sb.setRange(1, 99); self._rows_sb.setFixedWidth(70)
         for w in (self._cols, self._rows_sb):
             w.valueChanged.connect(self._emit)
         crl.addWidget(self._cols); crl.addWidget(QLabel("cols"))
