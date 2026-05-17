@@ -287,7 +287,7 @@ class PanelView(QWidget):
         self._zoom_sb.setSingleStep(0.05)
         self._zoom_sb.setDecimals(2)
         self._zoom_sb.setValue(0.3)
-        self._zoom_sb.setFixedWidth(70)
+        self._zoom_sb.setFixedWidth(85)
         ctrl_bar.addWidget(self._zoom_sb)
         rl.addLayout(ctrl_bar)
 
