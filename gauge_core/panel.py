@@ -96,6 +96,7 @@ def _load_grid(grid: dict, base_dir: Path, panel: "Panel") -> None:
     gx = float(grid["position"][0])
     gy = float(grid["position"][1])
     cols = int(grid.get("columns", 1))
+    rows = int(grid.get("rows", 1))
     cw = float(grid.get("cell_width", 310))
     ch = float(grid.get("cell_height", 310))
     for idx, inst_entry in enumerate(grid.get("instruments", [])):
@@ -105,7 +106,9 @@ def _load_grid(grid: dict, base_dir: Path, panel: "Panel") -> None:
         inst = load_instrument(inst_path)
         scale = float(inst_entry.get("scale", 1.0))
         ox = gx + col * cw
-        oy = gy + row * ch
+        # Row 0 = top row visually; in y-up coords the top of the grid is
+        # gy + rows*ch, so row 0 occupies [gy+(rows-1)*ch, gy+rows*ch].
+        oy = gy + (rows - 1 - row) * ch
         for comp in inst.components:
             if scale != 1.0:
                 comp.apply_scale(scale)
