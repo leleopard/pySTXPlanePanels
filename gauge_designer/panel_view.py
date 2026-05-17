@@ -14,11 +14,11 @@ from PySide6.QtWidgets import (
     QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QMessageBox, QSpinBox, QDoubleSpinBox, QFileDialog,
 )
-from PySide6.QtCore import Qt, Signal, QSettings
+from PySide6.QtCore import Qt, Signal, QSettings, QSize
 
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
 from gauge_designer.panel_canvas import PanelCanvas
-from gauge_designer.ui_utils import header_label
+from gauge_designer.ui_utils import header_label, make_svg_icon
 
 _ROLE_TYPE = Qt.UserRole          # "instrument" | "grid"
 
@@ -238,25 +238,40 @@ class PanelView(QWidget):
 
         # Pane 1: instrument tree + toolbar
         left = QWidget()
-        ll = QVBoxLayout(left); ll.setContentsMargins(0, 0, 0, 0)
+        ll = QVBoxLayout(left); ll.setContentsMargins(0, 0, 0, 0); ll.setSpacing(0)
         ll.addWidget(header_label("Instruments"))
-        self._tree = _InstrumentTree(self)
-        self._tree.currentItemChanged.connect(self._on_tree_selection_changed)
-        ll.addWidget(self._tree)
-        btn_bar = QHBoxLayout(); btn_bar.setSpacing(2)
-        for label, slot in [
-            ("+Inst", self._add_instrument),
-            ("+Grid", self._add_grid),
-            ("−",     self._remove_item),
-            ("▲",     self._move_up),
-            ("▼",     self._move_down),
+
+        btn_bar = QHBoxLayout()
+        btn_bar.setContentsMargins(2, 2, 2, 2)
+        btn_bar.setSpacing(2)
+        for icon_name, tip, slot in [
+            ("plus-circle-outline", "Add Instrument", self._add_instrument),
+            ("table-plus",          "Add Grid",        self._add_grid),
+            ("trash-can-outline",   "Remove",          self._remove_item),
+        ]:
+            btn = QPushButton()
+            btn.setIcon(make_svg_icon(icon_name))
+            btn.setIconSize(QSize(20, 20))
+            btn.setFixedSize(28, 28)
+            btn.setToolTip(tip)
+            btn.clicked.connect(slot)
+            btn_bar.addWidget(btn)
+        btn_bar.addSpacing(6)
+        for label, tip, slot in [
+            ("▲", "Move Up",   self._move_up),
+            ("▼", "Move Down", self._move_down),
         ]:
             btn = QPushButton(label)
-            btn.setFixedWidth(32 if len(label) <= 1 else 46)
+            btn.setFixedSize(28, 28)
+            btn.setToolTip(tip)
             btn.clicked.connect(slot)
             btn_bar.addWidget(btn)
         btn_bar.addStretch()
         ll.addLayout(btn_bar)
+
+        self._tree = _InstrumentTree(self)
+        self._tree.currentItemChanged.connect(self._on_tree_selection_changed)
+        ll.addWidget(self._tree)
 
         # Pane 2: stacked properties forms
         mid = QWidget()
