@@ -359,6 +359,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Saved: {path}")
 
     def _write_panel(self, path: str):
+        self._panel_data["name"] = self._panel_view.get_name()
         self._panel_data["instruments"] = self._panel_view.get_instruments()
         self._panel_data["size"] = self._panel_view.get_size()
         try:

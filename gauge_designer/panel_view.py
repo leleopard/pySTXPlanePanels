@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QTreeWidget, QTreeWidgetItem, QAbstractItemView,
-    QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QMessageBox, QSpinBox, QDoubleSpinBox, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal, QSettings
@@ -200,6 +200,20 @@ class PanelView(QWidget):
         ea.setSpacing(4)
         self._editor_area.setVisible(False)
 
+        # Panel name header
+        self._name_header = header_label("")
+        ea.addWidget(self._name_header)
+
+        # Name edit row
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 2, 0, 0)
+        name_row.setSpacing(6)
+        name_row.addWidget(QLabel("Name:"))
+        self._name_edit = QLineEdit()
+        self._name_edit.editingFinished.connect(self._on_name_changed)
+        name_row.addWidget(self._name_edit)
+        ea.addLayout(name_row)
+
         # Panel size bar
         size_bar = QHBoxLayout()
         size_bar.setContentsMargins(0, 0, 0, 4)
@@ -340,6 +354,10 @@ class PanelView(QWidget):
         self._yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
         self._instruments = panel_data.setdefault("instruments", [])
 
+        name = panel_data.get("name", "")
+        self._name_header.setText(name)
+        self._name_edit.setText(name)
+
         w, h = panel_data.get("size", [1540, 920])
         self._panel_w.blockSignals(True); self._panel_h.blockSignals(True)
         self._panel_w.setValue(int(w)); self._panel_h.setValue(int(h))
@@ -368,7 +386,10 @@ class PanelView(QWidget):
         self._loading = True
         self._instruments = []
         self._yaml_dir = ""
+        self._yaml_path = ""
         self._sel_path = None
+        self._name_header.setText("")
+        self._name_edit.clear()
         self._tree.clear()
         self._inst_form.clear()
         self._loading = False
@@ -378,8 +399,18 @@ class PanelView(QWidget):
     def get_instruments(self) -> list[dict]:
         return self._instruments
 
+    def get_name(self) -> str:
+        return self._name_edit.text().strip()
+
     def get_size(self) -> list[int]:
         return [self._panel_w.value(), self._panel_h.value()]
+
+    # ── Panel name ─────────────────────────────────────────────────────────
+
+    def _on_name_changed(self):
+        name = self._name_edit.text().strip()
+        self._name_header.setText(name)
+        self.changed.emit()
 
     # ── Panel size ─────────────────────────────────────────────────────────
 
