@@ -6,6 +6,7 @@ Starts zoomed out (0.3×) since panels are typically 1500+ px wide.
 """
 
 import io
+import os
 from pathlib import Path
 
 import yaml
@@ -25,10 +26,27 @@ _PALETTE = [
     (170, 170, 50, 170),
 ]
 
-try:
-    _FONT = ImageFont.load_default(size=11)
-except TypeError:
-    _FONT = ImageFont.load_default()
+def _load_bold_font(size: int) -> ImageFont.ImageFont:
+    candidates = [
+        "C:/Windows/Fonts/arialbd.ttf",                                     # Windows
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",             # Linux (Debian/Ubuntu)
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",     # Linux (RHEL/Fedora)
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",           # Linux (Fedora alt)
+        "/Library/Fonts/Arial Bold.ttf",                                     # macOS
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",                # macOS (Ventura+)
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+_FONT = _load_bold_font(44)
 
 
 class _Surface(QWidget):
