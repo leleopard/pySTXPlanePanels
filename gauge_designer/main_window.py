@@ -320,7 +320,7 @@ class MainWindow(QMainWindow):
             dirty = self._panel_dirty
         prefix = "* " if dirty else ""
         self.setWindowTitle(
-            f"{prefix}Gauge Designer — {name}" if name else "Gauge Designer"
+            f"{prefix}pyXplane Panels Designer — {name}" if name else "pyXplane Panels Designer"
         )
 
     # ── Save ──────────────────────────────────────────────────────────────

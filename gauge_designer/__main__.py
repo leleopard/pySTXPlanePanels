@@ -5,7 +5,7 @@ from gauge_designer.main_window import MainWindow
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Gauge Designer")
+    app.setApplicationName("pyXplane Panels Designer")
     app.setOrganizationName("pySTXPlanePanels")
     win = MainWindow()
     win.show()
