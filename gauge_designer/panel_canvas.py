@@ -140,6 +140,11 @@ class PanelCanvas(QWidget):
         self._zoom = max(0.05, min(4.0, z))
         self._render()
 
+    def inst_size(self, file_rel: str, scale: float = 1.0) -> tuple[int, int]:
+        """Return the rendered (width, height) of an instrument, using cache."""
+        w, h = self._inst_size(file_rel)
+        return (int(round(w * scale)), int(round(h * scale)))
+
     # ── Mouse tracking ────────────────────────────────────────────────────
 
     def _on_mouse_move(self, event):

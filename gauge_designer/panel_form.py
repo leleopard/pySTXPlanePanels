@@ -8,7 +8,7 @@ Three form types:
 
 from pathlib import Path
 
-from gauge_designer.ui_utils import flip_y
+from gauge_designer.ui_utils import is_y_down
 from PySide6.QtWidgets import (
     QWidget, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSpinBox, QDoubleSpinBox, QFileDialog,
@@ -23,6 +23,7 @@ class PanelForm(QWidget):
         super().__init__(parent)
         self._yaml_dir: str = ""
         self._ref_height: int = 920
+        self._item_height: int = 310
         self._loading = False
 
         form = QFormLayout(self)
@@ -72,18 +73,29 @@ class PanelForm(QWidget):
     def set_ref_height(self, h: int):
         self._ref_height = h
 
+    def set_item_height(self, h: int):
+        self._item_height = h
+
+    def _y_disp(self, y: int) -> int:
+        """Convert YAML y-up (bottom-left origin) ↔ display y (self-inverse).
+        In y-down mode the displayed origin is the top-left of the instrument.
+        """
+        if is_y_down():
+            return self._ref_height - y - self._item_height
+        return y
+
     def load(self, entry: dict):
         self._loading = True
         self._file.setText(str(entry.get("file", "")))
         pos = entry.get("position", [0, 0])
         self._pos_x.setValue(int(pos[0]))
-        self._pos_y.setValue(flip_y(int(pos[1]), self._ref_height))
+        self._pos_y.setValue(self._y_disp(int(pos[1])))
         self._scale.setValue(float(entry.get("scale", 1.0)))
         self._loading = False
 
     def get_data(self) -> dict:
         data: dict = {"file": self._file.text().strip()}
-        data["position"] = [self._pos_x.value(), flip_y(self._pos_y.value(), self._ref_height)]
+        data["position"] = [self._pos_x.value(), self._y_disp(self._pos_y.value())]
         scale = round(self._scale.value(), 3)
         if abs(scale - 1.0) > 1e-4:
             data["scale"] = scale
@@ -127,6 +139,14 @@ class GridForm(QWidget):
         super().__init__(parent)
         self._ref_height: int = 920
         self._loading = False
+
+    def _y_disp(self, y: int, grid_h: int) -> int:
+        """Convert YAML y-up (bottom-left origin) ↔ display y (self-inverse).
+        In y-down mode the displayed origin is the top-left of the grid.
+        """
+        if is_y_down():
+            return self._ref_height - y - grid_h
+        return y
 
         form = QFormLayout(self)
         form.setContentsMargins(6, 4, 6, 4)
@@ -175,8 +195,11 @@ class GridForm(QWidget):
         self._loading = True
         self._name.setText(grid_cfg.get("name", ""))
         pos = grid_cfg.get("position", [0, 0])
+        rows = int(grid_cfg.get("rows", 1))
+        ch = int(grid_cfg.get("cell_height", 310))
+        grid_h = rows * ch
         self._pos_x.setValue(int(pos[0]))
-        self._pos_y.setValue(flip_y(int(pos[1]), self._ref_height))
+        self._pos_y.setValue(self._y_disp(int(pos[1]), grid_h))
         self._cols.setValue(int(grid_cfg.get("columns", 1)))
         self._rows_sb.setValue(int(grid_cfg.get("rows", 1)))
         self._cell_w.setValue(int(grid_cfg.get("cell_width", 310)))
@@ -184,8 +207,9 @@ class GridForm(QWidget):
         self._loading = False
 
     def get_data(self) -> dict:
+        grid_h = self._rows_sb.value() * self._cell_h.value()
         data: dict = {
-            "position": [self._pos_x.value(), flip_y(self._pos_y.value(), self._ref_height)],
+            "position": [self._pos_x.value(), self._y_disp(self._pos_y.value(), grid_h)],
             "columns": self._cols.value(),
             "rows": self._rows_sb.value(),
             "cell_width": self._cell_w.value(),

@@ -581,6 +581,9 @@ class PanelView(QWidget):
                 self._stack.setCurrentIndex(1)
                 self._grid_form.load(entry["grid"])
             else:
+                scale = float(entry.get("scale", 1.0))
+                _, ih = self._canvas.inst_size(entry.get("file", ""), scale)
+                self._inst_form.set_item_height(ih)
                 self._stack.setCurrentIndex(0)
                 self._inst_form.load(entry)
             self._canvas.set_selected(i)
