@@ -140,14 +140,6 @@ class GridForm(QWidget):
         self._ref_height: int = 920
         self._loading = False
 
-    def _y_disp(self, y: int, grid_h: int) -> int:
-        """Convert YAML y-up (bottom-left origin) ↔ display y (self-inverse).
-        In y-down mode the displayed origin is the top-left of the grid.
-        """
-        if is_y_down():
-            return self._ref_height - y - grid_h
-        return y
-
         form = QFormLayout(self)
         form.setContentsMargins(6, 4, 6, 4)
         form.setHorizontalSpacing(8)
@@ -187,6 +179,14 @@ class GridForm(QWidget):
         szl.addWidget(self._cell_w); szl.addWidget(QLabel("×")); szl.addWidget(self._cell_h)
         szl.addStretch()
         form.addRow("Cell W × H", sz_row)
+
+    def _y_disp(self, y: int, grid_h: int) -> int:
+        """Convert YAML y-up (bottom-left origin) ↔ display y (self-inverse).
+        In y-down mode the displayed origin is the top-left of the grid.
+        """
+        if is_y_down():
+            return self._ref_height - y - grid_h
+        return y
 
     def set_ref_height(self, h: int):
         self._ref_height = h
