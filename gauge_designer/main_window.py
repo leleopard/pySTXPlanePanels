@@ -42,8 +42,8 @@ def _find_panels_root(yaml_path: str) -> str:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Gauge Designer")
-        self.setWindowIcon(make_svg_icon("turbine", "#ffffff", 64))
+        self.setWindowTitle("pyXplane Panels Designer")
+        self.setWindowIcon(make_svg_icon("turbine", size=64))
         self.resize(1060, 640)
 
         self._settings = QSettings()
