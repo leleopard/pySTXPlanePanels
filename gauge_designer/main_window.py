@@ -10,6 +10,7 @@ from PySide6.QtGui import QAction
 from gauge_designer.instrument_view import InstrumentView
 from gauge_designer.panel_view import PanelView
 from gauge_designer.preview import PreviewBar
+from gauge_designer.ui_utils import make_svg_icon
 
 _MAX_RECENT = 8
 _TAB_GAUGE = 0
@@ -42,6 +43,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Gauge Designer")
+        self.setWindowIcon(make_svg_icon("turbine", "#ffffff", 64))
         self.resize(1060, 640)
 
         self._settings = QSettings()
@@ -93,12 +95,6 @@ class MainWindow(QMainWindow):
     def _build_menu(self):
         menu = self.menuBar()
 
-        edit_menu = menu.addMenu("&Edit")
-        prefs_act = QAction("&Preferences…", self)
-        prefs_act.setShortcut("Ctrl+,")
-        prefs_act.triggered.connect(self._open_preferences)
-        edit_menu.addAction(prefs_act)
-
         file_menu = menu.addMenu("&File")
 
         self._open_gauge_act = QAction("Open &Gauge…", self)
@@ -132,6 +128,12 @@ class MainWindow(QMainWindow):
         quit_act.setShortcut("Ctrl+Q")
         quit_act.triggered.connect(self.close)
         file_menu.addAction(quit_act)
+
+        edit_menu = menu.addMenu("&Edit")
+        prefs_act = QAction("&Preferences…", self)
+        prefs_act.setShortcut("Ctrl+,")
+        prefs_act.triggered.connect(self._open_preferences)
+        edit_menu.addAction(prefs_act)
 
     def _open_preferences(self):
         from gauge_designer.preferences_dialog import PreferencesDialog
