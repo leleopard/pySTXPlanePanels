@@ -373,6 +373,7 @@ class InstrumentView(QWidget):
         prop_layout.addWidget(header_label("Properties"))
         self._form = PropertiesForm()
         self._form.changed.connect(self._on_form_changed)
+        self._form.setVisible(False)
         prop_layout.addWidget(self._form)
 
         # canvas pane
@@ -680,8 +681,10 @@ class InstrumentView(QWidget):
             comp = self._components[row]
             name = comp.get("name")
             self._form.load(comp)
+            self._form.setVisible(True)
         else:
             self._form.clear()
+            self._form.setVisible(False)
         self._canvas.set_selected(name)
 
     # ── Form change callback ──────────────────────────────────────────────
