@@ -604,6 +604,7 @@ class MainWindow(QMainWindow):
         self._panel_data["name"] = self._panel_view.get_name()
         self._panel_data["instruments"] = self._panel_view.get_instruments()
         self._panel_data["size"] = self._panel_view.get_size()
+        self._panel_data["background_color"] = self._panel_view.get_background_color()
         port = self._panel_view.get_listen_port()
         if port is not None:
             self._panel_data.setdefault("udp", {})["listen_port"] = port

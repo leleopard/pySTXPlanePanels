@@ -140,6 +140,11 @@ class PanelCanvas(QWidget):
         self._zoom = max(0.05, min(4.0, z))
         self._render()
 
+    def set_background_color(self, r: int, g: int, b: int):
+        if self._data:
+            self._data["background_color"] = [round(r / 255, 4), round(g / 255, 4), round(b / 255, 4)]
+            self._render()
+
     def inst_size(self, file_rel: str, scale: float = 1.0) -> tuple[int, int]:
         """Return the rendered (width, height) of an instrument, using cache."""
         w, h = self._inst_size(file_rel)
@@ -247,7 +252,12 @@ class PanelCanvas(QWidget):
 
     def _composite(self) -> QPixmap:
         pw, ph = self._data.get("size", [1540, 920])
-        canvas = Image.new("RGBA", (pw, ph), (25, 25, 25, 255))
+        bg = self._data.get("background_color", [0.05, 0.05, 0.05])
+        try:
+            bg_rgb = (int(round(bg[0] * 255)), int(round(bg[1] * 255)), int(round(bg[2] * 255)), 255)
+        except (TypeError, IndexError, ValueError):
+            bg_rgb = (13, 13, 13, 255)
+        canvas = Image.new("RGBA", (pw, ph), bg_rgb)
         draw = ImageDraw.Draw(canvas)
 
         for i, entry in enumerate(self._data.get("instruments", [])):

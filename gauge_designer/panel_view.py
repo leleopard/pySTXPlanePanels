@@ -13,9 +13,10 @@ import yaml
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QTreeWidget, QTreeWidgetItem, QAbstractItemView,
     QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QMessageBox, QInputDialog, QSpinBox, QDoubleSpinBox, QFileDialog,
+    QMessageBox, QInputDialog, QSpinBox, QDoubleSpinBox, QFileDialog, QColorDialog,
 )
 from PySide6.QtCore import Qt, Signal, QSettings, QSize
+from PySide6.QtGui import QColor
 
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
 from gauge_designer.panel_canvas import PanelCanvas
@@ -253,6 +254,21 @@ class PanelView(QWidget):
         size_bar.addStretch()
         ea.addLayout(size_bar)
 
+        # Background colour
+        self._bg_color = QColor(13, 13, 13)
+        color_bar = QHBoxLayout()
+        color_bar.setContentsMargins(0, 0, 0, 4)
+        color_bar.setSpacing(4)
+        color_bar.addWidget(QLabel("Background:"))
+        self._bg_color_btn = QPushButton()
+        self._bg_color_btn.setFixedSize(60, 22)
+        self._bg_color_btn.setToolTip("Click to choose panel background colour")
+        self._bg_color_btn.clicked.connect(self._pick_bg_color)
+        color_bar.addWidget(self._bg_color_btn)
+        color_bar.addStretch()
+        ea.addLayout(color_bar)
+        self._update_bg_swatch()
+
         # UDP listen port bar
         port_bar = QHBoxLayout()
         port_bar.setContentsMargins(0, 0, 0, 4)
@@ -475,6 +491,17 @@ class PanelView(QWidget):
         self._listen_port_sb.blockSignals(False)
         self._port_warning.setText("")
 
+        bg = panel_data.get("background_color", [0.05, 0.05, 0.05])
+        try:
+            self._bg_color = QColor(
+                int(round(bg[0] * 255)),
+                int(round(bg[1] * 255)),
+                int(round(bg[2] * 255)),
+            )
+        except (TypeError, IndexError, ValueError):
+            self._bg_color = QColor(13, 13, 13)
+        self._update_bg_swatch()
+
         self._loading = False
         self._inst_form.set_yaml_dir(self._yaml_dir)
         self._inst_form.set_ref_height(int(h))
@@ -506,6 +533,8 @@ class PanelView(QWidget):
         self._name_edit.clear()
         self._listen_port_sb.setValue(0)
         self._port_warning.setText("")
+        self._bg_color = QColor(13, 13, 13)
+        self._update_bg_swatch()
         self._tree.clear()
         self._inst_form.clear()
         self._loading = False
@@ -525,6 +554,10 @@ class PanelView(QWidget):
         """Return the per-panel listen port, or None if set to global default."""
         v = self._listen_port_sb.value()
         return v if v > 0 else None
+
+    def get_background_color(self) -> list[float]:
+        r, g, b = self._bg_color.red(), self._bg_color.green(), self._bg_color.blue()
+        return [round(r / 255, 4), round(g / 255, 4), round(b / 255, 4)]
 
     # ── Panel name ─────────────────────────────────────────────────────────
 
@@ -578,6 +611,25 @@ class PanelView(QWidget):
         else:
             self._port_warning.setText("")
         self.changed.emit()
+
+    # ── Background colour ──────────────────────────────────────────────────
+
+    def _pick_bg_color(self):
+        color = QColorDialog.getColor(self._bg_color, self, "Panel Background Colour")
+        if color.isValid():
+            self._bg_color = color
+            self._update_bg_swatch()
+            self._canvas.set_background_color(color.red(), color.green(), color.blue())
+            self.changed.emit()
+
+    def _update_bg_swatch(self):
+        r, g, b = self._bg_color.red(), self._bg_color.green(), self._bg_color.blue()
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        text_color = "#ffffff" if lum < 128 else "#000000"
+        self._bg_color_btn.setStyleSheet(
+            f"background-color: rgb({r},{g},{b}); color: {text_color}; "
+            f"border: 1px solid #888; border-radius: 2px;"
+        )
 
     def refresh_form(self):
         """Re-populate the active form using the current coord convention."""
