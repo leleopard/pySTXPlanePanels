@@ -217,6 +217,18 @@ class MainWindow(QMainWindow):
 
         tb.addSeparator()
 
+        self._script_btn = QPushButton()
+        self._script_btn.setIcon(make_svg_icon("script-text-play-outline", self._ICON_GREY, size=36))
+        self._script_btn.setIconSize(QSize(36, 36))
+        self._script_btn.setFixedSize(48, 48)
+        self._script_btn.setStyleSheet(_btn_style)
+        self._script_btn.setToolTip("Create launch script for this panel")
+        self._script_btn.setEnabled(False)
+        self._script_btn.clicked.connect(self._on_script_clicked)
+        tb.addWidget(self._script_btn)
+
+        tb.addSeparator()
+
         self._play_btn = QPushButton()
         self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY, size=36))
         self._play_btn.setIconSize(QSize(36, 36))
@@ -262,6 +274,25 @@ class MainWindow(QMainWindow):
         self._save_all_btn.setEnabled(any_dirty)
         color = _HEADER_COLOR if any_dirty else self._ICON_GREY
         self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", color, size=36))
+
+    def _update_script_btn(self):
+        from gauge_designer.ui_utils import _HEADER_COLOR
+        enabled = (
+            self._tabs.currentIndex() == _TAB_PANEL
+            and self._panel_path is not None
+        )
+        self._script_btn.setEnabled(enabled)
+        color = _HEADER_COLOR if enabled else self._ICON_GREY
+        self._script_btn.setIcon(make_svg_icon("script-text-play-outline", color, size=36))
+
+    def _on_script_clicked(self):
+        if not self._panel_path:
+            return
+        panels_root = self._panel_view._panels_root
+        project_root = str(Path(panels_root).parent) if panels_root else str(Path(self._panel_path).parent)
+        from gauge_designer.launch_script_dialog import LaunchScriptDialog
+        dlg = LaunchScriptDialog(self._panel_path, project_root, parent=self)
+        dlg.exec()
 
     def _save_all(self):
         if self._gauge_dirty and self._gauge_path:
@@ -332,6 +363,7 @@ class MainWindow(QMainWindow):
         dirty = self._gauge_dirty if idx == _TAB_GAUGE else self._panel_dirty
         self._update_save_btn(dirty)
         self._update_save_all_btn()
+        self._update_script_btn()
         self._update_play_btn()
         self._update_title()
 
@@ -453,6 +485,7 @@ class MainWindow(QMainWindow):
         self._preview.set_yaml(path, data_provider=lambda: self._panel_data)
         self._update_save_btn(False)
         self._update_save_all_btn()
+        self._update_script_btn()
         self._update_play_btn()
         self._update_title()
         n = len(data.get("instruments", []))
@@ -565,6 +598,7 @@ class MainWindow(QMainWindow):
         self._panel_dirty = False
         self._update_save_btn(False)
         self._update_save_all_btn()
+        self._update_script_btn()
         self._update_title()
         self.statusBar().showMessage(f"Saved: {path}")
 
