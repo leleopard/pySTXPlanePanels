@@ -218,8 +218,7 @@ class InstrumentView(QWidget):
         cl.setSpacing(2)
 
         # Instrument name header
-        self._name_header = QLabel("")
-        self._name_header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self._name_header = header_label("")
         cl.addWidget(self._name_header)
 
         name_row = QHBoxLayout()
@@ -273,10 +272,10 @@ class InstrumentView(QWidget):
         btn_bar.setContentsMargins(2, 2, 2, 2)
         btn_bar.setSpacing(2)
         for icon_name, slot, tip in [
-            ("menu-up",             self._move_up,           "Move up"),
-            ("menu-down",           self._move_down,         "Move down"),
             ("plus-circle-outline", self._add_component,     "Add component"),
             ("trash-can-outline",   self._remove_component,  "Remove component"),
+            ("menu-up",             self._move_up,           "Move up"),
+            ("menu-down",           self._move_down,         "Move down"),
         ]:
             btn = QPushButton()
             btn.setIcon(make_svg_icon(icon_name))
