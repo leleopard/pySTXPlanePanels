@@ -153,10 +153,30 @@ class MainWindow(QMainWindow):
         file_menu.addAction(quit_act)
 
         edit_menu = menu.addMenu("&Edit")
+
+        xplane_act = QAction("X-Plane &Network Settings…", self)
+        xplane_act.triggered.connect(self._open_xplane_settings)
+        edit_menu.addAction(xplane_act)
+
+        edit_menu.addSeparator()
+
         prefs_act = QAction("&Preferences…", self)
         prefs_act.setShortcut("Ctrl+,")
         prefs_act.triggered.connect(self._open_preferences)
         edit_menu.addAction(prefs_act)
+
+    def _open_xplane_settings(self):
+        from gauge_designer.xplane_settings_dialog import XPlaneSettingsDialog
+        root = self._project_root()
+        dlg = XPlaneSettingsDialog(root, parent=self)
+        dlg.exec()
+
+    def _project_root(self) -> str:
+        if self._gauge_view._instruments_root:
+            return str(Path(self._gauge_view._instruments_root).parent)
+        if self._panel_view._panels_root:
+            return str(Path(self._panel_view._panels_root).parent)
+        return str(Path.cwd())
 
     def _open_preferences(self):
         from gauge_designer.preferences_dialog import PreferencesDialog
@@ -288,10 +308,8 @@ class MainWindow(QMainWindow):
     def _on_script_clicked(self):
         if not self._panel_path:
             return
-        panels_root = self._panel_view._panels_root
-        project_root = str(Path(panels_root).parent) if panels_root else str(Path(self._panel_path).parent)
         from gauge_designer.launch_script_dialog import LaunchScriptDialog
-        dlg = LaunchScriptDialog(self._panel_path, project_root, parent=self)
+        dlg = LaunchScriptDialog(self._panel_path, self._project_root(), parent=self)
         dlg.exec()
 
     def _save_all(self):
@@ -586,6 +604,14 @@ class MainWindow(QMainWindow):
         self._panel_data["name"] = self._panel_view.get_name()
         self._panel_data["instruments"] = self._panel_view.get_instruments()
         self._panel_data["size"] = self._panel_view.get_size()
+        port = self._panel_view.get_listen_port()
+        if port is not None:
+            self._panel_data.setdefault("udp", {})["listen_port"] = port
+        else:
+            udp = self._panel_data.get("udp", {})
+            udp.pop("listen_port", None)
+            if not udp:
+                self._panel_data.pop("udp", None)
         try:
             with open(path, "w", encoding="utf-8") as f:
                 yaml.dump(

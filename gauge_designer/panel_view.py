@@ -253,6 +253,27 @@ class PanelView(QWidget):
         size_bar.addStretch()
         ea.addLayout(size_bar)
 
+        # UDP listen port bar
+        port_bar = QHBoxLayout()
+        port_bar.setContentsMargins(0, 0, 0, 4)
+        port_bar.setSpacing(4)
+        port_bar.addWidget(QLabel("UDP listen port:"))
+        self._listen_port_sb = QSpinBox()
+        self._listen_port_sb.setRange(0, 65535)
+        self._listen_port_sb.setFixedWidth(90)
+        self._listen_port_sb.setSpecialValueText("— (global)")
+        self._listen_port_sb.setToolTip(
+            "Per-panel listen port. Set to 0 to use the global default from config.yaml.\n"
+            "Each panel running simultaneously must use a unique port."
+        )
+        self._listen_port_sb.valueChanged.connect(self._on_listen_port_changed)
+        port_bar.addWidget(self._listen_port_sb)
+        self._port_warning = QLabel("")
+        self._port_warning.setStyleSheet("color: #c0392b; font-size: 11px;")
+        port_bar.addWidget(self._port_warning)
+        port_bar.addStretch()
+        ea.addLayout(port_bar)
+
         # Inner 3-way splitter: instrument tree | properties | canvas
         self._splitter = QSplitter(Qt.Horizontal)
 
@@ -448,6 +469,12 @@ class PanelView(QWidget):
         self._panel_w.setValue(int(w)); self._panel_h.setValue(int(h))
         self._panel_w.blockSignals(False); self._panel_h.blockSignals(False)
 
+        port = (panel_data.get("udp") or {}).get("listen_port", 0) or 0
+        self._listen_port_sb.blockSignals(True)
+        self._listen_port_sb.setValue(int(port))
+        self._listen_port_sb.blockSignals(False)
+        self._port_warning.setText("")
+
         self._loading = False
         self._inst_form.set_yaml_dir(self._yaml_dir)
         self._inst_form.set_ref_height(int(h))
@@ -477,6 +504,8 @@ class PanelView(QWidget):
         self._sel_path = None
         self._name_header.setText("")
         self._name_edit.clear()
+        self._listen_port_sb.setValue(0)
+        self._port_warning.setText("")
         self._tree.clear()
         self._inst_form.clear()
         self._loading = False
@@ -491,6 +520,11 @@ class PanelView(QWidget):
 
     def get_size(self) -> list[int]:
         return [self._panel_w.value(), self._panel_h.value()]
+
+    def get_listen_port(self) -> int | None:
+        """Return the per-panel listen port, or None if set to global default."""
+        v = self._listen_port_sb.value()
+        return v if v > 0 else None
 
     # ── Panel name ─────────────────────────────────────────────────────────
 
@@ -508,6 +542,42 @@ class PanelView(QWidget):
             self._grid_form.set_ref_height(h)
             self._canvas.set_size(self._panel_w.value(), h)
             self.changed.emit()
+
+    # ── UDP listen port ────────────────────────────────────────────────────
+
+    def _used_listen_ports(self) -> dict[int, str]:
+        """Return {port: panel_name} for all panels in the root except this one."""
+        result: dict[int, str] = {}
+        if not self._panels_root:
+            return result
+        current = str(Path(self._yaml_path).resolve()) if self._yaml_path else ""
+        for p in Path(self._panels_root).rglob("*.yaml"):
+            if str(p.resolve()) == current:
+                continue
+            try:
+                with open(p, encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                port = (data.get("udp") or {}).get("listen_port")
+                if port:
+                    result[int(port)] = data.get("name", p.stem)
+            except Exception:
+                continue
+        return result
+
+    def _on_listen_port_changed(self, value: int):
+        if self._loading:
+            return
+        if value > 0:
+            used = self._used_listen_ports()
+            if value in used:
+                self._port_warning.setText(
+                    f"⚠ Port {value} already used by '{used[value]}'"
+                )
+            else:
+                self._port_warning.setText("")
+        else:
+            self._port_warning.setText("")
+        self.changed.emit()
 
     def refresh_form(self):
         """Re-populate the active form using the current coord convention."""
