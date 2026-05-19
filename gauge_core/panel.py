@@ -53,7 +53,7 @@ class Panel:
 def _as_color(raw: Any) -> tuple[int, int, int] | None:
     if raw is None:
         return None
-    return (int(raw[0]), int(raw[1]), int(raw[2]))
+    return (int(round(raw[0] * 255)), int(round(raw[1] * 255)), int(round(raw[2] * 255)))
 
 
 def _find_project_root(yaml_path: Path) -> Path:
