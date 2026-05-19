@@ -109,10 +109,49 @@ class _InstrumentTree(QTreeWidget):
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
+        self.setEditTriggers(
+            QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed
+        )
         self._instruments_root: Path | None = None
+        self._renaming = False
+        self.itemChanged.connect(self._on_item_changed)
 
     def set_root(self, root: Path):
         self._instruments_root = root
+
+    def _on_item_changed(self, item: "QTreeWidgetItem", column: int):
+        if self._renaming or column != 0:
+            return
+        if item.data(0, _ROLE_TYPE) != "dir":
+            return
+        old_path = Path(item.data(0, _ROLE_PATH))
+        new_name = item.text(0).strip()
+
+        def _restore(msg: str = ""):
+            self._renaming = True
+            item.setText(0, old_path.name)
+            self._renaming = False
+            if msg:
+                QMessageBox.warning(self, "Rename", msg)
+
+        if not new_name:
+            _restore()
+            return
+        if new_name == old_path.name:
+            return
+        new_path = old_path.parent / new_name
+        if new_path.exists():
+            _restore(f"'{new_name}' already exists.")
+            return
+        try:
+            old_path.rename(new_path)
+        except Exception as exc:
+            _restore(str(exc))
+            return
+        self._renaming = True
+        item.setData(0, _ROLE_PATH, str(new_path))
+        self._renaming = False
+        self.item_moved.emit(str(old_path), str(new_path))
 
     def dragEnterEvent(self, event):
         if event.source() is self and self.currentItem():
@@ -489,6 +528,7 @@ class InstrumentView(QWidget):
                 item.setIcon(0, self._dir_icon)
                 item.setData(0, _ROLE_PATH, str(entry))
                 item.setData(0, _ROLE_TYPE, "dir")
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
                 self._add_tree_items(item, entry)
             elif entry.is_file() and entry.suffix.lower() in (".yaml", ".yml"):
                 item = QTreeWidgetItem(parent, [entry.stem])
