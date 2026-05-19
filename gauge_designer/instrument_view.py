@@ -15,7 +15,7 @@ from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
 from gauge_designer.properties_form import PropertiesForm
-from gauge_designer.ui_utils import header_label
+from gauge_designer.ui_utils import header_label, make_svg_icon
 
 # UserRole slots for tree items
 _ROLE_PATH = Qt.UserRole        # absolute path string (both files and dirs)
@@ -269,22 +269,29 @@ class InstrumentView(QWidget):
         comp_layout = QVBoxLayout(comp_pane)
         comp_layout.setContentsMargins(0, 0, 0, 0)
         comp_layout.addWidget(header_label("Components"))
+        btn_bar = QHBoxLayout()
+        btn_bar.setContentsMargins(2, 2, 2, 2)
+        btn_bar.setSpacing(2)
+        for icon_name, slot, tip in [
+            ("menu-up",             self._move_up,           "Move up"),
+            ("menu-down",           self._move_down,         "Move down"),
+            ("plus-circle-outline", self._add_component,     "Add component"),
+            ("trash-can-outline",   self._remove_component,  "Remove component"),
+        ]:
+            btn = QPushButton()
+            btn.setIcon(make_svg_icon(icon_name))
+            btn.setFixedSize(28, 28)
+            btn.setToolTip(tip)
+            btn.clicked.connect(slot)
+            btn_bar.addWidget(btn)
+        btn_bar.addStretch()
+        comp_layout.addLayout(btn_bar)
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
         self._delegate = _EyeDelegate(self._list)
         self._delegate.visibility_toggled.connect(self._on_visibility_toggled)
         self._list.setItemDelegate(self._delegate)
         comp_layout.addWidget(self._list)
-        btn_bar = QHBoxLayout()
-        btn_bar.setSpacing(2)
-        for label, slot in [("▲", self._move_up), ("▼", self._move_down),
-                             ("+", self._add_component), ("−", self._remove_component)]:
-            btn = QPushButton(label)
-            btn.setFixedWidth(32)
-            btn.clicked.connect(slot)
-            btn_bar.addWidget(btn)
-        btn_bar.addStretch()
-        comp_layout.addLayout(btn_bar)
 
         # properties pane
         prop_pane = QWidget()
