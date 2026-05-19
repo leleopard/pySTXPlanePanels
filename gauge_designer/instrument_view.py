@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import sys
@@ -95,9 +96,9 @@ class _EyeDelegate(QStyledItemDelegate):
 # ── Instrument file tree with drag-and-drop ──────────────────────────────────
 
 class _InstrumentTree(QTreeWidget):
-    """QTreeWidget that supports dragging instrument YAMLs into sub-folders."""
+    """QTreeWidget that supports dragging files and folders within the tree."""
 
-    file_moved = Signal(str, str)  # old_path, new_path
+    item_moved = Signal(str, str)  # old_path, new_path (file or directory)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -108,50 +109,85 @@ class _InstrumentTree(QTreeWidget):
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
+        self._instruments_root: Path | None = None
+
+    def set_root(self, root: Path):
+        self._instruments_root = root
 
     def dragEnterEvent(self, event):
-        if event.source() is self:
-            item = self.currentItem()
-            if item and item.data(0, _ROLE_TYPE) == "file":
-                event.accept()
-                return
-        event.ignore()
+        if event.source() is self and self.currentItem():
+            event.accept()
+        else:
+            event.ignore()
 
     def dragMoveEvent(self, event):
         if event.source() is not self:
             event.ignore()
             return
-        target = self.itemAt(event.position().toPoint())
-        if target is not None and target.data(0, _ROLE_TYPE) == "dir":
-            event.accept()
-        else:
+        src_item = self.currentItem()
+        if src_item is None:
             event.ignore()
+            return
+        target = self.itemAt(event.position().toPoint())
+        # Dropping on empty space = move to instruments root
+        if target is None:
+            event.accept() if self._instruments_root else event.ignore()
+            return
+        # Dropping onto a file = reject
+        if target.data(0, _ROLE_TYPE) != "dir":
+            event.ignore()
+            return
+        # Prevent dropping a dir into itself or any of its descendants
+        if src_item.data(0, _ROLE_TYPE) == "dir":
+            src_path = Path(src_item.data(0, _ROLE_PATH))
+            tgt_path = Path(target.data(0, _ROLE_PATH))
+            try:
+                tgt_path.relative_to(src_path)
+                event.ignore()  # target is inside src
+                return
+            except ValueError:
+                pass
+        event.accept()
 
     def dropEvent(self, event):
         if event.source() is not self:
             event.ignore()
             return
         src_item = self.currentItem()
-        if src_item is None or src_item.data(0, _ROLE_TYPE) != "file":
-            event.ignore()
-            return
-        target = self.itemAt(event.position().toPoint())
-        if target is None or target.data(0, _ROLE_TYPE) != "dir":
+        if src_item is None:
             event.ignore()
             return
         src_path = Path(src_item.data(0, _ROLE_PATH))
-        dst_dir = Path(target.data(0, _ROLE_PATH))
-        dst_path = dst_dir / src_path.name
-        if dst_path == src_path or dst_path.exists():
+        target = self.itemAt(event.position().toPoint())
+        if target is None:
+            if self._instruments_root is None:
+                event.ignore()
+                return
+            dst_dir = self._instruments_root
+        elif target.data(0, _ROLE_TYPE) == "dir":
+            dst_dir = Path(target.data(0, _ROLE_PATH))
+        else:
             event.ignore()
             return
+        dst_path = dst_dir / src_path.name
+        if dst_path.resolve() == src_path.resolve() or dst_path.exists():
+            event.ignore()
+            return
+        # Prevent moving a dir into its own subtree
+        if src_item.data(0, _ROLE_TYPE) == "dir":
+            try:
+                dst_dir.relative_to(src_path)
+                event.ignore()
+                return
+            except ValueError:
+                pass
         try:
             shutil.move(str(src_path), str(dst_path))
         except Exception as exc:
             QMessageBox.critical(self, "Move Error", str(exc))
             event.ignore()
             return
-        self.file_moved.emit(str(src_path), str(dst_path))
+        self.item_moved.emit(str(src_path), str(dst_path))
         event.accept()
 
 
@@ -189,7 +225,7 @@ class InstrumentView(QWidget):
 
         self._tree = _InstrumentTree()
         self._tree.itemActivated.connect(self._on_tree_activated)
-        self._tree.file_moved.connect(self._on_file_moved)
+        self._tree.item_moved.connect(self._on_item_moved)
         tl.addWidget(self._tree)
 
         crud_bar = QHBoxLayout()
@@ -326,7 +362,6 @@ class InstrumentView(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.addWidget(outer_splitter)
 
-        # Load default instruments root from project structure
         if _DEFAULT_ROOT.is_dir():
             self.set_instruments_root(str(_DEFAULT_ROOT))
 
@@ -407,6 +442,7 @@ class InstrumentView(QWidget):
 
     def set_instruments_root(self, path: str) -> None:
         self._instruments_root = path
+        self._tree.set_root(Path(path))
         self._populate_tree(Path(path))
 
     # ── Instrument tree ───────────────────────────────────────────────────
@@ -461,9 +497,14 @@ class InstrumentView(QWidget):
         if item.data(0, _ROLE_TYPE) == "file":
             self.open_requested.emit(item.data(0, _ROLE_PATH))
 
-    def _on_file_moved(self, old: str, new: str) -> None:
-        if self._loaded_path == str(Path(old).resolve()):
-            self._loaded_path = str(Path(new).resolve())
+    def _on_item_moved(self, old: str, new: str) -> None:
+        if self._loaded_path:
+            old_res = str(Path(old).resolve())
+            new_res = str(Path(new).resolve())
+            if self._loaded_path == old_res:
+                self._loaded_path = new_res
+            elif self._loaded_path.startswith(old_res + os.sep):
+                self._loaded_path = new_res + self._loaded_path[len(old_res):]
         self._populate_tree(Path(self._instruments_root))
 
     # ── Tree CRUD ─────────────────────────────────────────────────────────
