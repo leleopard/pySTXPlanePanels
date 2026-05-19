@@ -139,24 +139,45 @@ def _collect_from_instrument(
                       f"{label_base}  (visibility)")
 
 
+def _find_panels_project_root(yaml_path: Path) -> Path:
+    """Walk up to the 'panels' ancestor and return its parent (project root)."""
+    candidate = yaml_path.parent
+    while candidate != candidate.parent:
+        if candidate.name.lower() == "panels":
+            return candidate.parent
+        candidate = candidate.parent
+    return yaml_path.parent
+
+
 def collect_datarefs(yaml_path: Path) -> list[_DatarefInfo]:
     """Return one _DatarefInfo per unique dataref found in a panel or instrument YAML."""
+    yaml_path = Path(yaml_path).resolve()
     with open(yaml_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     registry: dict[str, _DatarefInfo] = {}
 
     if "instruments" in data:
-        # panel YAML
-        base = yaml_path.parent
+        # Panel YAML: instrument paths are relative to the project root
+        # (parent of the panels/ directory).
+        base = _find_panels_project_root(yaml_path)
         for entry in data.get("instruments", []):
-            inst_path = (base / entry["file"]).resolve()
-            with open(inst_path, encoding="utf-8") as f:
-                inst_data = yaml.safe_load(f)
-            inst_name = inst_data.get("name", inst_path.stem)
-            _collect_from_instrument(inst_data, inst_name, registry)
+            inst_entries = (
+                entry["grid"].get("instruments", [])
+                if "grid" in entry
+                else [entry]
+            )
+            for inst_entry in inst_entries:
+                inst_path = (base / inst_entry["file"]).resolve()
+                try:
+                    with open(inst_path, encoding="utf-8") as f:
+                        inst_data = yaml.safe_load(f)
+                except Exception:
+                    continue
+                inst_name = inst_data.get("name", inst_path.stem)
+                _collect_from_instrument(inst_data, inst_name, registry)
     else:
-        # single instrument YAML
+        # Single instrument YAML
         inst_name = data.get("name", yaml_path.stem)
         _collect_from_instrument(data, inst_name, registry)
 

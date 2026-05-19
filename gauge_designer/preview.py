@@ -26,6 +26,7 @@ class PreviewBar(QObject):
         self._data_provider: Callable[[], dict] | None = None
         self._proc: subprocess.Popen | None = None
         self._tmp_path: str | None = None
+        self._harness_win = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(500)
@@ -67,8 +68,20 @@ class PreviewBar(QObject):
         self._proc = subprocess.Popen(
             [sys.executable, "-m", "gauge_core.runner", launch_path, "--test"],
         )
+
+        try:
+            from gauge_test_harness.harness import TestHarnessWindow
+            self._harness_win = TestHarnessWindow(self._yaml_path)
+            self._harness_win.closed.connect(self._on_harness_closed)
+            self._harness_win.show()
+        except Exception:
+            self._harness_win = None
+
         self.running_changed.emit(True)
         self._timer.start()
+
+    def _on_harness_closed(self):
+        self._harness_win = None
 
     def _poll(self):
         if self._proc and self._proc.poll() is not None:
@@ -80,4 +93,8 @@ class PreviewBar(QObject):
                 except OSError:
                     pass
                 self._tmp_path = None
+            if self._harness_win is not None:
+                self._harness_win.closed.disconnect(self._on_harness_closed)
+                self._harness_win.close()
+                self._harness_win = None
             self.running_changed.emit(False)
