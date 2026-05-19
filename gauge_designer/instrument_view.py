@@ -188,6 +188,9 @@ class _InstrumentTree(QTreeWidget):
             event.ignore()
             return
         self.item_moved.emit(str(src_path), str(dst_path))
+        # Use CopyAction so Qt does not also delete the source tree item —
+        # _populate_tree already rebuilds the tree from disk.
+        event.setDropAction(Qt.CopyAction)
         event.accept()
 
 
