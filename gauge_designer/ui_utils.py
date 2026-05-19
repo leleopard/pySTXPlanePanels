@@ -1,5 +1,6 @@
 """Shared UI helpers for gauge_designer widgets."""
 
+import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import QLabel, QSizePolicy
@@ -23,6 +24,15 @@ def header_label(text: str) -> QLabel:
     lbl.setStyleSheet(_HEADER_STYLE)
     lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     return lbl
+
+
+def get_python_cmd() -> str:
+    """Return the Python command to embed in generated launch scripts.
+
+    Falls back to a platform default when the user has not set a preference.
+    """
+    default = "py" if sys.platform == "win32" else "python3"
+    return QSettings().value("preferences/pythonCommand", default)
 
 
 def is_y_down() -> bool:

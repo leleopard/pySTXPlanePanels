@@ -1,7 +1,6 @@
 """Dialog for generating a platform-appropriate panel launch script."""
 
 import stat
-import sys
 from pathlib import Path
 
 from PySide6.QtGui import QFont
@@ -31,7 +30,7 @@ def _default_fmt_index() -> int:
     return 0 if sys.platform == "win32" else 2
 
 
-def _generate_script(fmt: str, project_root: Path, panel_rel: str) -> str:
+def _generate_script(fmt: str, project_root: Path, panel_rel: str, py_cmd: str) -> str:
     root = str(project_root)
     if fmt == "bat":
         win_root  = root.replace("/", "\\")
@@ -39,21 +38,21 @@ def _generate_script(fmt: str, project_root: Path, panel_rel: str) -> str:
         return (
             "@echo off\n"
             f'cd /d "{win_root}"\n'
-            f'python -m gauge_core.runner "{win_panel}"\n'
+            f'{py_cmd} -m gauge_core.runner "{win_panel}"\n'
             "pause\n"
         )
     if fmt == "ps1":
         win_root = root.replace("/", "\\")
         return (
             f'Set-Location "{win_root}"\n'
-            f'python -m gauge_core.runner "{panel_rel}"\n'
+            f'{py_cmd} -m gauge_core.runner "{panel_rel}"\n'
             'Read-Host "Press Enter to exit"\n'
         )
     # sh
     return (
         "#!/bin/bash\n"
         f'cd "{root}"\n'
-        f'python3 -m gauge_core.runner "{panel_rel}"\n'
+        f'{py_cmd} -m gauge_core.runner "{panel_rel}"\n'
     )
 
 
@@ -142,7 +141,8 @@ class LaunchScriptDialog(QDialog):
     # ── slots ─────────────────────────────────────────────────────────────
 
     def _refresh(self):
-        content = _generate_script(self._fmt(), self._project_root, self._panel_rel())
+        from gauge_designer.ui_utils import get_python_cmd
+        content = _generate_script(self._fmt(), self._project_root, self._panel_rel(), get_python_cmd())
         self._preview.setPlainText(content)
         self._out_label.setText(f"Output: {self._out_path()}")
 
