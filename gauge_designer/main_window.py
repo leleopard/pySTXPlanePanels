@@ -160,17 +160,23 @@ class MainWindow(QMainWindow):
         tb.setFloatable(False)
         tb.setIconSize(QSize(36, 36))
 
+        _btn_style = "QPushButton { padding: 0px; border: none; background: transparent; }"
+
         self._save_btn = QPushButton()
-        self._save_btn.setIcon(make_svg_icon("content-save-outline", self._ICON_GREY, size=36))
+        self._save_btn.setIcon(make_svg_icon("content-save-outline", self._ICON_GREY, size=48))
+        self._save_btn.setIconSize(QSize(48, 48))
         self._save_btn.setFixedSize(48, 48)
+        self._save_btn.setStyleSheet(_btn_style)
         self._save_btn.setToolTip("Save (Ctrl+S)")
         self._save_btn.setEnabled(False)
         self._save_btn.clicked.connect(self._save)
         tb.addWidget(self._save_btn)
 
         self._save_all_btn = QPushButton()
-        self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", self._ICON_GREY, size=36))
+        self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", self._ICON_GREY, size=48))
+        self._save_all_btn.setIconSize(QSize(48, 48))
         self._save_all_btn.setFixedSize(48, 48)
+        self._save_all_btn.setStyleSheet(_btn_style)
         self._save_all_btn.setToolTip("Save All")
         self._save_all_btn.setEnabled(False)
         self._save_all_btn.clicked.connect(self._save_all)
@@ -179,8 +185,10 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         self._play_btn = QPushButton()
-        self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY, size=36))
+        self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY, size=48))
+        self._play_btn.setIconSize(QSize(48, 48))
         self._play_btn.setFixedSize(48, 48)
+        self._play_btn.setStyleSheet(_btn_style)
         self._play_btn.setToolTip("Launch test / preview")
         self._play_btn.setEnabled(False)
         self._play_btn.clicked.connect(self._on_play_clicked)
@@ -195,7 +203,7 @@ class MainWindow(QMainWindow):
         enabled = has_file and dirty
         self._save_btn.setEnabled(enabled)
         color = _HEADER_COLOR if enabled else self._ICON_GREY
-        self._save_btn.setIcon(make_svg_icon("content-save-outline", color))
+        self._save_btn.setIcon(make_svg_icon("content-save-outline", color, size=48))
         self._save_act.setEnabled(enabled)
 
     def _update_play_btn(self):
@@ -210,7 +218,7 @@ class MainWindow(QMainWindow):
         enabled = has_file and not running
         self._play_btn.setEnabled(enabled)
         color = _HEADER_COLOR if enabled else self._ICON_GREY
-        self._play_btn.setIcon(make_svg_icon("play-circle-outline", color))
+        self._play_btn.setIcon(make_svg_icon("play-circle-outline", color, size=48))
 
     def _update_save_all_btn(self):
         from gauge_designer.ui_utils import _HEADER_COLOR
@@ -220,7 +228,7 @@ class MainWindow(QMainWindow):
         )
         self._save_all_btn.setEnabled(any_dirty)
         color = _HEADER_COLOR if any_dirty else self._ICON_GREY
-        self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", color, size=36))
+        self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", color, size=48))
 
     def _save_all(self):
         if self._gauge_dirty and self._gauge_path:
