@@ -66,7 +66,7 @@ class PreviewBar(QObject):
                     pass  # fall back to the saved file
 
         self._proc = subprocess.Popen(
-            [sys.executable, "-m", "gauge_core.runner", launch_path, "--test"],
+            [sys.executable, "-m", "gauge_core.runner", launch_path, "--mock"],
         )
 
         try:
