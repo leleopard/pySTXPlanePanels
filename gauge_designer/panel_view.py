@@ -260,7 +260,7 @@ class PanelView(QWidget):
         port_bar.addWidget(QLabel("UDP listen port:"))
         self._listen_port_sb = QSpinBox()
         self._listen_port_sb.setRange(0, 65535)
-        self._listen_port_sb.setFixedWidth(90)
+        self._listen_port_sb.setFixedWidth(110)
         self._listen_port_sb.setSpecialValueText("— (global)")
         self._listen_port_sb.setToolTip(
             "Per-panel listen port. Set to 0 to use the global default from config.yaml.\n"
@@ -370,7 +370,7 @@ class PanelView(QWidget):
         self._splitter.addWidget(mid)
         self._splitter.addWidget(right)
         self._splitter.setSizes([200, 280, 420])
-        ea.addWidget(self._splitter)
+        ea.addWidget(self._splitter, 1)
 
         self._outer_splitter.addWidget(panels_pane)
         self._outer_splitter.addWidget(self._editor_area)
