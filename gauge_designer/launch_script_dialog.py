@@ -1,6 +1,7 @@
 """Dialog for generating a platform-appropriate panel launch script."""
 
 import stat
+import sys
 from pathlib import Path
 
 from PySide6.QtGui import QFont
