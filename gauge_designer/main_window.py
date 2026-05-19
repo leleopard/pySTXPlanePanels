@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QFileDialog, QMessageBox, QTabWidget, QPushButton,
 )
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, Qt, QSize
 from PySide6.QtGui import QAction
 
 from gauge_designer.instrument_view import InstrumentView
@@ -158,20 +158,29 @@ class MainWindow(QMainWindow):
         tb = self.addToolBar("Tools")
         tb.setMovable(False)
         tb.setFloatable(False)
+        tb.setIconSize(QSize(36, 36))
 
         self._save_btn = QPushButton()
-        self._save_btn.setIcon(make_svg_icon("content-save-outline", self._ICON_GREY))
-        self._save_btn.setFixedSize(32, 32)
+        self._save_btn.setIcon(make_svg_icon("content-save-outline", self._ICON_GREY, size=36))
+        self._save_btn.setFixedSize(48, 48)
         self._save_btn.setToolTip("Save (Ctrl+S)")
         self._save_btn.setEnabled(False)
         self._save_btn.clicked.connect(self._save)
         tb.addWidget(self._save_btn)
 
+        self._save_all_btn = QPushButton()
+        self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", self._ICON_GREY, size=36))
+        self._save_all_btn.setFixedSize(48, 48)
+        self._save_all_btn.setToolTip("Save All")
+        self._save_all_btn.setEnabled(False)
+        self._save_all_btn.clicked.connect(self._save_all)
+        tb.addWidget(self._save_all_btn)
+
         tb.addSeparator()
 
         self._play_btn = QPushButton()
-        self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY))
-        self._play_btn.setFixedSize(32, 32)
+        self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY, size=36))
+        self._play_btn.setFixedSize(48, 48)
         self._play_btn.setToolTip("Launch test / preview")
         self._play_btn.setEnabled(False)
         self._play_btn.clicked.connect(self._on_play_clicked)
@@ -203,6 +212,22 @@ class MainWindow(QMainWindow):
         color = _HEADER_COLOR if enabled else self._ICON_GREY
         self._play_btn.setIcon(make_svg_icon("play-circle-outline", color))
 
+    def _update_save_all_btn(self):
+        from gauge_designer.ui_utils import _HEADER_COLOR
+        any_dirty = (
+            (self._gauge_dirty and self._gauge_path is not None)
+            or (self._panel_dirty and self._panel_path is not None)
+        )
+        self._save_all_btn.setEnabled(any_dirty)
+        color = _HEADER_COLOR if any_dirty else self._ICON_GREY
+        self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", color, size=36))
+
+    def _save_all(self):
+        if self._gauge_dirty and self._gauge_path:
+            self._write_gauge(self._gauge_path)
+        if self._panel_dirty and self._panel_path:
+            self._write_panel(self._panel_path)
+
     def _on_play_clicked(self):
         if self._tabs.currentIndex() == _TAB_GAUGE:
             self._gauge_view.toggle_test()
@@ -221,6 +246,7 @@ class MainWindow(QMainWindow):
             self._preview.set_yaml(self._panel_path, data_provider=lambda: self._panel_data)
         dirty = self._gauge_dirty if idx == _TAB_GAUGE else self._panel_dirty
         self._update_save_btn(dirty)
+        self._update_save_all_btn()
         self._update_play_btn()
         self._update_title()
 
@@ -309,6 +335,7 @@ class MainWindow(QMainWindow):
         self._gauge_view.set_instruments_root(_find_instruments_root(path))
         self._preview.set_yaml(path, data_provider=lambda: self._gauge_data)
         self._update_save_btn(False)
+        self._update_save_all_btn()
         self._update_play_btn()
         self._update_title()
         n = len(data.get("components", []))
@@ -340,6 +367,7 @@ class MainWindow(QMainWindow):
         self._panel_view.load(data, path)
         self._preview.set_yaml(path, data_provider=lambda: self._panel_data)
         self._update_save_btn(False)
+        self._update_save_all_btn()
         self._update_play_btn()
         self._update_title()
         n = len(data.get("instruments", []))
@@ -354,12 +382,14 @@ class MainWindow(QMainWindow):
         if not self._gauge_dirty:
             self._gauge_dirty = True
             self._update_save_btn(True)
+            self._update_save_all_btn()
             self._update_title()
 
     def _mark_panel_dirty(self):
         if not self._panel_dirty:
             self._panel_dirty = True
             self._update_save_btn(True)
+            self._update_save_all_btn()
             self._update_title()
 
     def _update_title(self):
@@ -430,6 +460,7 @@ class MainWindow(QMainWindow):
             return
         self._gauge_dirty = False
         self._update_save_btn(False)
+        self._update_save_all_btn()
         self._update_title()
         self.statusBar().showMessage(f"Saved: {path}")
 
@@ -448,6 +479,7 @@ class MainWindow(QMainWindow):
             return
         self._panel_dirty = False
         self._update_save_btn(False)
+        self._update_save_all_btn()
         self._update_title()
         self.statusBar().showMessage(f"Saved: {path}")
 
