@@ -39,6 +39,26 @@ def _find_panels_root(yaml_path: str) -> str:
     return str(p)
 
 
+def _rewrite_refs(data: dict, old_rel: str, new_rel: str) -> bool:
+    """Replace matching instrument file references in a panel data dict (in-place).
+
+    Handles both exact file matches and prefix matches for directory moves.
+    Returns True if any reference was changed.
+    """
+    changed = False
+    for entry in data.get("instruments", []):
+        targets = entry.get("grid", {}).get("instruments", []) if "grid" in entry else [entry]
+        for inst in targets:
+            current = inst.get("file", "").replace("\\", "/")
+            if current == old_rel:
+                inst["file"] = new_rel
+                changed = True
+            elif current.startswith(old_rel + "/"):
+                inst["file"] = new_rel + current[len(old_rel):]
+                changed = True
+    return changed
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -73,6 +93,7 @@ class MainWindow(QMainWindow):
         self._preview = PreviewBar(self)
         self._gauge_view.test_running.connect(self._on_test_running)
         self._preview.running_changed.connect(self._on_test_running)
+        self._gauge_view.instrument_moved.connect(self._on_instrument_moved)
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._gauge_view, "Instruments")
@@ -256,6 +277,50 @@ class MainWindow(QMainWindow):
 
     def _on_test_running(self, running: bool):
         self._update_play_btn()
+
+    def _on_instrument_moved(self, old_abs: str, new_abs: str):
+        """Rewrite instrument file references in all panel YAMLs when a file/folder moves."""
+        instruments_root = self._gauge_view._instruments_root
+        panels_root = self._panel_view._panels_root
+        if not instruments_root or not panels_root:
+            return
+        project_root = Path(instruments_root).parent.resolve()
+        try:
+            old_rel = Path(old_abs).resolve().relative_to(project_root).as_posix()
+            new_rel = Path(new_abs).resolve().relative_to(project_root).as_posix()
+        except ValueError:
+            return
+
+        updated: list[str] = []
+        for yaml_path in Path(panels_root).rglob("*.yaml"):
+            try:
+                with open(yaml_path, encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+            except Exception:
+                continue
+            if not isinstance(data, dict) or "instruments" not in data:
+                continue
+            if not _rewrite_refs(data, old_rel, new_rel):
+                continue
+            try:
+                with open(yaml_path, "w", encoding="utf-8") as f:
+                    yaml.dump(data, f, default_flow_style=False,
+                              allow_unicode=True, sort_keys=False)
+                updated.append(yaml_path.name)
+            except Exception:
+                continue
+            # Keep in-memory panel data in sync if this is the open panel
+            if self._panel_path and Path(self._panel_path).resolve() == yaml_path.resolve():
+                self._panel_data = data
+                self._panel_dirty = False
+                self._panel_view.load(self._panel_data, self._panel_path)
+                self._update_save_btn(False)
+                self._update_save_all_btn()
+
+        if updated:
+            self.statusBar().showMessage(
+                f"Auto-updated paths in: {', '.join(updated)}"
+            )
 
     # ── Tab handling ──────────────────────────────────────────────────────
 

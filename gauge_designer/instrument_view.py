@@ -237,8 +237,9 @@ class _InstrumentTree(QTreeWidget):
 
 class InstrumentView(QWidget):
     changed = Signal()
-    open_requested = Signal(str)  # emitted when user activates a file in the tree
-    test_running = Signal(bool)   # True when test starts, False when it stops
+    open_requested = Signal(str)   # emitted when user activates a file in the tree
+    test_running = Signal(bool)    # True when test starts, False when it stops
+    instrument_moved = Signal(str, str)  # old_abs_path, new_abs_path (file or dir)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -551,6 +552,7 @@ class InstrumentView(QWidget):
             elif self._loaded_path.startswith(old_res + os.sep):
                 self._loaded_path = new_res + self._loaded_path[len(old_res):]
         self._populate_tree(Path(self._instruments_root))
+        self.instrument_moved.emit(old, new)
 
     # ── Tree CRUD ─────────────────────────────────────────────────────────
 
