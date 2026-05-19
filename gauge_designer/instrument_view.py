@@ -375,6 +375,7 @@ class InstrumentView(QWidget):
         self._form.changed.connect(self._on_form_changed)
         self._form.setVisible(False)
         prop_layout.addWidget(self._form)
+        prop_layout.addStretch()
 
         # canvas pane
         canvas_pane = QWidget()
