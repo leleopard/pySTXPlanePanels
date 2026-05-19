@@ -160,6 +160,7 @@ class _InstrumentTree(QTreeWidget):
 class InstrumentView(QWidget):
     changed = Signal()
     open_requested = Signal(str)  # emitted when user activates a file in the tree
+    test_running = Signal(bool)   # True when test starts, False when it stops
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -252,11 +253,6 @@ class InstrumentView(QWidget):
         size_bar.addWidget(QLabel("×"))
         size_bar.addWidget(self._gauge_h)
         size_bar.addStretch()
-        self._test_btn = QPushButton("▶  Test")
-        self._test_btn.setEnabled(False)
-        self._test_btn.setToolTip("Launch gauge window in mock mode and open test harness")
-        self._test_btn.clicked.connect(self._toggle_test)
-        size_bar.addWidget(self._test_btn)
         cl.addLayout(size_bar)
 
         # Inner splitter: components | properties | canvas
@@ -378,7 +374,6 @@ class InstrumentView(QWidget):
             self._list.setCurrentRow(0)
         self._editor_content.setVisible(True)
         self._loaded_path = str(Path(yaml_path).resolve()) if yaml_path else None
-        self._test_btn.setEnabled(self._loaded_path is not None)
         self._sync_tree_selection()
 
     def clear(self):
@@ -393,7 +388,6 @@ class InstrumentView(QWidget):
         self._canvas.clear()
         self._editor_content.setVisible(False)
         self._loaded_path = None
-        self._test_btn.setEnabled(False)
         self.stop_test()
         self._tree.setCurrentItem(None)
 
@@ -699,7 +693,7 @@ class InstrumentView(QWidget):
 
     # ── Test mode ─────────────────────────────────────────────────────────
 
-    def _toggle_test(self):
+    def toggle_test(self):
         if self._test_proc is not None:
             self.stop_test()
         else:
@@ -715,7 +709,7 @@ class InstrumentView(QWidget):
         self._harness_win = TestHarnessWindow(self._loaded_path)
         self._harness_win.closed.connect(self._on_harness_closed)
         self._harness_win.show()
-        self._test_btn.setText("■  Stop Test")
+        self.test_running.emit(True)
 
     def stop_test(self):
         if self._harness_win is not None:
@@ -725,11 +719,11 @@ class InstrumentView(QWidget):
         if self._test_proc is not None:
             self._test_proc.terminate()
             self._test_proc = None
-        self._test_btn.setText("▶  Test")
+        self.test_running.emit(False)
 
     def _on_harness_closed(self):
         self._harness_win = None
         if self._test_proc is not None:
             self._test_proc.terminate()
             self._test_proc = None
-        self._test_btn.setText("▶  Test")
+        self.test_running.emit(False)

@@ -2,7 +2,7 @@ import yaml
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QMainWindow, QFileDialog, QMessageBox, QTabWidget,
+    QMainWindow, QFileDialog, QMessageBox, QTabWidget, QPushButton,
 )
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction
@@ -71,6 +71,8 @@ class MainWindow(QMainWindow):
         )
 
         self._preview = PreviewBar(self)
+        self._gauge_view.test_running.connect(self._on_test_running)
+        self._preview.running_changed.connect(self._on_test_running)
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._gauge_view, "Instruments")
@@ -150,16 +152,65 @@ class MainWindow(QMainWindow):
 
     # ── Toolbar ───────────────────────────────────────────────────────────
 
+    _ICON_GREY = "#888888"
+
     def _build_toolbar(self):
         tb = self.addToolBar("Tools")
         tb.setMovable(False)
         tb.setFloatable(False)
-        tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        tb.addAction(self._open_gauge_act)
-        tb.addAction(self._open_panel_act)
-        tb.addAction(self._save_act)
+
+        self._save_btn = QPushButton()
+        self._save_btn.setIcon(make_svg_icon("content-save-outline", self._ICON_GREY))
+        self._save_btn.setFixedSize(32, 32)
+        self._save_btn.setToolTip("Save (Ctrl+S)")
+        self._save_btn.setEnabled(False)
+        self._save_btn.clicked.connect(self._save)
+        tb.addWidget(self._save_btn)
+
         tb.addSeparator()
-        tb.addWidget(self._preview.button)
+
+        self._play_btn = QPushButton()
+        self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY))
+        self._play_btn.setFixedSize(32, 32)
+        self._play_btn.setToolTip("Launch test / preview")
+        self._play_btn.setEnabled(False)
+        self._play_btn.clicked.connect(self._on_play_clicked)
+        tb.addWidget(self._play_btn)
+
+    def _update_save_btn(self, dirty: bool):
+        from gauge_designer.ui_utils import _HEADER_COLOR
+        has_file = (
+            (self._tabs.currentIndex() == _TAB_GAUGE and self._gauge_path is not None)
+            or (self._tabs.currentIndex() == _TAB_PANEL and self._panel_path is not None)
+        )
+        enabled = has_file and dirty
+        self._save_btn.setEnabled(enabled)
+        color = _HEADER_COLOR if enabled else self._ICON_GREY
+        self._save_btn.setIcon(make_svg_icon("content-save-outline", color))
+        self._save_act.setEnabled(enabled)
+
+    def _update_play_btn(self):
+        from gauge_designer.ui_utils import _HEADER_COLOR
+        idx = self._tabs.currentIndex()
+        has_file = (
+            (idx == _TAB_GAUGE and self._gauge_path is not None)
+            or (idx == _TAB_PANEL and self._panel_path is not None)
+        )
+        running = (idx == _TAB_GAUGE and self._gauge_view._test_proc is not None) \
+                  or (idx == _TAB_PANEL and self._preview.is_running)
+        enabled = has_file and not running
+        self._play_btn.setEnabled(enabled)
+        color = _HEADER_COLOR if enabled else self._ICON_GREY
+        self._play_btn.setIcon(make_svg_icon("play-circle-outline", color))
+
+    def _on_play_clicked(self):
+        if self._tabs.currentIndex() == _TAB_GAUGE:
+            self._gauge_view.toggle_test()
+        else:
+            self._preview.launch()
+
+    def _on_test_running(self, running: bool):
+        self._update_play_btn()
 
     # ── Tab handling ──────────────────────────────────────────────────────
 
@@ -168,10 +219,9 @@ class MainWindow(QMainWindow):
             self._preview.set_yaml(self._gauge_path, data_provider=lambda: self._gauge_data)
         elif idx == _TAB_PANEL and self._panel_path:
             self._preview.set_yaml(self._panel_path, data_provider=lambda: self._panel_data)
-        self._save_act.setEnabled(
-            (idx == _TAB_GAUGE and self._gauge_path is not None)
-            or (idx == _TAB_PANEL and self._panel_path is not None)
-        )
+        dirty = self._gauge_dirty if idx == _TAB_GAUGE else self._panel_dirty
+        self._update_save_btn(dirty)
+        self._update_play_btn()
         self._update_title()
 
     # ── Recent files ──────────────────────────────────────────────────────
@@ -258,7 +308,8 @@ class MainWindow(QMainWindow):
         self._gauge_view.load(data, path)
         self._gauge_view.set_instruments_root(_find_instruments_root(path))
         self._preview.set_yaml(path, data_provider=lambda: self._gauge_data)
-        self._save_act.setEnabled(True)
+        self._update_save_btn(False)
+        self._update_play_btn()
         self._update_title()
         n = len(data.get("components", []))
         self.statusBar().showMessage(
@@ -288,7 +339,8 @@ class MainWindow(QMainWindow):
         self._panel_view.set_panels_root(_find_panels_root(path))
         self._panel_view.load(data, path)
         self._preview.set_yaml(path, data_provider=lambda: self._panel_data)
-        self._save_act.setEnabled(True)
+        self._update_save_btn(False)
+        self._update_play_btn()
         self._update_title()
         n = len(data.get("instruments", []))
         self.statusBar().showMessage(
@@ -301,11 +353,13 @@ class MainWindow(QMainWindow):
     def _mark_gauge_dirty(self):
         if not self._gauge_dirty:
             self._gauge_dirty = True
+            self._update_save_btn(True)
             self._update_title()
 
     def _mark_panel_dirty(self):
         if not self._panel_dirty:
             self._panel_dirty = True
+            self._update_save_btn(True)
             self._update_title()
 
     def _update_title(self):
@@ -347,7 +401,6 @@ class MainWindow(QMainWindow):
             if path:
                 self._gauge_path = path
                 self._write_gauge(path)
-                self._save_act.setEnabled(True)
                 self._preview.set_yaml(path, data_provider=lambda: self._gauge_data)
                 self._push_recent(path)
         else:
@@ -359,7 +412,6 @@ class MainWindow(QMainWindow):
             if path:
                 self._panel_path = path
                 self._write_panel(path)
-                self._save_act.setEnabled(True)
                 self._preview.set_yaml(path, data_provider=lambda: self._panel_data)
                 self._push_recent(path)
 
@@ -377,6 +429,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Save Error", str(exc))
             return
         self._gauge_dirty = False
+        self._update_save_btn(False)
         self._update_title()
         self.statusBar().showMessage(f"Saved: {path}")
 
@@ -394,6 +447,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Save Error", str(exc))
             return
         self._panel_dirty = False
+        self._update_save_btn(False)
         self._update_title()
         self.statusBar().showMessage(f"Saved: {path}")
 

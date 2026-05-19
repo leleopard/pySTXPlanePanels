@@ -6,18 +6,19 @@ from typing import Callable
 from pathlib import Path
 
 import yaml
-from PySide6.QtCore import QObject, QTimer
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtCore import QObject, QTimer, Signal
 
 
 class PreviewBar(QObject):
-    """Manages the Arcade --test subprocess; exposes self.button for toolbar use.
+    """Manages the Arcade --test subprocess for panel preview.
 
     If a data_provider callable is set (via set_yaml), the current in-memory
-    instrument data is written to a temp file beside the original YAML so that
-    relative texture paths resolve correctly.  The temp file is deleted when
-    the Arcade window closes.
+    data is written to a temp file beside the original YAML so that relative
+    texture paths resolve correctly. The temp file is deleted when the process
+    closes.
     """
+
+    running_changed = Signal(bool)  # True when process starts, False when it stops
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -26,10 +27,6 @@ class PreviewBar(QObject):
         self._proc: subprocess.Popen | None = None
         self._tmp_path: str | None = None
 
-        self.button = QPushButton("Preview (test mode)")
-        self.button.setEnabled(False)
-        self.button.clicked.connect(self._launch)
-
         self._timer = QTimer(self)
         self._timer.setInterval(500)
         self._timer.timeout.connect(self._poll)
@@ -37,9 +34,12 @@ class PreviewBar(QObject):
     def set_yaml(self, path: str | None, data_provider: Callable[[], dict] | None = None):
         self._yaml_path = path
         self._data_provider = data_provider
-        self.button.setEnabled(path is not None and self._proc is None)
 
-    def _launch(self):
+    @property
+    def is_running(self) -> bool:
+        return self._proc is not None
+
+    def launch(self):
         if not self._yaml_path:
             return
         if self._proc and self._proc.poll() is None:
@@ -67,7 +67,7 @@ class PreviewBar(QObject):
         self._proc = subprocess.Popen(
             [sys.executable, "-m", "gauge_core.runner", launch_path, "--test"],
         )
-        self.button.setEnabled(False)
+        self.running_changed.emit(True)
         self._timer.start()
 
     def _poll(self):
@@ -80,4 +80,4 @@ class PreviewBar(QObject):
                 except OSError:
                     pass
                 self._tmp_path = None
-            self.button.setEnabled(self._yaml_path is not None)
+            self.running_changed.emit(False)
