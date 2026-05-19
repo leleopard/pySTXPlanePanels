@@ -8,7 +8,7 @@ components:
   position:
   - 155
   - 155
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 0
   - 300
@@ -20,7 +20,7 @@ components:
   position:
   - 155
   - 155
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 730
   - 1500
@@ -66,7 +66,7 @@ components:
       - 317.5
 - name: airspeed_bezel
   type: ImagePanel
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   cliprect:
   - 310
   - 310

@@ -26,7 +26,7 @@ visibility:
 components:
   - name: background
     type: ImagePanel
-    texture: ../assets/2048_Radio_Stack_text.png
+    texture: assets/2048_Radio_Stack_text.png
     cliprect: [417, 46]
     origin: [0, 71]
     position: [208, 23]
@@ -34,7 +34,7 @@ components:
   - name: distance
     type: Text
     text: " 0.0"
-    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_file: assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
     font_size: 22
     color: [211, 62, 33]
@@ -45,7 +45,7 @@ components:
   - name: speed
     type: Text
     text: "  0"
-    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_file: assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
     font_size: 22
     color: [211, 62, 33]
@@ -56,7 +56,7 @@ components:
   - name: time
     type: Text
     text: "  0"
-    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_file: assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
     font_size: 22
     color: [211, 62, 33]

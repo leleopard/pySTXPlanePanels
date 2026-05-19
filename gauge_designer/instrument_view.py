@@ -365,10 +365,15 @@ class InstrumentView(QWidget):
         self._gauge_w.blockSignals(False); self._gauge_h.blockSignals(False)
 
         self._loading = False
-        yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
-        self._form.set_yaml_dir(yaml_dir)
+        # Use the project root (parent of instruments/) as the asset base so
+        # that texture paths in YAMLs are stable regardless of sub-folder depth.
+        if self._instruments_root:
+            assets_root = str(Path(self._instruments_root).parent)
+        else:
+            assets_root = str(Path(yaml_path).parent) if yaml_path else ""
+        self._form.set_yaml_dir(assets_root)
         self._form.set_ref_height(int(h))
-        self._canvas.load(instrument_data, yaml_dir)
+        self._canvas.load(instrument_data, assets_root)
         self._canvas.set_hidden(set())
         if self._components:
             self._list.setCurrentRow(0)

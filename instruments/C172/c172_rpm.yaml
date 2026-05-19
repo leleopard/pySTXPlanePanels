@@ -11,14 +11,14 @@ size: [310, 310]
 components:
   - name: background
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     origin: [1200, 620]
     cliprect: [280, 280]
     position: [155, 155]
 
   - name: needle
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     origin: [1500, 620]
     cliprect: [280, 280]
     position: [155, 155]
@@ -38,7 +38,7 @@ components:
 
   - name: bezel
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     origin: [1200, 1500]
     cliprect: [310, 310]
     position: [155, 155]

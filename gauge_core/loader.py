@@ -53,9 +53,24 @@ class Instrument:
     visibility: InstrumentVisibility | None = None
 
 
+def _find_project_root(yaml_path: Path) -> Path:
+    """Walk up to the 'instruments' ancestor and return its parent (project root).
+
+    Texture paths in instrument YAMLs are relative to this root so that
+    moving a YAML to any sub-folder within instruments/ never breaks them.
+    Falls back to yaml_path.parent if no 'instruments' ancestor is found.
+    """
+    candidate = yaml_path.parent
+    while candidate != candidate.parent:
+        if candidate.name.lower() == "instruments":
+            return candidate.parent
+        candidate = candidate.parent
+    return yaml_path.parent
+
+
 def load_instrument(yaml_path: str | Path) -> Instrument:
     yaml_path = Path(yaml_path).resolve()
-    base_dir = yaml_path.parent
+    base_dir = _find_project_root(yaml_path)
 
     with open(yaml_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)

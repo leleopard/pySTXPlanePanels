@@ -1,64 +1,105 @@
-# C172 Ammeter / Vacuum gauge.
-# Dual-needle 200×200 gauge.
-# Right needle = ammeter (amps, -66..+66), left needle = vacuum (inHg).
-# Atlas origins (PIL):
-#   background : opengl y=648  → PIL y=1200
-#   needles    : same strips as oil gauge (PIL y=618, y=600)
-#   border     : PIL y=400
-#   text       : opengl y=48   → PIL y=1800
-
 name: C172 Ammeter / Vacuum
-size: [200, 200]
-
+size:
+- 200
+- 200
 components:
-  - name: background
-    type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
-    origin: [1800, 1200]
-    cliprect: [200, 200]
-    position: [100, 100]
-
-  - name: amp_needle
-    type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
-    origin: [1800, 618]
-    cliprect: [110, 18]
-    position: [160, 100]
-    rotation:
-      dataref: sim/flightmodel2/electrical/battery_current[0]
-      table:
-        - [-66, -59.0]
-        - [  0,   0.0]
-        - [ 66,  57.0]
-
-  - name: vacuum_needle
-    type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
-    origin: [1800, 600]
-    cliprect: [110, 18]
-    position: [44, 102]
-    rotation:
-      dataref: sim/cockpit2/engine/indicators/suction_iHg
-      convert_function: convert_suction
-      table:
-        - [2.8,  57.0]
-        - [3.0,  52.0]
-        - [4.0,  26.0]
-        - [5.0,   0.0]
-        - [6.0, -25.0]
-        - [7.0, -50.0]
-        - [7.2, -55.0]
-
-  - name: border
-    type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
-    origin: [1800, 400]
-    cliprect: [200, 200]
-    position: [100, 100]
-
-  - name: side_text
-    type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
-    origin: [1800, 1800]
-    cliprect: [200, 200]
-    position: [100, 100]
+- name: background
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1800
+  - 1200
+  cliprect:
+  - 200
+  - 200
+  position:
+  - 100
+  - 100
+- name: amp_needle
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1800
+  - 618
+  cliprect:
+  - 110
+  - 18
+  position:
+  - 160
+  - 100
+  rotation:
+    dataref: sim/flightmodel2/electrical/battery_current[0]
+    table:
+    - - -66
+      - -59.0
+    - - 0
+      - 0.0
+    - - 66
+      - 57.0
+- name: vacuum_needle
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1800
+  - 600
+  cliprect:
+  - 110
+  - 18
+  position:
+  - 44
+  - 102
+  rotation:
+    dataref: sim/cockpit2/engine/indicators/suction_iHg
+    convert_function: convert_suction
+    table:
+    - - 2.8
+      - 57.0
+    - - 3.0
+      - 52.0
+    - - 4.0
+      - 26.0
+    - - 5.0
+      - 0.0
+    - - 6.0
+      - -25.0
+    - - 7.0
+      - -50.0
+    - - 7.2
+      - -55.0
+- name: border
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1800
+  - 400
+  cliprect:
+  - 200
+  - 200
+  position:
+  - 100
+  - 100
+- name: side_text
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1800
+  - 1800
+  cliprect:
+  - 200
+  - 200
+  position:
+  - 100
+  - 100
+- name: bezel
+  type: ImagePanel
+  position:
+  - 100
+  - 100
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1200
+  - 1500
+  cliprect:
+  - 310
+  - 310
+  resize_to_container: true

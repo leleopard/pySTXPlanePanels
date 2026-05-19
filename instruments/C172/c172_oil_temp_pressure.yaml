@@ -8,7 +8,7 @@ components:
   position:
   - 100
   - 100
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 1800
   - 800
@@ -20,7 +20,7 @@ components:
   position:
   - 160
   - 103
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 1800
   - 618
@@ -38,7 +38,7 @@ components:
       - 59.5
 - name: pressure_needle
   type: ImagePanel
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 1800
   - 600
@@ -61,7 +61,7 @@ components:
       - -62.0
 - name: border
   type: ImagePanel
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 1800
   - 400
@@ -73,7 +73,7 @@ components:
   - 100
 - name: side_text
   type: ImagePanel
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 1800
   - 1400
@@ -88,7 +88,7 @@ components:
   position:
   - 100
   - 100
-  texture: ../../assets/c172_text_standard6.png
+  texture: assets/c172_text_standard6.png
   origin:
   - 1200
   - 1500

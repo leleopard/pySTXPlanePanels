@@ -13,14 +13,14 @@ size: [310, 310]
 components:
   - name: black_background
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [300, 300]
     position: [155, 155]
 
   - name: hg_wheel
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [600, 300]
     position: [155, 155]
@@ -33,7 +33,7 @@ components:
 
   - name: mb_wheel
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [600, 600]
     position: [155, 155]
@@ -47,14 +47,14 @@ components:
 
   - name: dial_face
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [300, 600]
     position: [155, 155]
 
   - name: needle_10k
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [900, 600]
     position: [155, 155]
@@ -67,7 +67,7 @@ components:
 
   - name: needle_1k
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [40, 300]
     origin: [130, 1500]
     position: [155, 155]
@@ -80,7 +80,7 @@ components:
 
   - name: needle_100s
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [40, 300]
     origin: [430, 1500]
     position: [155, 155]
@@ -93,7 +93,7 @@ components:
 
   - name: bezel
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [310, 310]
     origin: [1200, 1500]
     position: [155, 155]

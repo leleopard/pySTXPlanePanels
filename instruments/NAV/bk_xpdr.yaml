@@ -35,7 +35,7 @@ visibility:
 components:
   - name: background
     type: ImagePanel
-    texture: ../assets/2048_Radio_Stack_text.png
+    texture: assets/2048_Radio_Stack_text.png
     cliprect: [382, 65]
     origin: [0, 186]
     position: [191, 32]
@@ -44,7 +44,7 @@ components:
   - name: flight_level
     type: Text
     text: "   0"
-    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_file: assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
     font_size: 32
     color: [211, 62, 33]
@@ -60,7 +60,7 @@ components:
   - name: transponder_code
     type: Text
     text: "1200"
-    font_file: ../assets/fonts/DS-Digital-ItalicST.ttf
+    font_file: assets/fonts/DS-Digital-ItalicST.ttf
     font_name: DS-Digital
     font_size: 32
     color: [211, 62, 33]

@@ -19,7 +19,7 @@ size: [310, 310]
 components:
   - name: background_horizon
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [0, 900]
     position: [155, 155]
@@ -32,7 +32,7 @@ components:
 
   - name: inner_horizon
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [300, 900]
     position: [155, 155]
@@ -51,7 +51,7 @@ components:
 
   - name: outer_horizon
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [600, 900]
     position: [155, 155]
@@ -64,7 +64,7 @@ components:
 
   - name: plane_gizmo
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [1200, 900]
     position: [155, 155]
@@ -77,14 +77,14 @@ components:
 
   - name: plane_silhouette
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 300]
     origin: [900, 900]
     position: [155, 155]
 
   - name: bezel
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [310, 310]
     origin: [1200, 1500]
     position: [155, 155]

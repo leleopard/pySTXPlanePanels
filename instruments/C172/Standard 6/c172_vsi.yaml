@@ -9,14 +9,14 @@ size: [310, 310]
 components:
   - name: dial_face
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [300, 298]
     origin: [0, 2]
     position: [155, 155]
 
   - name: needle
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [40, 300]
     origin: [430, 1500]
     position: [155, 155]
@@ -35,7 +35,7 @@ components:
 
   - name: bezel
     type: ImagePanel
-    texture: ../../assets/c172_text_standard6.png
+    texture: assets/c172_text_standard6.png
     cliprect: [310, 310]
     origin: [1200, 1500]
     position: [155, 155]
