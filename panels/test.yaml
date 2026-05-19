@@ -1,0 +1,9 @@
+name: test
+size:
+- 1540
+- 920
+instruments:
+- file: C:/Users/stephane/Desktop/plane_gauges/instruments/C172/c172_airspeed.yaml
+  position:
+  - 0
+  - 0

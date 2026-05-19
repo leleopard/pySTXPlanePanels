@@ -56,9 +56,24 @@ def _as_color(raw: Any) -> tuple[int, int, int] | None:
     return (int(raw[0]), int(raw[1]), int(raw[2]))
 
 
+def _find_project_root(yaml_path: Path) -> Path:
+    """Walk up to the 'panels' ancestor and return its parent (project root).
+
+    Instrument paths in panel YAMLs are relative to this root so that
+    moving a panel YAML to any sub-folder within panels/ never breaks them.
+    Falls back to yaml_path.parent if no 'panels' ancestor is found.
+    """
+    candidate = yaml_path.parent
+    while candidate != candidate.parent:
+        if candidate.name.lower() == "panels":
+            return candidate.parent
+        candidate = candidate.parent
+    return yaml_path.parent
+
+
 def load_panel(yaml_path: str | Path) -> Panel:
     yaml_path = Path(yaml_path).resolve()
-    base_dir = yaml_path.parent
+    base_dir = _find_project_root(yaml_path)
 
     with open(yaml_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)

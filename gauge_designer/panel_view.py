@@ -431,7 +431,12 @@ class PanelView(QWidget):
     def load(self, panel_data: dict, yaml_path: str = ""):
         self._loading = True
         self._yaml_path = yaml_path
-        self._yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
+        # Use the project root (parent of panels/) as base for instrument paths
+        # so that moving a panel YAML within panels/ never breaks references.
+        if self._panels_root:
+            self._yaml_dir = str(Path(self._panels_root).parent)
+        else:
+            self._yaml_dir = str(Path(yaml_path).parent) if yaml_path else ""
         self._instruments = panel_data.setdefault("instruments", [])
 
         name = panel_data.get("name", "")

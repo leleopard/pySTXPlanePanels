@@ -1,76 +1,74 @@
-# C172 Full Instrument Panel — six-pack + engine gauges + nav indicators.
-#
-# Layout (y-up, bottom-left origin):
-#
-#   y 515–825  row 0: ASI  (15)  AH   (325)  ALT  (635)          ← six-pack top row
-#   y 205–515  row 1: TC   (15)  DG   (325)  VSI  (635)          ← six-pack bottom row
-#   y   5–205  row 2: Oil  (10)  A/V (210)  Fuel (410)  FF (610) ← small gauges
-#              RPM  (830)  — aligns with row 2, taller (280px)
-#   y 827–893  Annunciator (412) — above six-pack top row
-#
-#   Right column (x ≥ 945):
-#     VOR1   (945, 525)  310×310
-#     VOR2   (945, 235)  310×310
-#     ADF    (1141,  5)  310×310
-#     Compass(1185, 580) 310×310  (simplified rotating-disc; full
-#                                  scrolling-tape compass deferred —
-#                                  requires UV texture translation)
-#
-# Six-pack grid centres (310 spacing):
-#   row 0 (y=670):  ASI (170)   AH (480)   ALT (790)
-#   row 1 (y=360):  TC  (170)   DG (480)   VSI (790)
-# Annunciator centre: (635, 860)
-
-name: C172 Six-Pack
-size: [1540, 920]
-background_color: [0, 0, 0]
-
+name: C172 main instrument panel
+size:
+- 1540
+- 920
+background_color:
+- 0
+- 0
+- 0
 udp:
   listen_port: 49008
-
 instruments:
-  # ── Six-pack top row ──────────────────────────────────────────────────────
-  - file: ../instruments/C172/c172_airspeed.yaml
-    position: [15, 515]
-  - file: ../instruments/C172/c172_artificial_horizon.yaml
-    position: [325, 515]
-  - file: ../instruments/C172/c172_altimeter.yaml
-    position: [635, 515]
-
-  # ── Six-pack bottom row ───────────────────────────────────────────────────
-  - file: ../instruments/C172/c172_turn_coordinator.yaml
-    position: [15, 205]
-  - file: ../instruments/C172/c172_directional_gyro.yaml
-    position: [325, 205]
-  - file: ../instruments/C172/c172_vsi.yaml
-    position: [635, 205]
-
-  # ── Annunciator ───────────────────────────────────────────────────────────
-  - file: ../instruments/C172/c172_annunciator.yaml
-    position: [412, 827]
-
-  # ── Engine / system gauges (small 200×200) ────────────────────────────────
-  - file: ../instruments/C172/c172_oil_temp_pressure.yaml
-    position: [10, 5]
-  - file: ../instruments/C172/c172_amp_vac.yaml
-    position: [210, 5]
-  - file: ../instruments/C172/c172_fuel_quantity.yaml
-    position: [410, 5]
-  - file: ../instruments/C172/c172_fuel_flow.yaml
-    position: [610, 5]
-
-  # ── RPM tachometer (280×280 content, 310×310 with bezel) ─────────────────
-  - file: ../instruments/C172/c172_rpm.yaml
-    position: [830, 5]
-
-  # ── Navigation indicators ─────────────────────────────────────────────────
-  - file: ../instruments/C172/c172_vor1.yaml
-    position: [945, 525]
-  - file: ../instruments/C172/c172_vor2.yaml
-    position: [945, 235]
-  - file: ../instruments/C172/c172_adf_indicator.yaml
-    position: [1141, 5]
-
-  # ── Magnetic compass (simplified disc; full tape version deferred) ─────────
-  - file: ../instruments/C172/c172_compass.yaml
-    position: [1185, 580]
+- file: instruments/C172/c172_rpm.yaml
+  position:
+  - 932
+  - 8
+  scale: 0.9
+- file: instruments/C172/c172_annunciator.yaml
+  position:
+  - 238
+  - 842
+- grid:
+    position:
+    - 11
+    - 229
+    columns: 3
+    rows: 2
+    cell_width: 300
+    cell_height: 300
+    name: Standard 6 Grid
+    instruments:
+    - file: instruments/C172/c172_airspeed.yaml
+      scale: 0.97
+    - file: instruments/C172/c172_artificial_horizon.yaml
+      scale: 0.97
+    - file: instruments/C172/c172_altimeter.yaml
+      scale: 0.97
+    - file: instruments/C172/c172_turn_coordinator.yaml
+      scale: 0.97
+    - file: instruments/C172/c172_directional_gyro.yaml
+      scale: 0.97
+    - file: instruments/C172/c172_vsi.yaml
+      scale: 0.97
+- grid:
+    position:
+    - 917
+    - 293
+    columns: 2
+    rows: 2
+    cell_width: 310
+    cell_height: 310
+    name: VORADF Grid
+    instruments:
+    - file: instruments/C172/c172_vor1.yaml
+      scale: 0.94
+    - file: instruments/C172/c172_vor2.yaml
+      scale: 0.94
+    - file: instruments/C172/c172_adf_indicator.yaml
+      scale: 0.94
+    - file: instruments/C172/c172_compass.yaml
+      scale: 0.94
+- grid:
+    position:
+    - 60
+    - 13
+    columns: 4
+    rows: 1
+    cell_width: 200
+    cell_height: 200
+    name: Grid fuel and oil/amp
+    instruments:
+    - file: instruments/C172/c172_oil_temp_pressure.yaml
+    - file: instruments/C172/c172_amp_vac.yaml
+    - file: instruments/C172/c172_fuel_quantity.yaml
+    - file: instruments/C172/c172_fuel_flow.yaml
