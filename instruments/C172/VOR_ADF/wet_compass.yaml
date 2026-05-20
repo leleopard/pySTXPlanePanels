@@ -14,6 +14,7 @@ components:
   frame_width: 120
   frame_height: 66
   stride_x: 122
+  smooth: false
   animation:
     dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag
     table: [[0, 0], [360, 360]]

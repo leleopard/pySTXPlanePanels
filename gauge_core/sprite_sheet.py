@@ -143,8 +143,8 @@ class SpriteSheet:
         row = int_frame // self._columns
 
         # Centre of the target frame in atlas coords (x left-to-right, y down).
-        # The fractional part shifts X toward the next column for smooth scroll.
-        tx = col * self._stride_x + self._frame_w / 2 - frac * self._stride_x
+        # frac shifts tx RIGHT toward the next column (forward in the atlas).
+        tx = col * self._stride_x + self._frame_w / 2 + frac * self._stride_x
         ty_down = row * self._stride_y + self._frame_h / 2
 
         # To bring atlas point (tx, ty_down) to screen position (base_x, base_y):
