@@ -1,4 +1,16 @@
-"""Structured form for editing an ImagePanel component."""
+"""Structured form for editing instrument components.
+
+Supports three image-based component types whose visible sections adapt
+to the selected type:
+
+  ImagePanel    — atlas sub-region sprite with optional rotation,
+                  translation, viewport clip, visibility.
+  SpriteSheet   — frame-indexed sprite grid with animation dataref,
+                  viewport clip, visibility.
+  ScrollingTape — continuously scrolling texture strip with scroll
+                  dataref, viewport clip, visibility.
+  Text          — label / dataref readout (no texture section).
+"""
 
 import os
 from pathlib import Path
@@ -16,9 +28,9 @@ from PySide6.QtCore import Qt, Signal
 
 class _NoScrollComboBox(QComboBox):
     """QComboBox that ignores mouse-wheel events to prevent accidental changes."""
-
     def wheelEvent(self, event):
         event.ignore()
+
 
 # ── Registry data ─────────────────────────────────────────────────────────────
 
@@ -46,7 +58,7 @@ _PREDICATES = [
     "nav_gsflg_visible",
 ]
 
-_COMP_TYPES = ["ImagePanel", "Text"]
+_COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text"]
 
 
 def _coerce_num(text: str):
@@ -166,7 +178,6 @@ class _Section(QWidget):
         self._form.addRow(label, box)
 
     def row_widget(self, widget: QWidget) -> QWidget:
-        """Full-width row spanning both label and field columns."""
         self._form.addRow(widget)
         return widget
 
@@ -189,8 +200,16 @@ class _Section(QWidget):
         self.toggled.emit(on)
 
 
-def _sb(lo=-4096, hi=4096) -> QSpinBox:
+def _sb(lo: int = -4096, hi: int = 4096) -> QSpinBox:
     s = QSpinBox(); s.setRange(lo, hi); s.setMinimumWidth(64); return s
+
+
+def _pair_box(w1: QWidget, w2: QWidget, sep: str = "×") -> QWidget:
+    box = QWidget()
+    hl = QHBoxLayout(box)
+    hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
+    hl.addWidget(w1); hl.addWidget(QLabel(sep)); hl.addWidget(w2); hl.addStretch()
+    return box
 
 
 # ── Main form ─────────────────────────────────────────────────────────────────
@@ -213,8 +232,11 @@ class PropertiesForm(QWidget):
         self._mk_component()
         self._mk_position()
         self._mk_texture()
+        self._mk_spritesheet()
+        self._mk_scrolltape()
         self._mk_rotation()
         self._mk_translation()
+        self._mk_animation()
         self._mk_viewport()
         self._mk_visibility()
         self._vbox.addStretch()
@@ -260,18 +282,21 @@ class PropertiesForm(QWidget):
     def _mk_texture(self):
         self._tex_sec = _Section("Texture")
 
+        # File row — shared by all image-based types
         tex_row = QWidget()
         hl = QHBoxLayout(tex_row)
         hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
         self._tex_edit_btn = QPushButton("Edit"); self._tex_edit_btn.setFixedWidth(38)
-        self._tex_edit_btn.setToolTip("Open texture editor")
+        self._tex_edit_btn.setToolTip("Open texture editor (ImagePanel only)")
         self._tex_edit_btn.setEnabled(False)
         self._tex_edit_btn.clicked.connect(self._open_texture_editor)
         hl.addWidget(self._tex_edit_btn)
         self._tex = QLineEdit()
         self._tex.editingFinished.connect(self._emit)
         self._tex.textChanged.connect(
-            lambda t: self._tex_edit_btn.setEnabled(bool(t.strip()))
+            lambda t: self._tex_edit_btn.setEnabled(
+                bool(t.strip()) and self._type.currentText() == "ImagePanel"
+            )
         )
         hl.addWidget(self._tex)
         btn = QPushButton("…"); btn.setFixedWidth(26)
@@ -279,28 +304,87 @@ class PropertiesForm(QWidget):
         hl.addWidget(btn)
         self._tex_sec.row("File", tex_row)
 
+        # Atlas detail — ImagePanel-only fields in a toggleable container
+        self._atlas_detail = QWidget()
+        ad = QFormLayout(self._atlas_detail)
+        ad.setContentsMargins(0, 0, 0, 0)
+        ad.setHorizontalSpacing(8)
+        ad.setVerticalSpacing(4)
+
         self._clip_w = _sb(0, 4096); self._clip_h = _sb(0, 4096)
         for w in (self._clip_w, self._clip_h):
             w.valueChanged.connect(self._emit)
-        self._tex_sec.row_pair("Clip W  /  H", self._clip_w, self._clip_h)
+        ad.addRow("Clip W  /  H", _pair_box(self._clip_w, self._clip_h))
 
         self._orig_x = _sb(0, 4096); self._orig_y = _sb(0, 4096)
         for w in (self._orig_x, self._orig_y):
             w.valueChanged.connect(self._emit)
-        self._tex_sec.row_pair("Origin X  /  Y", self._orig_x, self._orig_y)
+        ad.addRow("Origin X  /  Y", _pair_box(self._orig_x, self._orig_y))
 
         self._resize_chk = QCheckBox("Fit to gauge size")
         self._resize_chk.toggled.connect(self._on_resize_toggled)
         self._resize_chk.toggled.connect(self._emit)
-        self._tex_sec.row_widget(self._resize_chk)
+        ad.addRow(self._resize_chk)
 
         self._prop_chk = QCheckBox("Maintain proportions")
         self._prop_chk.setChecked(True)
         self._prop_chk.setEnabled(False)
         self._prop_chk.toggled.connect(self._emit)
-        self._tex_sec.row_widget(self._prop_chk)
+        ad.addRow(self._prop_chk)
 
+        self._tex_sec.row_widget(self._atlas_detail)
         self._vbox.addWidget(self._tex_sec)
+
+    def _mk_spritesheet(self):
+        """Grid layout parameters — SpriteSheet only."""
+        self._ss_sec = _Section("Sprite grid")
+        self._ss_sec.setVisible(False)
+
+        self._ss_cols = QSpinBox(); self._ss_cols.setRange(1, 999); self._ss_cols.setMinimumWidth(64)
+        self._ss_rows_sb = QSpinBox(); self._ss_rows_sb.setRange(1, 999); self._ss_rows_sb.setMinimumWidth(64)
+        for w in (self._ss_cols, self._ss_rows_sb):
+            w.valueChanged.connect(self._emit)
+        cr_box = QWidget(); crl = QHBoxLayout(cr_box)
+        crl.setContentsMargins(0, 0, 0, 0); crl.setSpacing(4)
+        crl.addWidget(self._ss_cols); crl.addWidget(QLabel("cols"))
+        crl.addWidget(self._ss_rows_sb); crl.addWidget(QLabel("rows"))
+        crl.addStretch()
+        self._ss_sec.row("Grid size", cr_box)
+
+        self._ss_fw = _sb(1, 4096); self._ss_fh = _sb(1, 4096)
+        for w in (self._ss_fw, self._ss_fh):
+            w.valueChanged.connect(self._emit)
+        self._ss_sec.row("Frame W  ×  H", _pair_box(self._ss_fw, self._ss_fh))
+
+        # Stride: 0 = special value meaning "same as frame size"
+        self._ss_sx = _sb(0, 4096); self._ss_sx.setSpecialValueText("= frame W")
+        self._ss_sy = _sb(0, 4096); self._ss_sy.setSpecialValueText("= frame H")
+        for w in (self._ss_sx, self._ss_sy):
+            w.valueChanged.connect(self._emit)
+        self._ss_sec.row("Stride X  ×  Y", _pair_box(self._ss_sx, self._ss_sy))
+        hint = QLabel("Stride overrides frame size when atlas has inter-frame gaps.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #999; font-size: 10px;")
+        self._ss_sec.row_widget(hint)
+
+        self._ss_smooth = QCheckBox("Smooth  (sub-frame X interpolation for fluid animation)")
+        self._ss_smooth.setChecked(True)
+        self._ss_smooth.toggled.connect(self._emit)
+        self._ss_sec.row_widget(self._ss_smooth)
+
+        self._vbox.addWidget(self._ss_sec)
+
+    def _mk_scrolltape(self):
+        """Scroll axis — ScrollingTape only."""
+        self._st_sec = _Section("Scroll tape")
+        self._st_sec.setVisible(False)
+
+        self._st_axis = _NoScrollComboBox()
+        self._st_axis.addItems(["y  (vertical)", "x  (horizontal)"])
+        self._st_axis.currentTextChanged.connect(self._emit)
+        self._st_sec.row("Scroll axis", self._st_axis)
+
+        self._vbox.addWidget(self._st_sec)
 
     def _mk_rotation(self):
         self._rot_sec = _Section("Rotation", optional=True)
@@ -360,6 +444,24 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._tr_sec)
 
+    def _mk_animation(self):
+        """Shared animation/scroll block — SpriteSheet and ScrollingTape."""
+        self._anim_sec = _Section("Animation")
+        self._anim_sec.setVisible(False)
+
+        self._anim_dr = QLineEdit(); self._anim_dr.editingFinished.connect(self._emit)
+        self._anim_sec.row("Dataref", self._dr_field(self._anim_dr))
+
+        self._anim_fn = _NoScrollComboBox(); self._anim_fn.addItems(_VALUE_FUNCS)
+        self._anim_fn.currentTextChanged.connect(self._emit)
+        self._anim_sec.row("Convert fn", self._anim_fn)
+
+        self._anim_tbl = _TableEditor("Input value", "Output")
+        self._anim_tbl.changed.connect(self._emit)
+        self._anim_sec.row("Table", self._anim_tbl)
+
+        self._vbox.addWidget(self._anim_sec)
+
     def _mk_viewport(self):
         self._vp_sec = _Section("Viewport clip", optional=True)
         self._vp_sec.toggled.connect(self._emit)
@@ -393,26 +495,40 @@ class PropertiesForm(QWidget):
 
     def load(self, comp: dict):
         self._loading = True
-        known = {"name", "type", "position", "texture", "cliprect", "origin",
-                 "rotation", "translation", "viewport", "visibility",
-                 "resize_to_container", "maintain_proportions"}
+        known = {
+            "name", "type", "position",
+            # ImagePanel
+            "texture", "cliprect", "origin",
+            "resize_to_container", "maintain_proportions",
+            "rotation", "translation",
+            # SpriteSheet
+            "columns", "rows", "frame_width", "frame_height",
+            "stride_x", "stride_y", "smooth", "animation",
+            # ScrollingTape
+            "scroll_axis", "scroll",
+            # shared
+            "viewport", "visibility",
+        }
         self._extra = {k: v for k, v in comp.items() if k not in known}
 
         self._name.setText(str(comp.get("name", "")))
         ct = str(comp.get("type", "ImagePanel"))
-        self._type.setCurrentIndex(max(self._type.findText(ct), 0))
-        self._tex_sec.show_body(ct == "ImagePanel")
+        idx = self._type.findText(ct)
+        self._type.setCurrentIndex(max(idx, 0))
+        self._on_type_changed(ct)  # explicit: index may not have changed
 
         pos = comp.get("position", [0, 0])
         self._px.setValue(int(pos[0]))
         self._py.setValue(flip_y(int(pos[1]), self._ref_height))
 
+        # Texture file (all image-based types)
         self._tex.setText(str(comp.get("texture", "")))
+
+        # ImagePanel atlas detail
         cr = comp.get("cliprect", [0, 0])
         self._clip_w.setValue(int(cr[0])); self._clip_h.setValue(int(cr[1]))
         orig = comp.get("origin", [0, 0])
         self._orig_x.setValue(int(orig[0])); self._orig_y.setValue(int(orig[1]))
-
         resize = bool(comp.get("resize_to_container", False))
         self._resize_chk.blockSignals(True)
         self._resize_chk.setChecked(resize)
@@ -420,6 +536,20 @@ class PropertiesForm(QWidget):
         self._prop_chk.setEnabled(resize)
         self._prop_chk.setChecked(bool(comp.get("maintain_proportions", True)))
 
+        # SpriteSheet grid params
+        self._ss_cols.setValue(int(comp.get("columns", 1)))
+        self._ss_rows_sb.setValue(int(comp.get("rows", 1)))
+        self._ss_fw.setValue(max(1, int(comp.get("frame_width", 1))))
+        self._ss_fh.setValue(max(1, int(comp.get("frame_height", 1))))
+        self._ss_sx.setValue(int(comp.get("stride_x", 0)))
+        self._ss_sy.setValue(int(comp.get("stride_y", 0)))
+        self._ss_smooth.setChecked(bool(comp.get("smooth", True)))
+
+        # ScrollingTape axis
+        axis = str(comp.get("scroll_axis", "y"))
+        self._st_axis.setCurrentIndex(0 if axis == "y" else 1)
+
+        # ImagePanel rotation
         rot = comp.get("rotation")
         self._rot_sec.set_active(rot is not None)
         if rot:
@@ -434,6 +564,7 @@ class PropertiesForm(QWidget):
             self._rot_cx.setValue(0); self._rot_cy.setValue(0)
             self._rot_tbl.load([])
 
+        # ImagePanel translation
         tr = comp.get("translation")
         self._tr_sec.set_active(tr is not None)
         if tr:
@@ -452,6 +583,19 @@ class PropertiesForm(QWidget):
             self._tr_angle.setValue(0.0); self._tr_angle.setEnabled(False)
             self._tr_add.setValue(0.0); self._tr_tbl.load([])
 
+        # SpriteSheet animation / ScrollingTape scroll — same widget, different YAML key
+        anim = comp.get("animation") or comp.get("scroll")
+        if anim:
+            self._anim_dr.setText(str(anim.get("dataref", "")))
+            self._anim_fn.setCurrentIndex(
+                max(self._anim_fn.findText(anim.get("convert_function") or _NONE), 0))
+            self._anim_tbl.load(anim.get("table", []))
+        else:
+            self._anim_dr.clear()
+            self._anim_fn.setCurrentIndex(0)
+            self._anim_tbl.load([])
+
+        # Viewport (shared)
         vp = comp.get("viewport")
         self._vp_sec.set_active(vp is not None)
         if vp:
@@ -461,6 +605,7 @@ class PropertiesForm(QWidget):
             self._vp_x.setValue(0); self._vp_y.setValue(0)
             self._vp_w.setValue(0); self._vp_h.setValue(0)
 
+        # Visibility (shared)
         vis = comp.get("visibility")
         self._vis_sec.set_active(vis is not None)
         if vis:
@@ -477,10 +622,11 @@ class PropertiesForm(QWidget):
     def get_data(self) -> dict:
         data: dict = {}
         data["name"] = self._name.text().strip()
-        data["type"] = self._type.currentText()
+        ct = self._type.currentText()
+        data["type"] = ct
         data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
-        if data["type"] == "ImagePanel":
+        if ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
             data["origin"]  = [self._orig_x.value(), self._orig_y.value()]
             data["cliprect"] = [self._clip_w.value(), self._clip_h.value()]
@@ -489,29 +635,62 @@ class PropertiesForm(QWidget):
                 if not self._prop_chk.isChecked():
                     data["maintain_proportions"] = False
 
-        if self._rot_sec.active:
-            rot: dict = {"dataref": self._rot_dr.text().strip()}
-            cf = self._rot_fn.currentText()
-            if cf != _NONE:
-                rot["convert_function"] = cf
-            rc = [self._rot_cx.value(), self._rot_cy.value()]
-            if rc != [0, 0]:
-                rot["rotation_center"] = rc
-            rot["table"] = self._rot_tbl.get_data()
-            data["rotation"] = rot
+            if self._rot_sec.active:
+                rot: dict = {"dataref": self._rot_dr.text().strip()}
+                cf = self._rot_fn.currentText()
+                if cf != _NONE:
+                    rot["convert_function"] = cf
+                rc = [self._rot_cx.value(), self._rot_cy.value()]
+                if rc != [0, 0]:
+                    rot["rotation_center"] = rc
+                rot["table"] = self._rot_tbl.get_data()
+                data["rotation"] = rot
 
-        if self._tr_sec.active:
-            tr: dict = {"dataref": self._tr_dr.text().strip()}
-            cf = self._tr_fn.currentText()
-            if cf != _NONE:
-                tr["convert_function"] = cf
-            if self._tr_fixed.isChecked():
-                tr["translation_angle"] = self._tr_angle.value()
-            add = self._tr_add.value()
-            if add != 0.0:
-                tr["add_angle_to_rotation"] = add
-            tr["table"] = self._tr_tbl.get_data()
-            data["translation"] = tr
+            if self._tr_sec.active:
+                tr: dict = {"dataref": self._tr_dr.text().strip()}
+                cf = self._tr_fn.currentText()
+                if cf != _NONE:
+                    tr["convert_function"] = cf
+                if self._tr_fixed.isChecked():
+                    tr["translation_angle"] = self._tr_angle.value()
+                add = self._tr_add.value()
+                if add != 0.0:
+                    tr["add_angle_to_rotation"] = add
+                tr["table"] = self._tr_tbl.get_data()
+                data["translation"] = tr
+
+        elif ct == "SpriteSheet":
+            data["texture"] = self._tex.text().strip()
+            data["columns"] = self._ss_cols.value()
+            data["rows"] = self._ss_rows_sb.value()
+            data["frame_width"] = self._ss_fw.value()
+            data["frame_height"] = self._ss_fh.value()
+            if self._ss_sx.value() > 0:
+                data["stride_x"] = self._ss_sx.value()
+            if self._ss_sy.value() > 0:
+                data["stride_y"] = self._ss_sy.value()
+            if not self._ss_smooth.isChecked():
+                data["smooth"] = False
+            anim_dr = self._anim_dr.text().strip()
+            anim_tbl = self._anim_tbl.get_data()
+            if anim_dr or anim_tbl:
+                anim: dict = {"dataref": anim_dr, "table": anim_tbl}
+                cf = self._anim_fn.currentText()
+                if cf != _NONE:
+                    anim["convert_function"] = cf
+                data["animation"] = anim
+
+        elif ct == "ScrollingTape":
+            data["texture"] = self._tex.text().strip()
+            data["scroll_axis"] = "y" if self._st_axis.currentIndex() == 0 else "x"
+            anim_dr = self._anim_dr.text().strip()
+            anim_tbl = self._anim_tbl.get_data()
+            if anim_dr or anim_tbl:
+                scroll: dict = {"dataref": anim_dr, "table": anim_tbl}
+                cf = self._anim_fn.currentText()
+                if cf != _NONE:
+                    scroll["convert_function"] = cf
+                data["scroll"] = scroll
 
         if self._vp_sec.active:
             data["viewport"] = [
@@ -530,16 +709,23 @@ class PropertiesForm(QWidget):
 
     def clear(self):
         self._loading = True
-        self._name.clear(); self._type.setCurrentIndex(0)
+        self._name.clear()
+        self._type.setCurrentIndex(0)
+        self._on_type_changed("ImagePanel")  # explicit: index may not have changed
         self._px.setValue(0); self._py.setValue(0)
         self._tex.clear()
         self._clip_w.setValue(0); self._clip_h.setValue(0)
         self._orig_x.setValue(0); self._orig_y.setValue(0)
         self._resize_chk.setChecked(False)
-        self._prop_chk.setChecked(True)
-        self._prop_chk.setEnabled(False)
+        self._prop_chk.setChecked(True); self._prop_chk.setEnabled(False)
+        self._ss_cols.setValue(1); self._ss_rows_sb.setValue(1)
+        self._ss_fw.setValue(1); self._ss_fh.setValue(1)
+        self._ss_sx.setValue(0); self._ss_sy.setValue(0)
+        self._ss_smooth.setChecked(True)
+        self._st_axis.setCurrentIndex(0)
         self._rot_sec.set_active(False)
         self._tr_sec.set_active(False)
+        self._anim_dr.clear(); self._anim_fn.setCurrentIndex(0); self._anim_tbl.load([])
         self._vp_sec.set_active(False)
         self._vis_sec.set_active(False)
         self._extra = {}
@@ -552,7 +738,26 @@ class PropertiesForm(QWidget):
             self.changed.emit()
 
     def _on_type_changed(self, ct: str):
-        self._tex_sec.show_body(ct == "ImagePanel")
+        is_ip = ct == "ImagePanel"
+        is_ss = ct == "SpriteSheet"
+        is_st = ct == "ScrollingTape"
+        is_img = is_ip or is_ss or is_st  # any image-based type
+
+        # Texture section visible for image types; atlas detail only for ImagePanel
+        self._tex_sec.setVisible(is_img)
+        self._atlas_detail.setVisible(is_ip)
+        self._tex_edit_btn.setVisible(is_ip)
+
+        # Type-specific sections
+        self._ss_sec.setVisible(is_ss)
+        self._st_sec.setVisible(is_st)
+
+        # Rotation and Translation: ImagePanel only
+        self._rot_sec.setVisible(is_ip)
+        self._tr_sec.setVisible(is_ip)
+
+        # Animation: SpriteSheet and ScrollingTape
+        self._anim_sec.setVisible(is_ss or is_st)
 
     def _on_resize_toggled(self, on: bool):
         self._prop_chk.setEnabled(on)
@@ -563,14 +768,11 @@ class PropertiesForm(QWidget):
         self._tr_angle.setEnabled(on)
 
     def _dr_field(self, lineedit: QLineEdit) -> QWidget:
-        """Wrap a dataref QLineEdit with a '…' browse button."""
         box = QWidget()
         hl = QHBoxLayout(box)
-        hl.setContentsMargins(0, 0, 0, 0)
-        hl.setSpacing(2)
+        hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(2)
         hl.addWidget(lineedit)
-        btn = QPushButton("…")
-        btn.setFixedWidth(26)
+        btn = QPushButton("…"); btn.setFixedWidth(26)
         btn.setToolTip("Browse X-Plane datarefs")
         btn.clicked.connect(lambda: self._pick_dataref(lineedit))
         hl.addWidget(btn)
