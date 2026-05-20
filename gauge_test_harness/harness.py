@@ -133,6 +133,18 @@ def _collect_from_instrument(
                       f"{label_base}  (translation)",
                       convert_fn=tr.get("convert_function"))
 
+        if "animation" in comp:
+            anim = comp["animation"]
+            _register(anim["dataref"], anim.get("table", []),
+                      f"{label_base}  (animation)",
+                      convert_fn=anim.get("convert_function"))
+
+        if "scroll" in comp:
+            scr = comp["scroll"]
+            _register(scr["dataref"], scr.get("table", []),
+                      f"{label_base}  (scroll)",
+                      convert_fn=scr.get("convert_function"))
+
         if "visibility" in comp:
             vis = comp["visibility"]
             _register(vis["dataref"], [],
