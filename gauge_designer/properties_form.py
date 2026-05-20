@@ -15,6 +15,9 @@ to the selected type:
 import os
 from pathlib import Path
 
+import gauge_core.convert as _convert_reg  # noqa: F401 — registers convert functions
+import gauge_core.component as _component_reg  # noqa: F401
+from gauge_core.registry import known_converts
 from gauge_designer.ui_utils import flip_y
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
@@ -36,27 +39,16 @@ class _NoScrollComboBox(QComboBox):
 
 _NONE = "(none)"
 
-_VALUE_FUNCS = [
-    _NONE,
-    "identity",
-    "return100s", "return1000s", "return10000s",
-    "convert_in_to_mb",
-    "divideby100",
-    "add_compass_heading_to_value",
-    "calculate_turn_rate",
-    "return_alt_hundreds",
-    "convert_lbs_to_gallons",
-    "convert_suction",
-]
+# Derived from the live registry — adding a function to convert.py is enough.
+_PREDICATE_PREFIXES = ("true_if_", "nav_gsflg_")
 
-_PREDICATES = [
-    "true_if_zero",
-    "true_if_over_zero",
-    "true_if_equals_1", "true_if_equals_2", "true_if_equals_3",
-    "true_if_equals_4", "true_if_equals_5",
-    "true_if_over_1", "true_if_over_2",
-    "nav_gsflg_visible",
-]
+def _build_func_lists() -> tuple[list[str], list[str]]:
+    all_fns = known_converts()
+    predicates = [n for n in all_fns if any(n.startswith(p) for p in _PREDICATE_PREFIXES)]
+    values = [_NONE] + [n for n in all_fns if n not in predicates]
+    return values, predicates
+
+_VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text"]
 
