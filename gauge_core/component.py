@@ -283,14 +283,11 @@ def _image_panel_factory(
 
     if "translation" in comp:
         tr = comp["translation"]
-        angle = tr.get("translation_angle")
-        if angle is None and "axis" in tr:
-            angle = 90.0 if tr["axis"] == "y" else 0.0
         panel.set_translation(
             dataref=tr["dataref"],
             table=tr["table"],
             convert_function=tr.get("convert_function"),
-            translation_angle_deg=angle,
+            translation_angle_deg=tr.get("translation_angle"),
             add_angle_to_rotation_deg=tr.get("add_angle_to_rotation", 0.0),
         )
 
