@@ -1,0 +1,23 @@
+name: wet_compass
+size:
+- 200
+- 200
+components:
+- name: heading
+  type: SpriteSheet
+  position:
+  - 100
+  - 100
+  texture: assets/gen_compass.png
+  columns: 16
+  rows: 23
+  frame_width: 120
+  frame_height: 66
+  animation:
+    dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag
+    table: [[0, 0], [360, 360]]
+  viewport:
+  - 40
+  - 67
+  - 120
+  - 66

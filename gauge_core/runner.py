@@ -93,6 +93,16 @@ class PanelWindow(arcade.Window):
             font_size=14,
         )
 
+        # Test-mode overlay: shows current test value and step so the user
+        # can see what value is being fed to all datarefs.
+        self._test_overlay = arcade.Text(
+            text="",
+            x=6,
+            y=6,
+            color=(0, 230, 0, 220),
+            font_size=12,
+        ) if is_test_mode else None
+
     def on_close(self) -> None:
         if self._on_shutdown is not None:
             self._on_shutdown()
@@ -124,6 +134,14 @@ class PanelWindow(arcade.Window):
         # No-data overlay (only when bound to UDP and X-Plane is silent).
         if not self._is_test_mode and self._udp_alive is not None and not self._udp_alive():
             self._no_data_text.draw()
+
+        # Test-mode overlay: live value + step.
+        if self._test_overlay is not None:
+            self._test_overlay.text = (
+                f"TEST  value: {self.test_value:.2f}    step: {self.test_increment:.1f}"
+                f"    (numpad +/−  ↑↓ ×10  PgUp/Dn ×100  * toggle step)"
+            )
+            self._test_overlay.draw()
 
         # FPS counter via window title.
         self._frame_count += 1
