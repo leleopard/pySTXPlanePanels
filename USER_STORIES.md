@@ -159,6 +159,7 @@ These are tracked here for visibility but are not in scope for MVP1:
 - Frame-based animated images
 - Multi-panel / multi-monitor coordination
 - Mouse interaction / draggable windows
+- Instrument properties form: disable mouse-wheel on all QSpinBox / QDoubleSpinBox widgets (same pattern as `_NoScrollComboBox` already in `properties_form.py`)
 
 ---
 
