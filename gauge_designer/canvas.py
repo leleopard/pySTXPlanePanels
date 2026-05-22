@@ -227,15 +227,21 @@ class InstrumentCanvas(QWidget):
         w, h = self._data.get("size", [310, 310])
         result = []
         for comp in reversed(self._data.get("components", [])):  # topmost first
-            if comp.get("type") != "ImagePanel":
-                continue
             if comp.get("name") in self._hidden:
                 continue
+            ctype = comp.get("type")
             try:
-                sprite, px, py = self._crop_sprite(comp, w, h)
-                cw, ch = sprite.size
-                if px <= cx < px + cw and py <= cy < py + ch:
-                    result.append(comp.get("name"))
+                if ctype == "ImagePanel":
+                    sprite, px, py = self._crop_sprite(comp, w, h)
+                    cw, ch = sprite.size
+                    if px <= cx < px + cw and py <= cy < py + ch:
+                        result.append(comp.get("name"))
+                elif ctype in ("SpriteSheet", "ScrollingTape"):
+                    rect = self._viewport_rect_pil(comp, h)
+                    if rect is not None:
+                        rx, ry, rw, rh = rect
+                        if rx <= cx < rx + rw and ry <= cy < ry + rh:
+                            result.append(comp.get("name"))
             except Exception:
                 continue
         return result
@@ -267,13 +273,17 @@ class InstrumentCanvas(QWidget):
         composite = Image.new("RGBA", (w, h), (30, 30, 30, 255))
 
         for comp in self._data.get("components", []):
-            if comp.get("type") != "ImagePanel":
-                continue
             if comp.get("name") in self._hidden:
                 continue
+            ctype = comp.get("type")
             try:
-                sprite, px, py = self._crop_sprite(comp, w, h)
-                composite.paste(sprite, (px, py), sprite)
+                if ctype == "ImagePanel":
+                    sprite, px, py = self._crop_sprite(comp, w, h)
+                    composite.paste(sprite, (px, py), sprite)
+                elif ctype == "SpriteSheet":
+                    self._render_spritesheet(comp, composite, w, h)
+                elif ctype == "ScrollingTape":
+                    self._render_scrolltape(comp, composite, w, h)
             except Exception:
                 continue
 
@@ -282,7 +292,8 @@ class InstrumentCanvas(QWidget):
             for comp in self._data.get("components", []):
                 if comp.get("name") != self._selected_name:
                     continue
-                if comp.get("type") == "ImagePanel":
+                ctype = comp.get("type")
+                if ctype == "ImagePanel":
                     try:
                         sprite, px, py = self._crop_sprite(comp, w, h)
                         cw, ch = sprite.size
@@ -293,6 +304,23 @@ class InstrumentCanvas(QWidget):
                         )
                     except Exception:
                         pass
+                elif ctype in ("SpriteSheet", "ScrollingTape"):
+                    rect = self._viewport_rect_pil(comp, h)
+                    if rect is not None:
+                        rx, ry, rw, rh = rect
+                        draw.rectangle(
+                            [rx, ry, rx + rw - 1, ry + rh - 1],
+                            outline=(255, 220, 0, 255),
+                            width=2,
+                        )
+                    else:
+                        pos = comp.get("position", [w // 2, h // 2])
+                        cx_p, cy_up = int(pos[0]), int(pos[1])
+                        cy_p = h - cy_up
+                        draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)],
+                                  fill=(255, 220, 0, 255), width=2)
+                        draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)],
+                                  fill=(255, 220, 0, 255), width=2)
                 else:
                     pos = comp.get("position", [w // 2, h // 2])
                     cx_p, cy_up = int(pos[0]), int(pos[1])
@@ -309,12 +337,61 @@ class InstrumentCanvas(QWidget):
         pixmap.loadFromData(buf.getvalue())
         return pixmap
 
-    def _crop_sprite(self, comp: dict, canvas_w: int, canvas_h: int):
-        tex_rel = comp.get("texture", "")
+    def _viewport_rect_pil(self, comp: dict, canvas_h: int) -> tuple[int, int, int, int] | None:
+        """Return (x, y, w, h) in PIL (y-down) coords for the component's viewport."""
+        vp = comp.get("viewport")
+        if not vp:
+            return None
+        vx, vy, vw, vh = vp
+        return (int(vx), int(canvas_h - vy - vh), int(vw), int(vh))
+
+    def _load_atlas(self, tex_rel: str) -> Image.Image:
         tex_path = str((Path(self._yaml_dir) / tex_rel).resolve())
         if tex_path not in self._atlas_cache:
             self._atlas_cache[tex_path] = Image.open(tex_path).convert("RGBA")
-        atlas = self._atlas_cache[tex_path]
+        return self._atlas_cache[tex_path]
+
+    def _render_spritesheet(self, comp: dict, composite: Image.Image,
+                            canvas_w: int, canvas_h: int) -> None:
+        atlas = self._load_atlas(comp.get("texture", ""))
+        frame_w = int(comp.get("frame_width", 100))
+        frame_h = int(comp.get("frame_height", 100))
+        # Frame 0 sits at the top-left of the atlas.
+        frame0 = atlas.crop((0, 0, min(frame_w, atlas.width), min(frame_h, atlas.height)))
+
+        rect = self._viewport_rect_pil(comp, canvas_h)
+        if rect is not None:
+            rx, ry, rw, rh = rect
+            # Show only the part of frame 0 that fits in the viewport.
+            visible = frame0.crop((0, 0, min(frame_w, rw), min(frame_h, rh)))
+            composite.paste(visible, (rx, ry), visible)
+        else:
+            px, py = comp.get("position", [canvas_w // 2, canvas_h // 2])
+            paste_x = int(round(px - frame_w / 2))
+            paste_y = int(round((canvas_h - py) - frame_h / 2))
+            composite.paste(frame0, (paste_x, paste_y), frame0)
+
+    def _render_scrolltape(self, comp: dict, composite: Image.Image,
+                           canvas_w: int, canvas_h: int) -> None:
+        atlas = self._load_atlas(comp.get("texture", ""))
+
+        rect = self._viewport_rect_pil(comp, canvas_h)
+        if rect is not None:
+            rx, ry, rw, rh = rect
+            # Show the beginning of the strip (offset 0) through the viewport.
+            strip = atlas.crop((0, 0, min(atlas.width, rw), min(atlas.height, rh)))
+            composite.paste(strip, (rx, ry), strip)
+        else:
+            px, py = comp.get("position", [canvas_w // 2, canvas_h // 2])
+            patch_w = min(100, atlas.width)
+            patch_h = min(100, atlas.height)
+            patch = atlas.crop((0, 0, patch_w, patch_h))
+            paste_x = int(round(px - patch_w / 2))
+            paste_y = int(round((canvas_h - py) - patch_h / 2))
+            composite.paste(patch, (paste_x, paste_y), patch)
+
+    def _crop_sprite(self, comp: dict, canvas_w: int, canvas_h: int):
+        atlas = self._load_atlas(comp.get("texture", ""))
 
         ox, oy = comp.get("origin", [0, 0])
         cw, ch = comp.get("cliprect", [100, 100])
