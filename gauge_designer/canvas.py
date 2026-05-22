@@ -356,38 +356,60 @@ class InstrumentCanvas(QWidget):
         atlas = self._load_atlas(comp.get("texture", ""))
         frame_w = int(comp.get("frame_width", 100))
         frame_h = int(comp.get("frame_height", 100))
-        # Frame 0 sits at the top-left of the atlas.
-        frame0 = atlas.crop((0, 0, min(frame_w, atlas.width), min(frame_h, atlas.height)))
+
+        pos = comp.get("position", [canvas_w // 2, canvas_h // 2])
+        pos_x, pos_y = float(pos[0]), float(pos[1])
+
+        # Frame 0 center aligns with position (matches runtime _set_frame at frame 0).
+        # Atlas pixel (0,0) → PIL coords: (pos_x − frame_w/2, canvas_h − pos_y − frame_h/2)
+        f_left = int(round(pos_x - frame_w / 2))
+        f_top  = int(round(canvas_h - pos_y - frame_h / 2))
 
         rect = self._viewport_rect_pil(comp, canvas_h)
         if rect is not None:
-            rx, ry, rw, rh = rect
-            # Show only the part of frame 0 that fits in the viewport.
-            visible = frame0.crop((0, 0, min(frame_w, rw), min(frame_h, rh)))
-            composite.paste(visible, (rx, ry), visible)
+            # Viewport is an independent scissor window — clip frame 0 to it.
+            vx, vy, vw, vh = rect
+            ix1, iy1 = max(f_left, vx), max(f_top, vy)
+            ix2, iy2 = min(f_left + frame_w, vx + vw), min(f_top + frame_h, vy + vh)
+            if ix2 > ix1 and iy2 > iy1:
+                visible = atlas.crop((ix1 - f_left, iy1 - f_top, ix2 - f_left, iy2 - f_top))
+                composite.paste(visible, (ix1, iy1), visible)
         else:
-            px, py = comp.get("position", [canvas_w // 2, canvas_h // 2])
-            paste_x = int(round(px - frame_w / 2))
-            paste_y = int(round((canvas_h - py) - frame_h / 2))
-            composite.paste(frame0, (paste_x, paste_y), frame0)
+            frame0 = atlas.crop((0, 0, min(frame_w, atlas.width), min(frame_h, atlas.height)))
+            composite.paste(frame0, (f_left, f_top), frame0)
 
     def _render_scrolltape(self, comp: dict, composite: Image.Image,
                            canvas_w: int, canvas_h: int) -> None:
         atlas = self._load_atlas(comp.get("texture", ""))
+        axis = comp.get("scroll_axis", "y")
+
+        pos = comp.get("position", [canvas_w // 2, canvas_h // 2])
+        pos_x, pos_y = float(pos[0]), float(pos[1])
+
+        # At offset 0, texture pixel 0 aligns with position (matches runtime _scroll_to).
+        # y-axis: texture top at pos_y; horizontally centred at pos_x.
+        # x-axis: texture left at pos_x; vertically centred at pos_y.
+        if axis == "y":
+            t_left = int(round(pos_x - atlas.width / 2))
+            t_top  = int(round(canvas_h - pos_y))
+        else:
+            t_left = int(round(pos_x))
+            t_top  = int(round(canvas_h - pos_y - atlas.height / 2))
 
         rect = self._viewport_rect_pil(comp, canvas_h)
         if rect is not None:
-            rx, ry, rw, rh = rect
-            # Show the beginning of the strip (offset 0) through the viewport.
-            strip = atlas.crop((0, 0, min(atlas.width, rw), min(atlas.height, rh)))
-            composite.paste(strip, (rx, ry), strip)
+            vx, vy, vw, vh = rect
+            ix1, iy1 = max(t_left, vx), max(t_top, vy)
+            ix2, iy2 = min(t_left + atlas.width, vx + vw), min(t_top + atlas.height, vy + vh)
+            if ix2 > ix1 and iy2 > iy1:
+                strip = atlas.crop((ix1 - t_left, iy1 - t_top, ix2 - t_left, iy2 - t_top))
+                composite.paste(strip, (ix1, iy1), strip)
         else:
-            px, py = comp.get("position", [canvas_w // 2, canvas_h // 2])
             patch_w = min(100, atlas.width)
             patch_h = min(100, atlas.height)
             patch = atlas.crop((0, 0, patch_w, patch_h))
-            paste_x = int(round(px - patch_w / 2))
-            paste_y = int(round((canvas_h - py) - patch_h / 2))
+            paste_x = int(round(pos_x - patch_w / 2))
+            paste_y = int(round((canvas_h - pos_y) - patch_h / 2))
             composite.paste(patch, (paste_x, paste_y), patch)
 
     def _crop_sprite(self, comp: dict, canvas_w: int, canvas_h: int):
