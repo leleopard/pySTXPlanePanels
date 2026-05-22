@@ -33,7 +33,9 @@ class _CanvasSurface(QWidget):
 
     def set_pixmap(self, pixmap: QPixmap):
         self._pixmap = pixmap
-        self.resize(pixmap.size() if not pixmap.isNull() else self.size())
+        new_size = pixmap.size() if not pixmap.isNull() else self.size()
+        if new_size != self.size():
+            self.resize(new_size)
         self.update()
 
     def paintEvent(self, _event):
@@ -258,6 +260,13 @@ class InstrumentCanvas(QWidget):
         if not self._data:
             self._surface.set_pixmap(QPixmap())
             return
+
+        # Save scroll position — widget resize triggered by set_pixmap can reset it.
+        h_bar = self._scroll.horizontalScrollBar()
+        v_bar = self._scroll.verticalScrollBar()
+        saved_h = h_bar.value()
+        saved_v = v_bar.value()
+
         pixmap = self._composite()
         if self._zoom != 1.0:
             pixmap = pixmap.scaled(
@@ -267,6 +276,11 @@ class InstrumentCanvas(QWidget):
                 Qt.SmoothTransformation,
             )
         self._surface.set_pixmap(pixmap)
+
+        # Restore only when zoom/size didn't change (i.e. the scroll area range
+        # is the same). If range shrank the setValue call clamps gracefully.
+        h_bar.setValue(saved_h)
+        v_bar.setValue(saved_v)
 
     def _composite(self) -> QPixmap:
         w, h = self._data.get("size", [310, 310])
