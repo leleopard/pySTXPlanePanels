@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter
 
 
@@ -74,6 +74,7 @@ class InstrumentCanvas(QWidget):
         self._atlas_cache: dict[str, Image.Image] = {}
         self._hidden: set[str] = set()
         self._zoom: float = 1.0
+        self._deferred_scroll: tuple[int, int] | None = None
 
         # drag state (stored in unzoomed canvas coordinates)
         self._drag_name: str | None = None
@@ -152,15 +153,15 @@ class InstrumentCanvas(QWidget):
         h_val = self._scroll.horizontalScrollBar().value()
         v_val = self._scroll.verticalScrollBar().value()
 
-        self._render()
+        self._render()  # sets _deferred_scroll to pre-zoom values
 
-        # keep the world-point under the cursor stationary:
-        # new_scroll = cursor * (zoom_ratio - 1) + old_scroll
+        # Compute zoom-corrected scroll and override _deferred_scroll so the
+        # timer queued by _render() applies these values instead of the pre-zoom ones.
         zoom_ratio = self._zoom / old_zoom
-        self._scroll.horizontalScrollBar().setValue(
-            int(cursor_x * (zoom_ratio - 1) + h_val))
-        self._scroll.verticalScrollBar().setValue(
-            int(cursor_y * (zoom_ratio - 1) + v_val))
+        new_h = int(cursor_x * (zoom_ratio - 1) + h_val)
+        new_v = int(cursor_y * (zoom_ratio - 1) + v_val)
+        self._deferred_scroll = (new_h, new_v)
+        self._apply_deferred_scroll()
 
         event.accept()
 
@@ -261,11 +262,13 @@ class InstrumentCanvas(QWidget):
             self._surface.set_pixmap(QPixmap())
             return
 
-        # Save scroll position — widget resize triggered by set_pixmap can reset it.
-        h_bar = self._scroll.horizontalScrollBar()
-        v_bar = self._scroll.verticalScrollBar()
-        saved_h = h_bar.value()
-        saved_v = v_bar.value()
+        # Capture the intended scroll position before any resize resets it.
+        # _on_wheel overrides _deferred_scroll with zoom-corrected values after
+        # calling _render(), so the timer always applies the latest intention.
+        self._deferred_scroll = (
+            self._scroll.horizontalScrollBar().value(),
+            self._scroll.verticalScrollBar().value(),
+        )
 
         pixmap = self._composite()
         if self._zoom != 1.0:
@@ -277,10 +280,16 @@ class InstrumentCanvas(QWidget):
             )
         self._surface.set_pixmap(pixmap)
 
-        # Restore only when zoom/size didn't change (i.e. the scroll area range
-        # is the same). If range shrank the setValue call clamps gracefully.
-        h_bar.setValue(saved_h)
-        v_bar.setValue(saved_v)
+        # Restore immediately (handles sync resets) and also after Qt settles
+        # (handles async layout events queued by the widget resize).
+        self._apply_deferred_scroll()
+        QTimer.singleShot(0, self._apply_deferred_scroll)
+
+    def _apply_deferred_scroll(self) -> None:
+        if self._deferred_scroll is not None:
+            h, v = self._deferred_scroll
+            self._scroll.horizontalScrollBar().setValue(h)
+            self._scroll.verticalScrollBar().setValue(v)
 
     def _composite(self) -> QPixmap:
         w, h = self._data.get("size", [310, 310])
