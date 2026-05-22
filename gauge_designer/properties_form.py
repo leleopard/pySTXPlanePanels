@@ -18,7 +18,7 @@ from pathlib import Path
 import gauge_core.convert as _convert_reg  # noqa: F401 — registers convert functions
 import gauge_core.component as _component_reg  # noqa: F401
 from gauge_core.registry import known_converts
-from gauge_designer.ui_utils import flip_y
+from gauge_designer.ui_utils import flip_y, is_y_down
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
@@ -461,7 +461,8 @@ class PropertiesForm(QWidget):
         self._vp_x = _sb(0, 4096); self._vp_y = _sb(0, 4096)
         for w in (self._vp_x, self._vp_y):
             w.valueChanged.connect(self._emit)
-        self._vp_sec.row_pair("X  /  Y", self._vp_x, self._vp_y)
+        y_label = "X  /  Y top" if is_y_down() else "X  /  Y bottom"
+        self._vp_sec.row_pair(y_label, self._vp_x, self._vp_y)
 
         self._vp_w = _sb(0, 4096); self._vp_h = _sb(0, 4096)
         for w in (self._vp_w, self._vp_h):
@@ -591,8 +592,12 @@ class PropertiesForm(QWidget):
         vp = comp.get("viewport")
         self._vp_sec.set_active(vp is not None)
         if vp:
-            self._vp_x.setValue(int(vp[0])); self._vp_y.setValue(int(vp[1]))
-            self._vp_w.setValue(int(vp[2])); self._vp_h.setValue(int(vp[3]))
+            self._vp_x.setValue(int(vp[0]))
+            self._vp_w.setValue(int(vp[2]))
+            self._vp_h.setValue(int(vp[3]))
+            # vp[1] is the bottom edge (y-up YAML).  In y-down mode display the top edge.
+            vy_display = (self._ref_height - int(vp[1]) - int(vp[3])) if is_y_down() else int(vp[1])
+            self._vp_y.setValue(vy_display)
         else:
             self._vp_x.setValue(0); self._vp_y.setValue(0)
             self._vp_w.setValue(0); self._vp_h.setValue(0)
@@ -685,10 +690,11 @@ class PropertiesForm(QWidget):
                 data["scroll"] = scroll
 
         if self._vp_sec.active:
-            data["viewport"] = [
-                self._vp_x.value(), self._vp_y.value(),
-                self._vp_w.value(), self._vp_h.value(),
-            ]
+            vh = self._vp_h.value()
+            vy_display = self._vp_y.value()
+            # Convert display Y back to y-up bottom edge for the YAML.
+            vy_yaml = (self._ref_height - vy_display - vh) if is_y_down() else vy_display
+            data["viewport"] = [self._vp_x.value(), vy_yaml, self._vp_w.value(), vh]
 
         if self._vis_sec.active:
             data["visibility"] = {
