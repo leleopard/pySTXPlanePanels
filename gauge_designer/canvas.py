@@ -356,44 +356,69 @@ class InstrumentCanvas(QWidget):
         atlas = self._load_atlas(comp.get("texture", ""))
         frame_w = int(comp.get("frame_width", 100))
         frame_h = int(comp.get("frame_height", 100))
+        stride_x = int(comp.get("stride_x", frame_w))
+        stride_y = int(comp.get("stride_y", frame_h))
+        columns  = int(comp.get("columns", 1))
+        total    = columns * int(comp.get("rows", 1))
+
+        # Use the table's first output as the initial frame (matches runtime at min value).
+        anim  = comp.get("animation", {})
+        table = anim.get("table", [])
+        frame = float(table[0][1]) if table else 0.0
+        int_frame = max(0, min(total - 1, int(frame)))
+        col = int_frame % columns
+        row = int_frame // columns
+        crop_x = col * stride_x
+        crop_y = row * stride_y
 
         pos = comp.get("position", [canvas_w // 2, canvas_h // 2])
         pos_x, pos_y = float(pos[0]), float(pos[1])
 
-        # Frame 0 center aligns with position (matches runtime _set_frame at frame 0).
-        # Atlas pixel (0,0) → PIL coords: (pos_x − frame_w/2, canvas_h − pos_y − frame_h/2)
+        # The active frame's centre always aligns with position, regardless of which
+        # frame is shown.  The canvas paste position is therefore always the same.
         f_left = int(round(pos_x - frame_w / 2))
         f_top  = int(round(canvas_h - pos_y - frame_h / 2))
 
         rect = self._viewport_rect_pil(comp, canvas_h)
         if rect is not None:
-            # Viewport is an independent scissor window — clip frame 0 to it.
             vx, vy, vw, vh = rect
             ix1, iy1 = max(f_left, vx), max(f_top, vy)
             ix2, iy2 = min(f_left + frame_w, vx + vw), min(f_top + frame_h, vy + vh)
             if ix2 > ix1 and iy2 > iy1:
-                visible = atlas.crop((ix1 - f_left, iy1 - f_top, ix2 - f_left, iy2 - f_top))
+                ax1 = crop_x + (ix1 - f_left)
+                ay1 = crop_y + (iy1 - f_top)
+                visible = atlas.crop((ax1, ay1, ax1 + (ix2 - ix1), ay1 + (iy2 - iy1)))
                 composite.paste(visible, (ix1, iy1), visible)
         else:
-            frame0 = atlas.crop((0, 0, min(frame_w, atlas.width), min(frame_h, atlas.height)))
-            composite.paste(frame0, (f_left, f_top), frame0)
+            frame_img = atlas.crop((crop_x, crop_y,
+                                    min(crop_x + frame_w, atlas.width),
+                                    min(crop_y + frame_h, atlas.height)))
+            composite.paste(frame_img, (f_left, f_top), frame_img)
 
     def _render_scrolltape(self, comp: dict, composite: Image.Image,
                            canvas_w: int, canvas_h: int) -> None:
         atlas = self._load_atlas(comp.get("texture", ""))
-        axis = comp.get("scroll_axis", "y")
+        axis  = comp.get("scroll_axis", "y")
 
         pos = comp.get("position", [canvas_w // 2, canvas_h // 2])
         pos_x, pos_y = float(pos[0]), float(pos[1])
 
-        # At offset 0, texture pixel 0 aligns with position (matches runtime _scroll_to).
-        # y-axis: texture top at pos_y; horizontally centred at pos_x.
-        # x-axis: texture left at pos_x; vertically centred at pos_y.
+        # Use the table's first output as the initial scroll offset (matches runtime
+        # at the minimum input value, so the preview digit agrees with the test harness
+        # when its spinbox is at the table minimum).
+        scroll    = comp.get("scroll", {})
+        table     = scroll.get("table", [])
+        offset_px = float(table[0][1]) if table else 0.0
+
+        # Derive atlas top-left in PIL (y-down) coords.
+        # Runtime: at offset O, row O (or column O) is centred at position.
+        #   y-axis: row 0 is at Arcade y = pos_y + O  → PIL y = canvas_h - pos_y - O
+        #   x-axis: col 0 is at Arcade x = pos_x - O  → PIL x = pos_x - O
         if axis == "y":
             t_left = int(round(pos_x - atlas.width / 2))
-            t_top  = int(round(canvas_h - pos_y))
+            t_top  = int(round(canvas_h - pos_y - offset_px))
         else:
-            t_left = int(round(pos_x))
+            t_left = int(round(pos_x - offset_px))
             t_top  = int(round(canvas_h - pos_y - atlas.height / 2))
 
         rect = self._viewport_rect_pil(comp, canvas_h)
