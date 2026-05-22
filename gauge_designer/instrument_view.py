@@ -534,10 +534,19 @@ class InstrumentView(QWidget):
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
                 self._add_tree_items(item, entry)
             elif entry.is_file() and entry.suffix.lower() in (".yaml", ".yml"):
-                item = QTreeWidgetItem(parent, [entry.stem])
+                label = entry.stem
+                try:
+                    with entry.open(encoding="utf-8") as fh:
+                        data = yaml.safe_load(fh)
+                    if isinstance(data, dict) and isinstance(data.get("name"), str) and data["name"]:
+                        label = data["name"]
+                except Exception:
+                    pass
+                item = QTreeWidgetItem(parent, [label])
                 item.setIcon(0, self._file_icon)
                 item.setData(0, _ROLE_PATH, str(entry))
                 item.setData(0, _ROLE_TYPE, "file")
+                item.setToolTip(0, entry.stem)
 
     def _on_tree_activated(self, item: QTreeWidgetItem, _col: int) -> None:
         if item.data(0, _ROLE_TYPE) == "file":
