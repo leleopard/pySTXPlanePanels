@@ -90,6 +90,17 @@ def return_alt_hundreds(value: float, _get: GetData) -> float:
     return float(int(value / 100))
 
 
+# -- Digit-drum helpers --------------------------------------------------
+
+def return_units_decimal(value: float, _get: GetData) -> float:
+    """Ones digit plus fractional part (value mod 10).
+
+    Drives smoothly-scrolling digit drums: input 1234.7 → 4.7 so the drum
+    sits 70 % of the way between the '4' and '5' frames.
+    """
+    return value % 10.0
+
+
 # -- Predicates -----------------------------------------------------------
 # Predicates return a bool. Used by visibility transforms and
 # (potentially) for state-dependent component swapping.
@@ -128,6 +139,9 @@ def convert_lbs_to_gallons(value: float, _get: GetData) -> float:
     """Convert fuel weight in lbs to US gallons (avgas ≈ 6 lbs/gal)."""
     return value / 6.0
 
+def convert_kgs_to_gallons_avgas(value: float, _get: GetData) -> float:
+    """Convert fuel weight in lbs to US gallons avgas."""
+    return value / 2.72
 
 def convert_suction(value: float, _get: GetData) -> float:
     """Scale vacuum suction reading (matches original pyXPPanels convertSuction)."""
@@ -168,8 +182,10 @@ for _name, _func in {
     "true_if_over_1": true_if_over_1,
     "true_if_over_2": true_if_over_2,
     "convert_lbs_to_gallons": convert_lbs_to_gallons,
+    "convert_kgs_to_gallons_avgas": convert_kgs_to_gallons_avgas,
     "convert_suction": convert_suction,
     "nav_gsflg_visible": nav_gsflg_visible,
+    "return_units_decimal": return_units_decimal,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
