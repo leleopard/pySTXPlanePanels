@@ -660,7 +660,27 @@ class InstrumentView(QWidget):
     def _on_name_changed(self):
         name = self._name_edit.text().strip()
         self._name_header.setText(name)
+        self._update_tree_label(name)
         self.changed.emit()
+
+    def _update_tree_label(self, name: str) -> None:
+        """Update the tree item label for the currently loaded file."""
+        if not self._loaded_path:
+            return
+
+        def search(parent: QTreeWidgetItem) -> bool:
+            for i in range(parent.childCount()):
+                item = parent.child(i)
+                if item.data(0, _ROLE_TYPE) == "file":
+                    item_path = str(Path(item.data(0, _ROLE_PATH)).resolve())
+                    if item_path == self._loaded_path:
+                        item.setText(0, name or item.toolTip(0))
+                        return True
+                if search(item):
+                    return True
+            return False
+
+        search(self._tree.invisibleRootItem())
 
     def _on_size_changed(self):
         self._form.set_ref_height(self._gauge_h.value())
