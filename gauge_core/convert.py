@@ -101,6 +101,14 @@ def return_units_decimal(value: float, _get: GetData) -> float:
     return value % 10.0
 
 
+def return_tens_digit(value: float, _get: GetData) -> float:
+    """Tens digit (0–9) as a whole number.
+
+    Input 1234.7 → 3.  Used to index a static tens-digit drum.
+    """
+    return float((int(value) // 10) % 10)
+
+
 # -- Predicates -----------------------------------------------------------
 # Predicates return a bool. Used by visibility transforms and
 # (potentially) for state-dependent component swapping.
@@ -186,6 +194,7 @@ for _name, _func in {
     "convert_suction": convert_suction,
     "nav_gsflg_visible": nav_gsflg_visible,
     "return_units_decimal": return_units_decimal,
+    "return_tens_digit": return_tens_digit,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
