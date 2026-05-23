@@ -441,8 +441,12 @@ class InstrumentCanvas(QWidget):
         pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
         cx_p, cy_p = int(pos[0]), canvas_h - int(pos[1])
         hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
-        color = _rgba(comp.get("color"))
-        draw.rectangle([cx_p - hw, cy_p - hh, cx_p + hw, cy_p + hh], fill=color)
+        bbox = [cx_p - hw, cy_p - hh, cx_p + hw, cy_p + hh]
+        draw.rectangle(bbox, fill=_rgba(comp.get("color")))
+        oc = comp.get("outline_color")
+        if oc is not None:
+            ow = max(1, int(round(float(comp.get("outline_width", 1.0)))))
+            draw.rectangle(bbox, outline=_rgba(oc), width=ow)
 
     def _render_polygon(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pts_raw = comp.get("points", [])
@@ -452,6 +456,10 @@ class InstrumentCanvas(QWidget):
         color = _rgba(comp.get("color"))
         if comp.get("filled", True):
             draw.polygon(pts, fill=color)
+            oc = comp.get("outline_color")
+            if oc is not None:
+                ow = max(1, int(round(float(comp.get("outline_width", 1.0)))))
+                draw.polygon(pts, outline=_rgba(oc), width=ow)
         else:
             width = max(1, int(round(float(comp.get("width", 1.0)))))
             draw.line(pts + [pts[0]], fill=color, width=width)

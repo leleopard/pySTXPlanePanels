@@ -513,7 +513,25 @@ class PropertiesForm(QWidget):
 
         self._frt_color = _ColorButton()
         self._frt_color.color_changed.connect(self._emit)
-        self._frt_sec.row("Color", self._frt_color)
+        self._frt_sec.row("Fill color", self._frt_color)
+
+        self._frt_outline_chk = QCheckBox("Outline")
+        self._frt_outline_chk.toggled.connect(self._on_frt_outline_toggled)
+        self._frt_outline_chk.toggled.connect(self._emit)
+        self._frt_sec.row_widget(self._frt_outline_chk)
+
+        self._frt_outline_color = _ColorButton()
+        self._frt_outline_color.set_rgba((255, 255, 255, 255))
+        self._frt_outline_color.setEnabled(False)
+        self._frt_outline_color.color_changed.connect(self._emit)
+        self._frt_sec.row("Outline color", self._frt_outline_color)
+
+        self._frt_outline_width = QDoubleSpinBox()
+        self._frt_outline_width.setRange(0.5, 50.0); self._frt_outline_width.setDecimals(1)
+        self._frt_outline_width.setValue(1.0)
+        self._frt_outline_width.setEnabled(False)
+        self._frt_outline_width.valueChanged.connect(self._emit)
+        self._frt_sec.row("Outline width", self._frt_outline_width)
 
         self._vbox.addWidget(self._frt_sec)
 
@@ -527,7 +545,7 @@ class PropertiesForm(QWidget):
 
         self._poly_color = _ColorButton()
         self._poly_color.color_changed.connect(self._emit)
-        self._poly_sec.row("Color", self._poly_color)
+        self._poly_sec.row("Fill color", self._poly_color)
 
         self._poly_filled = QCheckBox("Filled")
         self._poly_filled.setChecked(True)
@@ -535,12 +553,32 @@ class PropertiesForm(QWidget):
         self._poly_filled.toggled.connect(self._emit)
         self._poly_sec.row_widget(self._poly_filled)
 
+        # Unfilled-only: outline width (primary color is the outline color)
         self._poly_width = QDoubleSpinBox()
         self._poly_width.setRange(0.5, 50.0); self._poly_width.setDecimals(1)
         self._poly_width.setValue(1.0)
-        self._poly_width.setEnabled(False)
+        self._poly_width.setEnabled(False)  # shown only when not filled
         self._poly_width.valueChanged.connect(self._emit)
         self._poly_sec.row("Outline width", self._poly_width)
+
+        # Filled + outline overlay
+        self._poly_outline_chk = QCheckBox("Add outline")
+        self._poly_outline_chk.toggled.connect(self._on_poly_outline_toggled)
+        self._poly_outline_chk.toggled.connect(self._emit)
+        self._poly_sec.row_widget(self._poly_outline_chk)
+
+        self._poly_outline_color = _ColorButton()
+        self._poly_outline_color.set_rgba((255, 255, 255, 255))
+        self._poly_outline_color.setEnabled(False)
+        self._poly_outline_color.color_changed.connect(self._emit)
+        self._poly_sec.row("Outline color", self._poly_outline_color)
+
+        self._poly_outline_width = QDoubleSpinBox()
+        self._poly_outline_width.setRange(0.5, 50.0); self._poly_outline_width.setDecimals(1)
+        self._poly_outline_width.setValue(1.0)
+        self._poly_outline_width.setEnabled(False)
+        self._poly_outline_width.valueChanged.connect(self._emit)
+        self._poly_sec.row("Outline width ", self._poly_outline_width)
 
         self._vbox.addWidget(self._poly_sec)
 
@@ -676,6 +714,7 @@ class PropertiesForm(QWidget):
             "points", "filled",
             # shared across vector types
             "color", "width",
+            "outline_color", "outline_width",
             # shared across all
             "viewport", "visibility",
         }
@@ -745,6 +784,14 @@ class PropertiesForm(QWidget):
         sz = comp.get("size", [100, 100])
         self._frt_w.setValue(int(sz[0])); self._frt_h.setValue(int(sz[1]))
         self._frt_color.set_rgba(comp.get("color"))
+        frt_oc = comp.get("outline_color")
+        self._frt_outline_chk.blockSignals(True)
+        self._frt_outline_chk.setChecked(frt_oc is not None)
+        self._frt_outline_chk.blockSignals(False)
+        self._frt_outline_color.setEnabled(frt_oc is not None)
+        self._frt_outline_color.set_rgba(frt_oc if frt_oc is not None else (255, 255, 255, 255))
+        self._frt_outline_width.setEnabled(frt_oc is not None)
+        self._frt_outline_width.setValue(float(comp.get("outline_width", 1.0)))
 
         # Polygon
         pts = comp.get("points", [])
@@ -756,6 +803,18 @@ class PropertiesForm(QWidget):
         self._poly_filled.blockSignals(False)
         self._poly_width.setEnabled(not filled)
         self._poly_width.setValue(float(comp.get("width", 1.0)))
+        poly_oc = comp.get("outline_color")
+        has_poly_outline = poly_oc is not None and filled
+        self._poly_outline_chk.blockSignals(True)
+        self._poly_outline_chk.setChecked(has_poly_outline)
+        self._poly_outline_chk.blockSignals(False)
+        self._poly_outline_chk.setVisible(filled)
+        self._poly_outline_color.setEnabled(has_poly_outline)
+        self._poly_outline_color.setVisible(filled)
+        self._poly_outline_color.set_rgba(poly_oc if poly_oc is not None else (255, 255, 255, 255))
+        self._poly_outline_width.setEnabled(has_poly_outline)
+        self._poly_outline_width.setVisible(filled)
+        self._poly_outline_width.setValue(float(comp.get("outline_width", 1.0)))
 
         # ImagePanel rotation
         rot = comp.get("rotation")
@@ -868,6 +927,9 @@ class PropertiesForm(QWidget):
         elif ct == "FilledRect":
             data["size"]  = [self._frt_w.value(), self._frt_h.value()]
             data["color"] = list(self._frt_color.get_rgba())
+            if self._frt_outline_chk.isChecked():
+                data["outline_color"] = list(self._frt_outline_color.get_rgba())
+                data["outline_width"] = self._frt_outline_width.value()
 
         elif ct == "Polygon":
             data["points"] = [[row[0], row[1]] for row in self._poly_pts.get_data()]
@@ -875,6 +937,9 @@ class PropertiesForm(QWidget):
             if not self._poly_filled.isChecked():
                 data["filled"] = False
                 data["width"]  = self._poly_width.value()
+            elif self._poly_outline_chk.isChecked():
+                data["outline_color"] = list(self._poly_outline_color.get_rgba())
+                data["outline_width"] = self._poly_outline_width.value()
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
@@ -990,9 +1055,13 @@ class PropertiesForm(QWidget):
         self._arc_tilt.setValue(0.0); self._arc_segs.setValue(64)
         self._frt_w.setValue(100); self._frt_h.setValue(100)
         self._frt_color.set_rgba(None)
+        self._frt_outline_chk.setChecked(False)
+        self._frt_outline_color.set_rgba(None); self._frt_outline_width.setValue(1.0)
         self._poly_pts.load([])
         self._poly_color.set_rgba(None)
         self._poly_filled.setChecked(True); self._poly_width.setValue(1.0)
+        self._poly_outline_chk.setChecked(False)
+        self._poly_outline_color.set_rgba(None); self._poly_outline_width.setValue(1.0)
         self._extra = {}
         self._loading = False
 
@@ -1038,8 +1107,24 @@ class PropertiesForm(QWidget):
         # Viewport clip: image types only (vector primitives don't have viewport)
         self._vp_sec.setVisible(is_img)
 
+    def _on_frt_outline_toggled(self, on: bool):
+        self._frt_outline_color.setEnabled(on)
+        self._frt_outline_width.setEnabled(on)
+
     def _on_poly_filled_toggled(self, filled: bool):
         self._poly_width.setEnabled(not filled)
+        # Outline overlay only makes sense when filled; unfilled IS an outline
+        self._poly_outline_chk.setVisible(filled)
+        self._poly_outline_color.setVisible(filled)
+        self._poly_outline_width.setVisible(filled)
+        if not filled:
+            self._poly_outline_chk.blockSignals(True)
+            self._poly_outline_chk.setChecked(False)
+            self._poly_outline_chk.blockSignals(False)
+
+    def _on_poly_outline_toggled(self, on: bool):
+        self._poly_outline_color.setEnabled(on)
+        self._poly_outline_width.setEnabled(on)
 
     def _on_resize_toggled(self, on: bool):
         self._prop_chk.setEnabled(on)

@@ -197,7 +197,7 @@ class Arc(_VecBase):
 # ---------------------------------------------------------------------------
 
 class FilledRect(_VecBase):
-    """Solid filled rectangle, positioned by its centre."""
+    """Solid filled rectangle, positioned by its centre, with optional outline."""
 
     def __init__(
         self,
@@ -205,16 +205,21 @@ class FilledRect(_VecBase):
         position: tuple[float, float],
         size: tuple[float, float],
         color: tuple[int, int, int, int],
+        outline_color: tuple[int, int, int, int] | None = None,
+        outline_width: float = 1.0,
     ) -> None:
         self.name = name
         self._cx, self._cy = float(position[0]), float(position[1])
         self._w, self._h = float(size[0]), float(size[1])
         self._color = color
+        self._outline_color = outline_color
+        self._outline_width = float(outline_width)
         self._init_visibility()
 
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
         self._w *= scale; self._h *= scale
+        self._outline_width *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._cx += dx; self._cy += dy
@@ -222,10 +227,10 @@ class FilledRect(_VecBase):
     def draw(self) -> None:
         if not self._visible:
             return
-        arcade.draw_rect_filled(
-            arcade.XYWH(self._cx, self._cy, self._w, self._h),
-            self._color,
-        )
+        rect = arcade.XYWH(self._cx, self._cy, self._w, self._h)
+        arcade.draw_rect_filled(rect, self._color)
+        if self._outline_color is not None:
+            arcade.draw_rect_outline(rect, self._outline_color, self._outline_width)
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +238,13 @@ class FilledRect(_VecBase):
 # ---------------------------------------------------------------------------
 
 class Polygon(_VecBase):
-    """Filled or outlined polygon defined by an explicit point list."""
+    """Filled or outlined polygon defined by an explicit point list.
+
+    When ``filled=True`` an optional outline can be drawn on top of the fill
+    via ``outline_color`` / ``outline_width``.  When ``filled=False`` the
+    primary ``color`` and ``width`` define the outline; ``outline_*`` are
+    ignored (the outline IS the drawing in that case).
+    """
 
     def __init__(
         self,
@@ -242,6 +253,8 @@ class Polygon(_VecBase):
         color: tuple[int, int, int, int],
         filled: bool = True,
         width: float = 1.0,
+        outline_color: tuple[int, int, int, int] | None = None,
+        outline_width: float = 1.0,
     ) -> None:
         self.name = name
         self._points: list[tuple[float, float]] = [
@@ -250,11 +263,14 @@ class Polygon(_VecBase):
         self._color = color
         self._filled = filled
         self._width = float(width)
+        self._outline_color = outline_color
+        self._outline_width = float(outline_width)
         self._init_visibility()
 
     def apply_scale(self, scale: float) -> None:
         self._points = [(x * scale, y * scale) for x, y in self._points]
         self._width *= scale
+        self._outline_width *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._points = [(x + dx, y + dy) for x, y in self._points]
@@ -264,6 +280,8 @@ class Polygon(_VecBase):
             return
         if self._filled:
             arcade.draw_polygon_filled(self._points, self._color)
+            if self._outline_color is not None:
+                arcade.draw_polygon_outline(self._points, self._outline_color, self._outline_width)
         else:
             arcade.draw_polygon_outline(self._points, self._color, self._width)
 
@@ -305,11 +323,14 @@ def _arc_factory(comp: dict, base_dir: Path, container_size=None) -> Arc:
 
 
 def _filledrect_factory(comp: dict, base_dir: Path, container_size=None) -> FilledRect:
+    oc = comp.get("outline_color")
     rect = FilledRect(
         name=comp["name"],
         position=tuple(comp["position"]),
         size=tuple(comp["size"]),
         color=_as_color(comp.get("color")),
+        outline_color=_as_color(oc) if oc is not None else None,
+        outline_width=float(comp.get("outline_width", 1.0)),
     )
     if "visibility" in comp:
         v = comp["visibility"]
@@ -318,12 +339,15 @@ def _filledrect_factory(comp: dict, base_dir: Path, container_size=None) -> Fill
 
 
 def _polygon_factory(comp: dict, base_dir: Path, container_size=None) -> Polygon:
+    oc = comp.get("outline_color")
     poly = Polygon(
         name=comp["name"],
         points=[tuple(p) for p in comp["points"]],
         color=_as_color(comp.get("color")),
         filled=bool(comp.get("filled", True)),
         width=float(comp.get("width", 1.0)),
+        outline_color=_as_color(oc) if oc is not None else None,
+        outline_width=float(comp.get("outline_width", 1.0)),
     )
     if "visibility" in comp:
         v = comp["visibility"]
