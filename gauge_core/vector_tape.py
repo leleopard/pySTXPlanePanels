@@ -247,11 +247,14 @@ class VectorTape:
     def _draw_labels_y(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
             return
+        # offset is measured from the spine outward so the user can set it to 0
+        # and have labels sit flush against the spine, regardless of viewport width.
+        spine_x = vx if self._tick_side == "left" else vx + vw
         side = self._label_side if self._label_side is not None else self._tick_side
         if side == "left":
-            lx, anchor_x = vx - self._label_offset, "right"
+            lx, anchor_x = spine_x - self._label_offset, "right"
         else:
-            lx, anchor_x = vx + vw + self._label_offset, "left"
+            lx, anchor_x = spine_x + self._label_offset, "left"
         half_range = vh / 2 / self._ppu
         v_min = val - half_range - 1
         v_max = val + half_range + 1
@@ -315,11 +318,12 @@ class VectorTape:
     def _draw_labels_x(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
             return
+        spine_y = (vy + vh) if self._tick_side == "top" else vy
         side = self._label_side if self._label_side is not None else self._tick_side
         if side == "top":
-            ly, anchor_y = vy + vh + self._label_offset, "bottom"
+            ly, anchor_y = spine_y + self._label_offset, "bottom"
         else:
-            ly, anchor_y = vy - self._label_offset, "top"
+            ly, anchor_y = spine_y - self._label_offset, "top"
         half_range = vw / 2 / self._ppu
         v_min = val - half_range - 1
         v_max = val + half_range + 1
