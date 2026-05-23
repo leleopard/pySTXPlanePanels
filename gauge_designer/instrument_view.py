@@ -347,10 +347,11 @@ class InstrumentView(QWidget):
         btn_bar.setContentsMargins(2, 2, 2, 2)
         btn_bar.setSpacing(2)
         for icon_name, slot, tip in [
-            ("plus-circle-outline", self._add_component,     "Add component"),
-            ("trash-can-outline",   self._remove_component,  "Remove component"),
-            ("menu-up",             self._move_up,           "Move up"),
-            ("menu-down",           self._move_down,         "Move down"),
+            ("plus-circle-outline",          self._add_component,       "Add component"),
+            ("plus-circle-multiple-outline", self._duplicate_component, "Duplicate selected component"),
+            ("trash-can-outline",            self._remove_component,    "Remove component"),
+            ("menu-up",                      self._move_up,             "Move up"),
+            ("menu-down",                    self._move_down,           "Move down"),
         ]:
             btn = QPushButton()
             btn.setIcon(make_svg_icon(icon_name))
@@ -797,6 +798,29 @@ class InstrumentView(QWidget):
         self._list.addItem(new_comp["name"])
         self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
         self._list.setCurrentRow(len(self._components) - 1)
+        self.changed.emit()
+
+    def _duplicate_component(self):
+        import copy
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        original = self._components[row]
+        # Build a unique name
+        base_name = original.get("name", "component")
+        existing = {c.get("name", "") for c in self._components}
+        candidate = f"{base_name}_copy"
+        suffix = 1
+        while candidate in existing:
+            suffix += 1
+            candidate = f"{base_name}_copy{suffix}"
+        new_comp = copy.deepcopy(original)
+        new_comp["name"] = candidate
+        insert_at = row + 1
+        self._components.insert(insert_at, new_comp)
+        self._list.insertItem(insert_at, new_comp["name"])
+        self._list.item(insert_at).setData(Qt.UserRole, True)
+        self._list.setCurrentRow(insert_at)
         self.changed.emit()
 
     def _remove_component(self):
