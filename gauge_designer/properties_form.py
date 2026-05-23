@@ -620,7 +620,7 @@ class PropertiesForm(QWidget):
         self._vt_label_interval.setRange(0.0, 9999.0); self._vt_label_interval.setDecimals(1)
         self._vt_label_interval.setSpecialValueText("(none)")
         self._vt_label_interval.valueChanged.connect(self._emit)
-        self._vt_sec.row("Label interval", self._vt_label_interval)
+        self._vt_sec.row("Label interval - dataref unit", self._vt_label_interval)
 
         self._vt_label_offset = QDoubleSpinBox()
         self._vt_label_offset.setRange(0.0, 200.0); self._vt_label_offset.setDecimals(1)
