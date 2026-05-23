@@ -169,7 +169,7 @@ High-level procedural instrument components for jetliner-style glass panels (B73
 
 | ID | Story | Status |
 |----|-------|--------|
-| GLASS-01 | As a user, a `VectorTape` component draws a scrolling tape (airspeed or altitude) with configurable tick intervals, label intervals, label format string, colored speed/altitude bands, and a scissor viewport — driven by a dataref + calibration table. | 🔲 |
+| GLASS-01 | As a user, a `VectorTape` component draws a scrolling tape (airspeed or altitude) with configurable tick intervals, label intervals, label format string, colored speed/altitude bands, and a scissor viewport — driven by a dataref + calibration table. | ✅ |
 | GLASS-02 | As a user, a `TapeBug` component overlays a filled triangle marker on a `VectorTape` viewport at a position driven by a separate dataref (e.g. selected speed bug, selected altitude). | 🔲 |
 | GLASS-03 | As a user, a `HeadingTape` component draws a horizontal scrolling compass tape with configurable tick/label intervals and a center lubber line — driven by a heading dataref. | 🔲 |
 | GLASS-04 | As a user, an `AttitudeIndicator` component renders a full AI: sky/ground background, pitch ladder (lines + labels CPU-rotated by bank angle), bank angle arc with tick marks, and roll pointer — all clipped to a configurable rectangular viewport. | 🔲 |
@@ -184,7 +184,7 @@ Full procedural Primary Flight Display modelled on the Boeing 737-800 NG layout 
 
 | ID | Story | Status |
 |----|-------|--------|
-| B737-01 | As a user, `instruments/B737/b737_airspeed_tape.yaml` renders a working vector airspeed tape with VNO/VFE/stall colored bands and selected-speed bug. | 🔲 |
+| B737-01 | As a user, `instruments/B737/b737_airspeed_tape.yaml` renders a working vector airspeed tape with VNO/VFE/stall colored bands and selected-speed bug. | ⚠️ YAML + runtime done; speed bug (TapeBug, GLASS-02) not yet implemented. |
 | B737-02 | As a user, `instruments/B737/b737_altitude_tape.yaml` renders a working vector altitude tape with 20 ft minor / 100 ft major ticks and selected-altitude bug. | 🔲 |
 | B737-03 | As a user, `instruments/B737/b737_heading_tape.yaml` renders a working horizontal heading tape with 5° minor / 10° major ticks and heading bug. | 🔲 |
 | B737-04 | As a user, `instruments/B737/b737_attitude_indicator.yaml` renders a working AI with pitch ladder, bank scale, and roll pointer. | 🔲 |
@@ -257,3 +257,4 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-05-17* — fix(panel-designer): layout canvas colors now follow the instrument (file-path hash) rather than the cell position, so reordering instruments inside a grid produces a visually obvious change. Also defensive .get() for grid instruments list in tree rebuild. Marks DESIGN-11 ✅.
 - *2026-05-23* — feat(designer): instrument file tree shows YAML `name` field instead of filename stem; label updates live when the Name field is edited; filename shown as tooltip. Added `_update_tree_label()` helper in `InstrumentView`.
 - *2026-05-23* — feat(core): vector primitive components — `Line`, `Arc`, `FilledRect`, `Polygon`. All registered in the component registry via `gauge_core/vector_primitives.py`; imported for side-effects in `loader.py`. All four support `visibility` blocks. Added EPIC 9 (vector primitives), EPIC 10 (glass cockpit instrument types), EPIC 11 (B737 PFD panel) to USER_STORIES.md. Marks VEC-01..05 ✅.
+- *2026-05-23* — feat(core+designer): `VectorTape` procedural scrolling tape component. `gauge_core/vector_tape.py` provides the runtime: scissor-clipped tick marks (configurable intervals / lengths / widths / per-level colour override), coloured bands, and unscissored labels — for both vertical (y) and horizontal (x) axes. Designer canvas shows a static tick-mark preview with band colour strips and viewport border. Designer properties form exposes axis, pixels-per-unit, tick side, tick colour, and scroll dataref/table; ticks/labels/bands round-trip transparently via `_extra`. `instruments/B737/b737_airspeed_tape.yaml` created as reference instrument. Marks GLASS-01 ✅, B737-01 ⚠️.

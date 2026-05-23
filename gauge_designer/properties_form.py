@@ -97,7 +97,7 @@ def _build_func_lists() -> tuple[list[str], list[str]]:
 _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
-               "Line", "Arc", "FilledRect", "Polygon"]
+               "Line", "Arc", "FilledRect", "Polygon", "VectorTape"]
 
 
 def _coerce_num(text: str):
@@ -277,6 +277,7 @@ class PropertiesForm(QWidget):
         self._mk_arc_sec()
         self._mk_filledrect_sec()
         self._mk_polygon_sec()
+        self._mk_vectortape_sec()
         self._mk_rotation()
         self._mk_translation()
         self._mk_animation()
@@ -582,6 +583,37 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._poly_sec)
 
+    def _mk_vectortape_sec(self):
+        self._vt_sec = _Section("Vector Tape")
+        self._vt_sec.setVisible(False)
+
+        self._vt_axis = _NoScrollComboBox()
+        self._vt_axis.addItems(["y  (vertical)", "x  (horizontal)"])
+        self._vt_axis.currentTextChanged.connect(self._emit)
+        self._vt_sec.row("Scroll axis", self._vt_axis)
+
+        self._vt_ppu = QDoubleSpinBox()
+        self._vt_ppu.setRange(0.1, 100.0); self._vt_ppu.setDecimals(2)
+        self._vt_ppu.setValue(5.0)
+        self._vt_ppu.valueChanged.connect(self._emit)
+        self._vt_sec.row("Pixels / unit", self._vt_ppu)
+
+        self._vt_tick_side = _NoScrollComboBox()
+        self._vt_tick_side.addItems(["left", "right", "top", "bottom"])
+        self._vt_tick_side.currentTextChanged.connect(self._emit)
+        self._vt_sec.row("Tick side", self._vt_tick_side)
+
+        self._vt_tick_color = _ColorButton()
+        self._vt_tick_color.color_changed.connect(self._emit)
+        self._vt_sec.row("Tick color", self._vt_tick_color)
+
+        hint = QLabel("Ticks, labels and bands are preserved as-is from YAML.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #999; font-size: 10px;")
+        self._vt_sec.row_widget(hint)
+
+        self._vbox.addWidget(self._vt_sec)
+
     def _mk_rotation(self):
         self._rot_sec = _Section("Rotation", optional=True)
         self._rot_sec.toggled.connect(self._emit)
@@ -715,6 +747,8 @@ class PropertiesForm(QWidget):
             # shared across vector types
             "color", "width",
             "outline_color", "outline_width",
+            # VectorTape (ticks/labels/bands are complex nested lists; stored in _extra)
+            "pixels_per_unit", "tick_side", "tick_color",
             # shared across all
             "viewport", "visibility",
         }
@@ -815,6 +849,13 @@ class PropertiesForm(QWidget):
         self._poly_outline_width.setEnabled(has_poly_outline)
         self._poly_outline_width.setVisible(filled)
         self._poly_outline_width.setValue(float(comp.get("outline_width", 1.0)))
+
+        # VectorTape
+        self._vt_axis.setCurrentIndex(0 if str(comp.get("scroll_axis", "y")) == "y" else 1)
+        self._vt_ppu.setValue(float(comp.get("pixels_per_unit", 5.0)))
+        ts = str(comp.get("tick_side", "left"))
+        self._vt_tick_side.setCurrentIndex(max(self._vt_tick_side.findText(ts), 0))
+        self._vt_tick_color.set_rgba(comp.get("tick_color"))
 
         # ImagePanel rotation
         rot = comp.get("rotation")
@@ -1007,6 +1048,20 @@ class PropertiesForm(QWidget):
                     scroll["convert_function"] = cf
                 data["scroll"] = scroll
 
+        elif ct == "VectorTape":
+            data["scroll_axis"] = "y" if self._vt_axis.currentIndex() == 0 else "x"
+            data["pixels_per_unit"] = self._vt_ppu.value()
+            data["tick_side"] = self._vt_tick_side.currentText()
+            data["tick_color"] = list(self._vt_tick_color.get_rgba())
+            anim_dr = self._anim_dr.text().strip()
+            anim_tbl = self._anim_tbl.get_data()
+            if anim_dr or anim_tbl:
+                vt_scroll: dict = {"dataref": anim_dr, "table": anim_tbl}
+                cf = self._anim_fn.currentText()
+                if cf != _NONE:
+                    vt_scroll["convert_function"] = cf
+                data["scroll"] = vt_scroll
+
         if self._vp_sec.active:
             vh = self._vp_h.value()
             vy_display = self._vp_y.value()
@@ -1062,6 +1117,10 @@ class PropertiesForm(QWidget):
         self._poly_filled.setChecked(True); self._poly_width.setValue(1.0)
         self._poly_outline_chk.setChecked(False)
         self._poly_outline_color.set_rgba(None); self._poly_outline_width.setValue(1.0)
+        self._vt_axis.setCurrentIndex(0)
+        self._vt_ppu.setValue(5.0)
+        self._vt_tick_side.setCurrentIndex(0)
+        self._vt_tick_color.set_rgba(None)
         self._extra = {}
         self._loading = False
 
@@ -1080,6 +1139,7 @@ class PropertiesForm(QWidget):
         is_arc  = ct == "Arc"
         is_frt  = ct == "FilledRect"
         is_poly = ct == "Polygon"
+        is_vt   = ct == "VectorTape"
 
         # Position: hide for types that define geometry without a single centre point
         self._pos_sec.setVisible(not is_line and not is_arc and not is_poly)
@@ -1096,16 +1156,19 @@ class PropertiesForm(QWidget):
         self._arc_sec.setVisible(is_arc)
         self._frt_sec.setVisible(is_frt)
         self._poly_sec.setVisible(is_poly)
+        self._vt_sec.setVisible(is_vt)
 
         # Rotation and Translation: ImagePanel only
         self._rot_sec.setVisible(is_ip)
         self._tr_sec.setVisible(is_ip)
 
-        # Animation: SpriteSheet and ScrollingTape
-        self._anim_sec.setVisible(is_ss or is_st)
+        # Animation: SpriteSheet, ScrollingTape, and VectorTape (scroll dataref)
+        self._anim_sec.setVisible(is_ss or is_st or is_vt)
 
-        # Viewport clip: image types only (vector primitives don't have viewport)
-        self._vp_sec.setVisible(is_img)
+        # Viewport clip: image types and VectorTape (always required for tape)
+        self._vp_sec.setVisible(is_img or is_vt)
+        if is_vt:
+            self._vp_sec.set_active(True)
 
     def _on_frt_outline_toggled(self, on: bool):
         self._frt_outline_color.setEnabled(on)

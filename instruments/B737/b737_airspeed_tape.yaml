@@ -1,0 +1,37 @@
+name: B737 Airspeed Tape
+size: [150, 600]
+components:
+  - type: VectorTape
+    name: airspeed_tape
+    position: [75, 300]
+    viewport: [10, 20, 120, 560]
+    scroll_axis: y
+    pixels_per_unit: 5
+    tick_side: right
+    tick_color: [255, 255, 255]
+    ticks:
+      - interval: 10
+        length: 12
+        width: 2
+      - interval: 20
+        length: 22
+        width: 3
+    labels:
+      interval: 20
+      font_size: 18
+      color: [255, 255, 255]
+      format: "{:.0f}"
+      offset: 8
+    bands:
+      - range: [0, 67]
+        color: [200, 0, 0, 180]
+        width: 8
+      - range: [67, 209]
+        color: [0, 180, 0, 180]
+        width: 8
+      - range: [209, 250]
+        color: [255, 165, 0, 180]
+        width: 8
+    scroll:
+      dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+      table: [[0, 0], [400, 400]]

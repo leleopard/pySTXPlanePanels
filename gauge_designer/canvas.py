@@ -283,6 +283,12 @@ class InstrumentCanvas(QWidget):
                         if (min(xs) - pad <= cx <= max(xs) + pad and
                                 min(ys) - pad <= cy <= max(ys) + pad):
                             result.append(comp.get("name"))
+                elif ctype == "VectorTape":
+                    rect = self._viewport_rect_pil(comp, h)
+                    if rect is not None:
+                        rx, ry, rw, rh = rect
+                        if rx <= cx < rx + rw and ry <= cy < ry + rh:
+                            result.append(comp.get("name"))
             except Exception:
                 continue
         return result
@@ -354,6 +360,8 @@ class InstrumentCanvas(QWidget):
                     self._render_filledrect(comp, draw, h)
                 elif ctype == "Polygon":
                     self._render_polygon(comp, draw, h)
+                elif ctype == "VectorTape":
+                    self._render_vectortape(comp, composite, draw, w, h)
             except Exception:
                 continue
 
@@ -371,7 +379,7 @@ class InstrumentCanvas(QWidget):
                                        outline=SEL, width=2)
                     except Exception:
                         pass
-                elif ctype in ("SpriteSheet", "ScrollingTape"):
+                elif ctype in ("SpriteSheet", "ScrollingTape", "VectorTape"):
                     rect = self._viewport_rect_pil(comp, h)
                     if rect is not None:
                         rx, ry, rw, rh = rect
@@ -463,6 +471,69 @@ class InstrumentCanvas(QWidget):
         else:
             width = max(1, int(round(float(comp.get("width", 1.0)))))
             draw.line(pts + [pts[0]], fill=color, width=width)
+
+    def _render_vectortape(self, comp: dict, composite: Image.Image,
+                           draw: ImageDraw.ImageDraw, canvas_w: int, canvas_h: int) -> None:
+        vp = comp.get("viewport")
+        if not vp:
+            return
+        vx, vy_bottom, vw, vh = (float(v) for v in vp)
+        py_top = canvas_h - vy_bottom - vh  # PIL y-down
+
+        # Dark tape background
+        bg = [int(vx), int(py_top), int(vx + vw), int(py_top + vh)]
+        draw.rectangle(bg, fill=(15, 15, 35, 220))
+
+        axis = comp.get("scroll_axis", "y")
+        tick_side = comp.get("tick_side", "left")
+        tc = _rgba(comp.get("tick_color"))
+        ppu = float(comp.get("pixels_per_unit", 5.0))
+        ticks = comp.get("ticks", [])
+        t0_interval = float(ticks[0]["interval"]) if ticks else 10.0
+        t0_length = float(ticks[0].get("length", 15)) if ticks else 15.0
+
+        if axis == "y":
+            spine_x = int(vx) if tick_side == "left" else int(vx + vw)
+            tick_dir = 1 if tick_side == "left" else -1
+            # Bands (proportional strips along the spine side)
+            for band in comp.get("bands", []):
+                bc = _rgba(band.get("color"))
+                bw = float(band.get("width", 8))
+                bx = int(vx) if tick_side == "left" else int(vx + vw - bw)
+                draw.rectangle([bx, int(py_top), int(bx + bw), int(py_top + vh)], fill=bc)
+            # Evenly-spaced tick marks for visual indication
+            step_px = max(1, int(t0_interval * ppu))
+            y = int(py_top)
+            while y <= int(py_top + vh):
+                draw.line([(spine_x, y), (spine_x + tick_dir * int(t0_length), y)],
+                          fill=tc, width=2)
+                y += step_px
+            draw.line([(spine_x, int(py_top)), (spine_x, int(py_top + vh))], fill=tc, width=1)
+        else:
+            spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
+            tick_dir = 1 if tick_side != "top" else -1
+            for band in comp.get("bands", []):
+                bc = _rgba(band.get("color"))
+                bh = float(band.get("width", 8))
+                by = int(py_top) if tick_side == "top" else int(py_top + vh - bh)
+                draw.rectangle([int(vx), by, int(vx + vw), int(by + bh)], fill=bc)
+            step_px = max(1, int(t0_interval * ppu))
+            x = int(vx)
+            while x <= int(vx + vw):
+                draw.line([(x, spine_y), (x, spine_y + tick_dir * int(t0_length))],
+                          fill=tc, width=2)
+                x += step_px
+            draw.line([(int(vx), spine_y), (int(vx + vw), spine_y)], fill=tc, width=1)
+
+        # Viewport border
+        draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
+                       outline=(80, 80, 150, 255), width=1)
+
+        # Position marker (where current value sits)
+        pos = comp.get("position", [vx + vw / 2, vy_bottom + vh / 2])
+        mx, my = int(pos[0]), canvas_h - int(pos[1])
+        draw.line([(mx - 8, my), (mx + 8, my)], fill=(255, 200, 0, 255), width=1)
+        draw.line([(mx, my - 8), (mx, my + 8)], fill=(255, 200, 0, 255), width=1)
 
     def _viewport_rect_pil(self, comp: dict, canvas_h: int) -> tuple[int, int, int, int] | None:
         """Return (x, y, w, h) in PIL (y-down) coords for the component's viewport."""

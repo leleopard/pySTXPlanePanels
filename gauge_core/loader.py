@@ -22,6 +22,7 @@ from gauge_core import text_component as _text_component  # noqa: F401
 from gauge_core import sprite_sheet as _sprite_sheet  # noqa: F401
 from gauge_core import scrolling_tape as _scrolling_tape  # noqa: F401
 from gauge_core import vector_primitives as _vector_primitives  # noqa: F401
+from gauge_core import vector_tape as _vector_tape  # noqa: F401
 from gauge_core.registry import get_component_factory, get_convert
 
 
