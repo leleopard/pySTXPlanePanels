@@ -200,10 +200,17 @@ class VectorTape:
             self._draw_ticks_x(vx, vy, vw, vh, val)
         ctx.scissor = None
 
+        win = arcade.get_window()
         if self._axis == "y":
+            # Clip labels to the viewport's vertical band only; let them span
+            # the full window width so they can sit outside the tick viewport.
+            ctx.scissor = (0, int(vy), win.width, int(vh))
             self._draw_labels_y(vx, vy, vw, vh, val)
         else:
+            # Clip labels to the viewport's horizontal band only.
+            ctx.scissor = (int(vx), 0, int(vw), win.height)
             self._draw_labels_x(vx, vy, vw, vh, val)
+        ctx.scissor = None
 
     # -- vertical tape --------------------------------------------------------
 
@@ -264,16 +271,15 @@ class VectorTape:
             txt_kw["font_name"] = self._label_font
         while v <= v_max + self._label_interval * 0.001:
             y = self._cy + (v - val) * self._ppu
-            if vy - 2 <= y <= vy + vh + 2:
-                arcade.draw_text(
-                    self._label_format.format(v),
-                    lx, y,
-                    self._label_color,
-                    font_size=self._label_font_size,
-                    anchor_x=anchor_x,
-                    anchor_y="center",
-                    **txt_kw,
-                )
+            arcade.draw_text(
+                self._label_format.format(v),
+                lx, y,
+                self._label_color,
+                font_size=self._label_font_size,
+                anchor_x=anchor_x,
+                anchor_y="center",
+                **txt_kw,
+            )
             v += self._label_interval
 
     # -- horizontal tape ------------------------------------------------------
@@ -333,16 +339,15 @@ class VectorTape:
             txt_kw["font_name"] = self._label_font
         while v <= v_max + self._label_interval * 0.001:
             x = self._cx + (v - val) * self._ppu
-            if vx - 2 <= x <= vx + vw + 2:
-                arcade.draw_text(
-                    self._label_format.format(v),
-                    x, ly,
-                    self._label_color,
-                    font_size=self._label_font_size,
-                    anchor_x="center",
-                    anchor_y=anchor_y,
-                    **txt_kw,
-                )
+            arcade.draw_text(
+                self._label_format.format(v),
+                x, ly,
+                self._label_color,
+                font_size=self._label_font_size,
+                anchor_x="center",
+                anchor_y=anchor_y,
+                **txt_kw,
+            )
             v += self._label_interval
 
 
