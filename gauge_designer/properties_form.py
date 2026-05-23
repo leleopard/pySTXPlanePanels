@@ -22,17 +22,63 @@ from gauge_designer.ui_utils import flip_y, is_y_down
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
-    QPushButton, QCheckBox, QDialog,
+    QPushButton, QCheckBox, QDialog, QColorDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 
 
 class _NoScrollComboBox(QComboBox):
     """QComboBox that ignores mouse-wheel events to prevent accidental changes."""
     def wheelEvent(self, event):
         event.ignore()
+
+
+class _ColorButton(QPushButton):
+    """Button showing the current RGBA color; opens QColorDialog on click."""
+    color_changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rgba = (255, 255, 255, 255)
+        self.setFixedHeight(24)
+        self.clicked.connect(self._pick)
+        self._refresh()
+
+    def set_rgba(self, raw) -> None:
+        if raw is None:
+            self._rgba = (255, 255, 255, 255)
+        elif len(raw) == 3:
+            self._rgba = (int(raw[0]), int(raw[1]), int(raw[2]), 255)
+        else:
+            self._rgba = tuple(int(v) for v in raw[:4])
+        self._refresh()
+
+    def get_rgba(self) -> tuple:
+        return self._rgba
+
+    def _refresh(self) -> None:
+        r, g, b, a = self._rgba
+        luma = r * 299 + g * 587 + b * 114
+        fg = "#000" if luma > 128000 else "#fff"
+        self.setText(f"  #{r:02X}{g:02X}{b:02X}   α {a}")
+        self.setStyleSheet(
+            f"background-color: rgb({r},{g},{b}); color: {fg};"
+            f"border: 1px solid #888; text-align: left; padding: 2px;"
+        )
+
+    def _pick(self) -> None:
+        r, g, b, a = self._rgba
+        c = QColorDialog.getColor(
+            QColor(r, g, b, a), self, "Pick Color",
+            QColorDialog.ShowAlphaChannel,
+        )
+        if c.isValid():
+            self._rgba = (c.red(), c.green(), c.blue(), c.alpha())
+            self._refresh()
+            self.color_changed.emit()
 
 
 # ── Registry data ─────────────────────────────────────────────────────────────
@@ -50,7 +96,8 @@ def _build_func_lists() -> tuple[list[str], list[str]]:
 
 _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
-_COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text"]
+_COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
+               "Line", "Arc", "FilledRect", "Polygon"]
 
 
 def _coerce_num(text: str):
@@ -226,6 +273,10 @@ class PropertiesForm(QWidget):
         self._mk_texture()
         self._mk_spritesheet()
         self._mk_scrolltape()
+        self._mk_line_sec()
+        self._mk_arc_sec()
+        self._mk_filledrect_sec()
+        self._mk_polygon_sec()
         self._mk_rotation()
         self._mk_translation()
         self._mk_animation()
@@ -264,12 +315,12 @@ class PropertiesForm(QWidget):
         self._vbox.addWidget(s)
 
     def _mk_position(self):
-        s = _Section("Position")
+        self._pos_sec = _Section("Position")
         self._px = _sb(); self._py = _sb()
         for w in (self._px, self._py):
             w.valueChanged.connect(self._emit)
-        s.row_pair("X  /  Y", self._px, self._py)
-        self._vbox.addWidget(s)
+        self._pos_sec.row_pair("X  /  Y", self._px, self._py)
+        self._vbox.addWidget(self._pos_sec)
 
     def _mk_texture(self):
         self._tex_sec = _Section("Texture")
@@ -377,6 +428,121 @@ class PropertiesForm(QWidget):
         self._st_sec.row("Scroll axis", self._st_axis)
 
         self._vbox.addWidget(self._st_sec)
+
+    def _mk_line_sec(self):
+        self._line_sec = _Section("Line")
+        self._line_sec.setVisible(False)
+
+        self._line_x1 = _sb(); self._line_y1 = _sb()
+        for w in (self._line_x1, self._line_y1):
+            w.valueChanged.connect(self._emit)
+        self._line_sec.row_pair("Start X  /  Y", self._line_x1, self._line_y1)
+
+        self._line_x2 = _sb(); self._line_y2 = _sb()
+        for w in (self._line_x2, self._line_y2):
+            w.valueChanged.connect(self._emit)
+        self._line_sec.row_pair("End X  /  Y", self._line_x2, self._line_y2)
+
+        self._line_color = _ColorButton()
+        self._line_color.color_changed.connect(self._emit)
+        self._line_sec.row("Color", self._line_color)
+
+        self._line_width = QDoubleSpinBox()
+        self._line_width.setRange(0.5, 50.0); self._line_width.setDecimals(1)
+        self._line_width.setValue(1.0)
+        self._line_width.valueChanged.connect(self._emit)
+        self._line_sec.row("Width px", self._line_width)
+
+        self._vbox.addWidget(self._line_sec)
+
+    def _mk_arc_sec(self):
+        self._arc_sec = _Section("Arc")
+        self._arc_sec.setVisible(False)
+
+        self._arc_cx = _sb(); self._arc_cy = _sb()
+        for w in (self._arc_cx, self._arc_cy):
+            w.valueChanged.connect(self._emit)
+        self._arc_sec.row_pair("Center X  /  Y", self._arc_cx, self._arc_cy)
+
+        self._arc_radius = QDoubleSpinBox()
+        self._arc_radius.setRange(0.0, 4096.0); self._arc_radius.setDecimals(1)
+        self._arc_radius.valueChanged.connect(self._emit)
+        self._arc_sec.row("Radius", self._arc_radius)
+
+        self._arc_start = QDoubleSpinBox()
+        self._arc_start.setRange(-360.0, 360.0); self._arc_start.setDecimals(1)
+        self._arc_start.valueChanged.connect(self._emit)
+        self._arc_sec.row("Start angle °", self._arc_start)
+
+        self._arc_end = QDoubleSpinBox()
+        self._arc_end.setRange(-360.0, 360.0); self._arc_end.setDecimals(1)
+        self._arc_end.setValue(360.0)
+        self._arc_end.valueChanged.connect(self._emit)
+        self._arc_sec.row("End angle °", self._arc_end)
+
+        self._arc_color = _ColorButton()
+        self._arc_color.color_changed.connect(self._emit)
+        self._arc_sec.row("Color", self._arc_color)
+
+        self._arc_width = QDoubleSpinBox()
+        self._arc_width.setRange(0.5, 50.0); self._arc_width.setDecimals(1)
+        self._arc_width.setValue(1.0)
+        self._arc_width.valueChanged.connect(self._emit)
+        self._arc_sec.row("Width px", self._arc_width)
+
+        self._arc_tilt = QDoubleSpinBox()
+        self._arc_tilt.setRange(-360.0, 360.0); self._arc_tilt.setDecimals(1)
+        self._arc_tilt.valueChanged.connect(self._emit)
+        self._arc_sec.row("Tilt °", self._arc_tilt)
+
+        self._arc_segs = QSpinBox()
+        self._arc_segs.setRange(8, 256); self._arc_segs.setValue(64)
+        self._arc_segs.valueChanged.connect(self._emit)
+        self._arc_sec.row("Segments", self._arc_segs)
+
+        self._vbox.addWidget(self._arc_sec)
+
+    def _mk_filledrect_sec(self):
+        self._frt_sec = _Section("Rectangle")
+        self._frt_sec.setVisible(False)
+
+        self._frt_w = _sb(0, 4096); self._frt_h = _sb(0, 4096)
+        for w in (self._frt_w, self._frt_h):
+            w.valueChanged.connect(self._emit)
+        self._frt_sec.row_pair("Width  ×  Height", self._frt_w, self._frt_h)
+
+        self._frt_color = _ColorButton()
+        self._frt_color.color_changed.connect(self._emit)
+        self._frt_sec.row("Color", self._frt_color)
+
+        self._vbox.addWidget(self._frt_sec)
+
+    def _mk_polygon_sec(self):
+        self._poly_sec = _Section("Polygon")
+        self._poly_sec.setVisible(False)
+
+        self._poly_pts = _TableEditor("X", "Y")
+        self._poly_pts.changed.connect(self._emit)
+        self._poly_sec.row("Points", self._poly_pts)
+
+        self._poly_color = _ColorButton()
+        self._poly_color.color_changed.connect(self._emit)
+        self._poly_sec.row("Color", self._poly_color)
+
+        self._poly_filled = QCheckBox("Filled")
+        self._poly_filled.setChecked(True)
+        self._poly_filled.toggled.connect(self._on_poly_filled_toggled)
+        self._poly_filled.toggled.connect(self._emit)
+        self._poly_sec.row_widget(self._poly_filled)
+
+        self._poly_width = QDoubleSpinBox()
+        self._poly_width.setRange(0.5, 50.0); self._poly_width.setDecimals(1)
+        self._poly_width.setValue(1.0)
+        self._poly_width.setEnabled(False)
+        self._poly_width.valueChanged.connect(self._emit)
+        self._poly_sec.row("Outline width", self._poly_width)
+
+        self._vbox.addWidget(self._poly_sec)
 
     def _mk_rotation(self):
         self._rot_sec = _Section("Rotation", optional=True)
@@ -499,7 +665,18 @@ class PropertiesForm(QWidget):
             "stride_x", "stride_y", "smooth", "animation",
             # ScrollingTape
             "scroll_axis", "scroll",
-            # shared
+            # Line
+            "start", "end",
+            # Arc
+            "center", "radius", "start_angle", "end_angle",
+            "tilt_angle", "num_segments",
+            # FilledRect
+            "size",
+            # Polygon
+            "points", "filled",
+            # shared across vector types
+            "color", "width",
+            # shared across all
             "viewport", "visibility",
         }
         self._extra = {k: v for k, v in comp.items() if k not in known}
@@ -541,6 +718,44 @@ class PropertiesForm(QWidget):
         # ScrollingTape axis
         axis = str(comp.get("scroll_axis", "y"))
         self._st_axis.setCurrentIndex(0 if axis == "y" else 1)
+
+        # Line
+        start = comp.get("start", [0, 0])
+        self._line_x1.setValue(int(start[0]))
+        self._line_y1.setValue(flip_y(int(start[1]), self._ref_height))
+        end = comp.get("end", [0, 0])
+        self._line_x2.setValue(int(end[0]))
+        self._line_y2.setValue(flip_y(int(end[1]), self._ref_height))
+        self._line_color.set_rgba(comp.get("color"))
+        self._line_width.setValue(float(comp.get("width", 1.0)))
+
+        # Arc
+        ctr = comp.get("center", [0, 0])
+        self._arc_cx.setValue(int(ctr[0]))
+        self._arc_cy.setValue(flip_y(int(ctr[1]), self._ref_height))
+        self._arc_radius.setValue(float(comp.get("radius", 50.0)))
+        self._arc_start.setValue(float(comp.get("start_angle", 0.0)))
+        self._arc_end.setValue(float(comp.get("end_angle", 360.0)))
+        self._arc_color.set_rgba(comp.get("color"))
+        self._arc_width.setValue(float(comp.get("width", 1.0)))
+        self._arc_tilt.setValue(float(comp.get("tilt_angle", 0.0)))
+        self._arc_segs.setValue(int(comp.get("num_segments", 64)))
+
+        # FilledRect
+        sz = comp.get("size", [100, 100])
+        self._frt_w.setValue(int(sz[0])); self._frt_h.setValue(int(sz[1]))
+        self._frt_color.set_rgba(comp.get("color"))
+
+        # Polygon
+        pts = comp.get("points", [])
+        self._poly_pts.load([[p[0], p[1]] for p in pts])
+        self._poly_color.set_rgba(comp.get("color"))
+        filled = bool(comp.get("filled", True))
+        self._poly_filled.blockSignals(True)
+        self._poly_filled.setChecked(filled)
+        self._poly_filled.blockSignals(False)
+        self._poly_width.setEnabled(not filled)
+        self._poly_width.setValue(float(comp.get("width", 1.0)))
 
         # ImagePanel rotation
         rot = comp.get("rotation")
@@ -621,9 +836,47 @@ class PropertiesForm(QWidget):
         data["name"] = self._name.text().strip()
         ct = self._type.currentText()
         data["type"] = ct
-        data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
-        if ct == "ImagePanel":
+        # Position only for types that use a single centre point
+        if ct not in ("Line", "Arc", "Polygon"):
+            data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
+
+        if ct == "Line":
+            data["start"] = [self._line_x1.value(), flip_y(self._line_y1.value(), self._ref_height)]
+            data["end"]   = [self._line_x2.value(), flip_y(self._line_y2.value(), self._ref_height)]
+            data["color"] = list(self._line_color.get_rgba())
+            w = self._line_width.value()
+            if w != 1.0:
+                data["width"] = w
+
+        elif ct == "Arc":
+            data["center"]      = [self._arc_cx.value(), flip_y(self._arc_cy.value(), self._ref_height)]
+            data["radius"]      = self._arc_radius.value()
+            data["start_angle"] = self._arc_start.value()
+            data["end_angle"]   = self._arc_end.value()
+            data["color"]       = list(self._arc_color.get_rgba())
+            w = self._arc_width.value()
+            if w != 1.0:
+                data["width"] = w
+            t = self._arc_tilt.value()
+            if t != 0.0:
+                data["tilt_angle"] = t
+            s = self._arc_segs.value()
+            if s != 64:
+                data["num_segments"] = s
+
+        elif ct == "FilledRect":
+            data["size"]  = [self._frt_w.value(), self._frt_h.value()]
+            data["color"] = list(self._frt_color.get_rgba())
+
+        elif ct == "Polygon":
+            data["points"] = [[row[0], row[1]] for row in self._poly_pts.get_data()]
+            data["color"]  = list(self._poly_color.get_rgba())
+            if not self._poly_filled.isChecked():
+                data["filled"] = False
+                data["width"]  = self._poly_width.value()
+
+        elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
             data["origin"]  = [self._orig_x.value(), self._orig_y.value()]
             data["cliprect"] = [self._clip_w.value(), self._clip_h.value()]
@@ -726,6 +979,20 @@ class PropertiesForm(QWidget):
         self._anim_dr.clear(); self._anim_fn.setCurrentIndex(0); self._anim_tbl.load([])
         self._vp_sec.set_active(False)
         self._vis_sec.set_active(False)
+        # Vector primitives
+        self._line_x1.setValue(0); self._line_y1.setValue(0)
+        self._line_x2.setValue(0); self._line_y2.setValue(0)
+        self._line_color.set_rgba(None); self._line_width.setValue(1.0)
+        self._arc_cx.setValue(0); self._arc_cy.setValue(0)
+        self._arc_radius.setValue(50.0)
+        self._arc_start.setValue(0.0); self._arc_end.setValue(360.0)
+        self._arc_color.set_rgba(None); self._arc_width.setValue(1.0)
+        self._arc_tilt.setValue(0.0); self._arc_segs.setValue(64)
+        self._frt_w.setValue(100); self._frt_h.setValue(100)
+        self._frt_color.set_rgba(None)
+        self._poly_pts.load([])
+        self._poly_color.set_rgba(None)
+        self._poly_filled.setChecked(True); self._poly_width.setValue(1.0)
         self._extra = {}
         self._loading = False
 
@@ -736,10 +1003,17 @@ class PropertiesForm(QWidget):
             self.changed.emit()
 
     def _on_type_changed(self, ct: str):
-        is_ip = ct == "ImagePanel"
-        is_ss = ct == "SpriteSheet"
-        is_st = ct == "ScrollingTape"
-        is_img = is_ip or is_ss or is_st  # any image-based type
+        is_ip  = ct == "ImagePanel"
+        is_ss  = ct == "SpriteSheet"
+        is_st  = ct == "ScrollingTape"
+        is_img = is_ip or is_ss or is_st
+        is_line = ct == "Line"
+        is_arc  = ct == "Arc"
+        is_frt  = ct == "FilledRect"
+        is_poly = ct == "Polygon"
+
+        # Position: hide for types that define geometry without a single centre point
+        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly)
 
         # Texture section visible for image types; atlas detail only for ImagePanel
         self._tex_sec.setVisible(is_img)
@@ -749,6 +1023,10 @@ class PropertiesForm(QWidget):
         # Type-specific sections
         self._ss_sec.setVisible(is_ss)
         self._st_sec.setVisible(is_st)
+        self._line_sec.setVisible(is_line)
+        self._arc_sec.setVisible(is_arc)
+        self._frt_sec.setVisible(is_frt)
+        self._poly_sec.setVisible(is_poly)
 
         # Rotation and Translation: ImagePanel only
         self._rot_sec.setVisible(is_ip)
@@ -756,6 +1034,12 @@ class PropertiesForm(QWidget):
 
         # Animation: SpriteSheet and ScrollingTape
         self._anim_sec.setVisible(is_ss or is_st)
+
+        # Viewport clip: image types only (vector primitives don't have viewport)
+        self._vp_sec.setVisible(is_img)
+
+    def _on_poly_filled_toggled(self, filled: bool):
+        self._poly_width.setEnabled(not filled)
 
     def _on_resize_toggled(self, on: bool):
         self._prop_chk.setEnabled(on)

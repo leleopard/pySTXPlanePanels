@@ -21,6 +21,15 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter
 
 
+def _rgba(raw) -> tuple:
+    """YAML color list → (r, g, b, a) tuple."""
+    if raw is None:
+        return (200, 200, 200, 255)
+    if len(raw) == 3:
+        return (int(raw[0]), int(raw[1]), int(raw[2]), 255)
+    return tuple(int(v) for v in raw[:4])
+
+
 class _CanvasSurface(QWidget):
     """Inner widget that owns the scaled pixmap and forwards input to InstrumentCanvas."""
 
@@ -226,7 +235,7 @@ class InstrumentCanvas(QWidget):
     # ── Hit testing ───────────────────────────────────────────────────────
 
     def _hits_at(self, cx: int, cy: int) -> list[str]:
-        """All sprites containing unzoomed canvas point (cx, cy), topmost first."""
+        """All components containing unzoomed canvas point (cx, cy), topmost first."""
         w, h = self._data.get("size", [310, 310])
         result = []
         for comp in reversed(self._data.get("components", [])):  # topmost first
@@ -244,6 +253,35 @@ class InstrumentCanvas(QWidget):
                     if rect is not None:
                         rx, ry, rw, rh = rect
                         if rx <= cx < rx + rw and ry <= cy < ry + rh:
+                            result.append(comp.get("name"))
+                elif ctype == "Line":
+                    s = comp.get("start", [0, 0]); e = comp.get("end", [0, 0])
+                    x1, y1 = int(s[0]), h - int(s[1])
+                    x2, y2 = int(e[0]), h - int(e[1])
+                    pad = 8
+                    if (min(x1, x2) - pad <= cx <= max(x1, x2) + pad and
+                            min(y1, y2) - pad <= cy <= max(y1, y2) + pad):
+                        result.append(comp.get("name"))
+                elif ctype == "Arc":
+                    ctr = comp.get("center", [0, 0])
+                    r = int(round(float(comp.get("radius", 50)))) + 8
+                    ax, ay = int(ctr[0]), h - int(ctr[1])
+                    if (ax - r) <= cx <= (ax + r) and (ay - r) <= cy <= (ay + r):
+                        result.append(comp.get("name"))
+                elif ctype == "FilledRect":
+                    pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
+                    fx, fy = int(pos[0]), h - int(pos[1])
+                    hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
+                    if (fx - hw) <= cx <= (fx + hw) and (fy - hh) <= cy <= (fy + hh):
+                        result.append(comp.get("name"))
+                elif ctype == "Polygon":
+                    pts = comp.get("points", [])
+                    if pts:
+                        xs = [int(p[0]) for p in pts]
+                        ys = [h - int(p[1]) for p in pts]
+                        pad = 4
+                        if (min(xs) - pad <= cx <= max(xs) + pad and
+                                min(ys) - pad <= cy <= max(ys) + pad):
                             result.append(comp.get("name"))
             except Exception:
                 continue
@@ -294,6 +332,7 @@ class InstrumentCanvas(QWidget):
     def _composite(self) -> QPixmap:
         w, h = self._data.get("size", [310, 310])
         composite = Image.new("RGBA", (w, h), (30, 30, 30, 255))
+        draw = ImageDraw.Draw(composite)
 
         for comp in self._data.get("components", []):
             if comp.get("name") in self._hidden:
@@ -307,11 +346,19 @@ class InstrumentCanvas(QWidget):
                     self._render_spritesheet(comp, composite, w, h)
                 elif ctype == "ScrollingTape":
                     self._render_scrolltape(comp, composite, w, h)
+                elif ctype == "Line":
+                    self._render_line(comp, draw, h)
+                elif ctype == "Arc":
+                    self._render_arc(comp, draw, h)
+                elif ctype == "FilledRect":
+                    self._render_filledrect(comp, draw, h)
+                elif ctype == "Polygon":
+                    self._render_polygon(comp, draw, h)
             except Exception:
                 continue
 
+        SEL = (255, 220, 0, 255)
         if self._selected_name:
-            draw = ImageDraw.Draw(composite)
             for comp in self._data.get("components", []):
                 if comp.get("name") != self._selected_name:
                     continue
@@ -320,38 +367,42 @@ class InstrumentCanvas(QWidget):
                     try:
                         sprite, px, py = self._crop_sprite(comp, w, h)
                         cw, ch = sprite.size
-                        draw.rectangle(
-                            [px, py, px + cw - 1, py + ch - 1],
-                            outline=(255, 220, 0, 255),
-                            width=2,
-                        )
+                        draw.rectangle([px, py, px + cw - 1, py + ch - 1],
+                                       outline=SEL, width=2)
                     except Exception:
                         pass
                 elif ctype in ("SpriteSheet", "ScrollingTape"):
                     rect = self._viewport_rect_pil(comp, h)
                     if rect is not None:
                         rx, ry, rw, rh = rect
-                        draw.rectangle(
-                            [rx, ry, rx + rw - 1, ry + rh - 1],
-                            outline=(255, 220, 0, 255),
-                            width=2,
-                        )
+                        draw.rectangle([rx, ry, rx + rw - 1, ry + rh - 1],
+                                       outline=SEL, width=2)
                     else:
-                        pos = comp.get("position", [w // 2, h // 2])
-                        cx_p, cy_up = int(pos[0]), int(pos[1])
-                        cy_p = h - cy_up
-                        draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)],
-                                  fill=(255, 220, 0, 255), width=2)
-                        draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)],
-                                  fill=(255, 220, 0, 255), width=2)
+                        self._draw_crosshair(draw, comp.get("position", [w//2, h//2]), h, SEL)
+                elif ctype == "Line":
+                    s = comp.get("start", [0, 0]); e = comp.get("end", [0, 0])
+                    lw = max(3, int(float(comp.get("width", 1.0))) + 2)
+                    draw.line([(int(s[0]), h - int(s[1])), (int(e[0]), h - int(e[1]))],
+                              fill=SEL, width=lw)
+                elif ctype == "Arc":
+                    ctr = comp.get("center", [0, 0])
+                    r = int(round(float(comp.get("radius", 50))))
+                    cx_p, cy_p = int(ctr[0]), h - int(ctr[1])
+                    bbox = [cx_p - r, cy_p - r, cx_p + r, cy_p + r]
+                    sa, ea = float(comp.get("start_angle", 0)), float(comp.get("end_angle", 360))
+                    draw.arc(bbox, -ea, -sa, fill=SEL, width=4)
+                elif ctype == "FilledRect":
+                    pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
+                    cx_p, cy_p = int(pos[0]), h - int(pos[1])
+                    hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
+                    draw.rectangle([cx_p - hw, cy_p - hh, cx_p + hw, cy_p + hh],
+                                   outline=SEL, width=2)
+                elif ctype == "Polygon":
+                    pts = [(int(p[0]), h - int(p[1])) for p in comp.get("points", [])]
+                    if pts:
+                        draw.polygon(pts, outline=SEL)
                 else:
-                    pos = comp.get("position", [w // 2, h // 2])
-                    cx_p, cy_up = int(pos[0]), int(pos[1])
-                    cy_p = h - cy_up
-                    draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)],
-                              fill=(255, 220, 0, 255), width=2)
-                    draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)],
-                              fill=(255, 220, 0, 255), width=2)
+                    self._draw_crosshair(draw, comp.get("position", [w//2, h//2]), h, SEL)
                 break
 
         buf = io.BytesIO()
@@ -359,6 +410,51 @@ class InstrumentCanvas(QWidget):
         pixmap = QPixmap()
         pixmap.loadFromData(buf.getvalue())
         return pixmap
+
+    def _draw_crosshair(self, draw: ImageDraw.ImageDraw,
+                        pos, canvas_h: int, color) -> None:
+        cx_p, cy_p = int(pos[0]), canvas_h - int(pos[1])
+        draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)], fill=color, width=2)
+        draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)], fill=color, width=2)
+
+    def _render_line(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        s = comp.get("start", [0, 0]); e = comp.get("end", [0, 0])
+        color = _rgba(comp.get("color"))
+        width = max(1, int(round(float(comp.get("width", 1.0)))))
+        draw.line([(int(s[0]), canvas_h - int(s[1])), (int(e[0]), canvas_h - int(e[1]))],
+                  fill=color, width=width)
+
+    def _render_arc(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        ctr = comp.get("center", [0, 0])
+        r = int(round(float(comp.get("radius", 50))))
+        cx_p, cy_p = int(ctr[0]), canvas_h - int(ctr[1])
+        bbox = [cx_p - r, cy_p - r, cx_p + r, cy_p + r]
+        sa = float(comp.get("start_angle", 0))
+        ea = float(comp.get("end_angle", 360))
+        color = _rgba(comp.get("color"))
+        width = max(1, int(round(float(comp.get("width", 1.0)))))
+        # Arcade uses CCW angles in y-up space; PIL uses CW angles in y-down space.
+        # Flipping y negates all angles, so swap and negate: pil_start=-ea, pil_end=-sa.
+        draw.arc(bbox, -ea, -sa, fill=color, width=width)
+
+    def _render_filledrect(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
+        cx_p, cy_p = int(pos[0]), canvas_h - int(pos[1])
+        hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
+        color = _rgba(comp.get("color"))
+        draw.rectangle([cx_p - hw, cy_p - hh, cx_p + hw, cy_p + hh], fill=color)
+
+    def _render_polygon(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        pts_raw = comp.get("points", [])
+        if len(pts_raw) < 2:
+            return
+        pts = [(int(p[0]), canvas_h - int(p[1])) for p in pts_raw]
+        color = _rgba(comp.get("color"))
+        if comp.get("filled", True):
+            draw.polygon(pts, fill=color)
+        else:
+            width = max(1, int(round(float(comp.get("width", 1.0)))))
+            draw.line(pts + [pts[0]], fill=color, width=width)
 
     def _viewport_rect_pil(self, comp: dict, canvas_h: int) -> tuple[int, int, int, int] | None:
         """Return (x, y, w, h) in PIL (y-down) coords for the component's viewport."""
