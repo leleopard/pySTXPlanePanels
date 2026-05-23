@@ -1311,7 +1311,7 @@ class PropertiesForm(QWidget):
         current_name = self._vt_label_font.text().strip() or "Arial"
         current_size = int(self._vt_label_font_size.value())
         initial = QFont(current_name, current_size)
-        font, ok = QFontDialog.getFont(initial, self, "Choose label font")
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
         if ok:
             self._vt_label_font.setText(font.family())
             self._vt_label_font_size.setValue(float(font.pointSize()))
