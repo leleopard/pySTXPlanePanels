@@ -64,7 +64,12 @@ class PanelWindow(arcade.Window):
         on_shutdown: Callable[[], None] | None = None,
     ) -> None:
         w, h = panel.size
-        super().__init__(w, h, panel.name)
+        super().__init__(w, h, panel.name, antialiasing=True, samples=4)
+        # GL_LINE_SMOOTH gives per-primitive antialiasing for draw_line / draw_arc
+        # calls. MSAA alone doesn't reach lines that go through Arcade's intermediate
+        # framebuffer; this flag fills the gap on all common Windows GPU drivers.
+        from pyglet.gl import glEnable, GL_LINE_SMOOTH
+        glEnable(GL_LINE_SMOOTH)
         if panel.background_color is not None:
             self.background_color = panel.background_color
         else:
