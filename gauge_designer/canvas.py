@@ -489,26 +489,30 @@ class InstrumentCanvas(QWidget):
         tc = _rgba(comp.get("tick_color"))
         ppu = float(comp.get("pixels_per_unit", 5.0))
         ticks = comp.get("ticks", [])
-        t0_interval = float(ticks[0]["interval"]) if ticks else 10.0
-        t0_length = float(ticks[0].get("length", 15)) if ticks else 15.0
 
         if axis == "y":
             spine_x = int(vx) if tick_side == "left" else int(vx + vw)
             tick_dir = 1 if tick_side == "left" else -1
-            # Bands (proportional strips along the spine side)
+            # Bands
             for band in comp.get("bands", []):
                 bc = _rgba(band.get("color"))
                 bw = float(band.get("width", 8))
                 bx = int(vx) if tick_side == "left" else int(vx + vw - bw)
                 draw.rectangle([bx, int(py_top), int(bx + bw), int(py_top + vh)], fill=bc)
-            # Evenly-spaced tick marks for visual indication
-            step_px = max(1, int(t0_interval * ppu))
-            y = int(py_top)
-            while y <= int(py_top + vh):
-                draw.line([(spine_x, y), (spine_x + tick_dir * int(t0_length), y)],
-                          fill=tc, width=2)
-                y += step_px
-            draw.line([(spine_x, int(py_top)), (spine_x, int(py_top + vh))], fill=tc, width=1)
+            # Spine line (only when ticks are defined)
+            if ticks:
+                draw.line([(spine_x, int(py_top)), (spine_x, int(py_top + vh))],
+                          fill=tc, width=1)
+            # Evenly-spaced tick marks — one pass per tick definition
+            for td in ticks:
+                interval = float(td["interval"])
+                length = float(td.get("length", 15))
+                step_px = max(1, int(interval * ppu))
+                y = int(py_top)
+                while y <= int(py_top + vh):
+                    draw.line([(spine_x, y), (spine_x + tick_dir * int(length), y)],
+                              fill=tc, width=max(1, int(td.get("width", 2))))
+                    y += step_px
         else:
             spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
             tick_dir = 1 if tick_side != "top" else -1
@@ -517,13 +521,17 @@ class InstrumentCanvas(QWidget):
                 bh = float(band.get("width", 8))
                 by = int(py_top) if tick_side == "top" else int(py_top + vh - bh)
                 draw.rectangle([int(vx), by, int(vx + vw), int(by + bh)], fill=bc)
-            step_px = max(1, int(t0_interval * ppu))
-            x = int(vx)
-            while x <= int(vx + vw):
-                draw.line([(x, spine_y), (x, spine_y + tick_dir * int(t0_length))],
-                          fill=tc, width=2)
-                x += step_px
-            draw.line([(int(vx), spine_y), (int(vx + vw), spine_y)], fill=tc, width=1)
+            if ticks:
+                draw.line([(int(vx), spine_y), (int(vx + vw), spine_y)], fill=tc, width=1)
+            for td in ticks:
+                interval = float(td["interval"])
+                length = float(td.get("length", 15))
+                step_px = max(1, int(interval * ppu))
+                x = int(vx)
+                while x <= int(vx + vw):
+                    draw.line([(x, spine_y), (x, spine_y + tick_dir * int(length))],
+                              fill=tc, width=max(1, int(td.get("width", 2))))
+                    x += step_px
 
         # Viewport border
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],

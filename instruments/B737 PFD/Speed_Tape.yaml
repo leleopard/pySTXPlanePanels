@@ -1,0 +1,104 @@
+name: Speed_Tape
+size:
+- 600
+- 600
+components:
+- name: bg_ref
+  type: ImagePanel
+  position:
+  - 300
+  - 300
+  texture: Primary_Flight_Display_of_a_Boeing_737-800.png
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 854
+  - 763
+  resize_to_container: true
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    predicate: true_if_zero
+- name: speed_tape_background
+  type: FilledRect
+  position:
+  - 46
+  - 306
+  size:
+  - 76
+  - 382
+  color:
+  - 98
+  - 88
+  - 87
+  - 255
+- name: alt_tape_window
+  type: Polygon
+  points:
+  - - 6
+    - 332
+  - - 60
+    - 332
+  - - 60
+    - 315
+  - - 72
+    - 306
+  - - 60
+    - 297
+  - - 60
+    - 280
+  - - 6
+    - 280
+  color:
+  - 0
+  - 0
+  - 0
+  - 255
+  outline_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  outline_width: 2.0
+- name: main_speed_tape
+  type: VectorTape
+  position:
+  - 74
+  - 300
+  scroll_axis: y
+  pixels_per_unit: 5.0
+  tick_side: right
+  tick_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  ticks:
+  - interval: 10
+    length: 8
+    width: 2
+  - interval: 20
+    length: 16
+    width: 2
+  labels:
+    interval: 20
+    font_size: 14
+    side: left
+    color:
+    - 255
+    - 255
+    - 255
+    format: '{:.0f}'
+    offset: 4
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 0
+    - - 382
+      - 382
+  viewport:
+  - 59
+  - 114
+  - 32
+  - 382
