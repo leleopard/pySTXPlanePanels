@@ -113,10 +113,11 @@ def _coerce_num(text: str):
 class _TableEditor(QWidget):
     changed = Signal()
 
-    def __init__(self, col0="Input value", col1="Output", parent=None):
+    def __init__(self, *headers, parent=None):
         super().__init__(parent)
-        self._tbl = QTableWidget(0, 2)
-        self._tbl.setHorizontalHeaderLabels([col0, col1])
+        n = max(2, len(headers))
+        self._tbl = QTableWidget(0, n)
+        self._tbl.setHorizontalHeaderLabels(list(headers) if headers else ["Col 0", "Col 1"])
         self._tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._tbl.setFixedHeight(110)
@@ -135,27 +136,30 @@ class _TableEditor(QWidget):
     def load(self, data: list):
         self._tbl.blockSignals(True)
         self._tbl.setRowCount(0)
+        n = self._tbl.columnCount()
         for row in data:
-            if isinstance(row, (list, tuple)) and len(row) >= 2:
+            if isinstance(row, (list, tuple)) and len(row) >= min(2, n):
                 r = self._tbl.rowCount()
                 self._tbl.insertRow(r)
-                self._tbl.setItem(r, 0, QTableWidgetItem(str(row[0])))
-                self._tbl.setItem(r, 1, QTableWidgetItem(str(row[1])))
+                for c in range(min(n, len(row))):
+                    self._tbl.setItem(r, c, QTableWidgetItem(str(row[c])))
         self._tbl.blockSignals(False)
 
     def get_data(self) -> list:
         out = []
+        n = self._tbl.columnCount()
         for r in range(self._tbl.rowCount()):
-            i0, i1 = self._tbl.item(r, 0), self._tbl.item(r, 1)
-            if i0 and i1:
-                out.append([_coerce_num(i0.text()), _coerce_num(i1.text())])
+            items = [self._tbl.item(r, c) for c in range(n)]
+            if all(items):
+                out.append([_coerce_num(item.text()) for item in items])
         return out
 
     def _add(self):
         self._tbl.blockSignals(True)
-        r = self._tbl.rowCount(); self._tbl.insertRow(r)
-        self._tbl.setItem(r, 0, QTableWidgetItem("0"))
-        self._tbl.setItem(r, 1, QTableWidgetItem("0"))
+        r = self._tbl.rowCount()
+        self._tbl.insertRow(r)
+        for c in range(self._tbl.columnCount()):
+            self._tbl.setItem(r, c, QTableWidgetItem("0"))
         self._tbl.blockSignals(False)
         self.changed.emit()
 
@@ -608,6 +612,16 @@ class PropertiesForm(QWidget):
         self._vt_tick_color.color_changed.connect(self._emit)
         self._vt_sec.row("Tick color", self._vt_tick_color)
 
+        self._vt_ticks = _TableEditor("Interval", "Length", "Width")
+        self._vt_ticks.changed.connect(self._emit)
+        self._vt_sec.row("Ticks", self._vt_ticks)
+
+        self._vt_label_interval = QDoubleSpinBox()
+        self._vt_label_interval.setRange(0.0, 9999.0); self._vt_label_interval.setDecimals(1)
+        self._vt_label_interval.setSpecialValueText("(none)")
+        self._vt_label_interval.valueChanged.connect(self._emit)
+        self._vt_sec.row("Label interval", self._vt_label_interval)
+
         self._vt_label_side = _NoScrollComboBox()
         self._vt_label_side.addItems(["(same as tick side)", "left", "right", "top", "bottom"])
         self._vt_label_side.currentTextChanged.connect(self._emit)
@@ -764,8 +778,8 @@ class PropertiesForm(QWidget):
             # shared across vector types
             "color", "width",
             "outline_color", "outline_width",
-            # VectorTape (ticks/bands are complex nested lists; stored in _extra)
-            "pixels_per_unit", "tick_side", "tick_color", "labels",
+            # VectorTape (bands are stored in _extra; ticks + labels handled by form)
+            "pixels_per_unit", "tick_side", "tick_color", "ticks", "labels",
             # shared across all
             "viewport", "visibility",
         }
@@ -873,8 +887,14 @@ class PropertiesForm(QWidget):
         ts = str(comp.get("tick_side", "left"))
         self._vt_tick_side.setCurrentIndex(max(self._vt_tick_side.findText(ts), 0))
         self._vt_tick_color.set_rgba(comp.get("tick_color"))
+        ticks = comp.get("ticks") or []
+        self._vt_ticks.load(
+            [[td["interval"], td.get("length", 15), td.get("width", 2)] for td in ticks]
+        )
         lbl = comp.get("labels") or {}
-        self._vt_labels_cache = dict(lbl)
+        self._vt_labels_cache = {k: v for k, v in lbl.items()
+                                 if k not in ("interval", "font_size", "font", "side")}
+        self._vt_label_interval.setValue(float(lbl.get("interval", 0.0)))
         ls = str(lbl.get("side", "")) if lbl.get("side") else ""
         self._vt_label_side.setCurrentIndex(
             max(self._vt_label_side.findText(ls), 0) if ls else 0
@@ -1086,9 +1106,21 @@ class PropertiesForm(QWidget):
                 if cf != _NONE:
                     vt_scroll["convert_function"] = cf
                 data["scroll"] = vt_scroll
-            # Labels dict: cache preserves interval/color/format/offset;
-            # form controls font_size, font, and side.
+            # Ticks list
+            ticks_raw = self._vt_ticks.get_data()
+            if ticks_raw:
+                data["ticks"] = [
+                    {"interval": r[0], "length": r[1], "width": r[2]}
+                    for r in ticks_raw
+                ]
+            # Labels dict: cache preserves color/format/offset;
+            # form controls interval, font_size, font, and side.
             lbl_dict = dict(self._vt_labels_cache)
+            lbl_interval = self._vt_label_interval.value()
+            if lbl_interval > 0:
+                lbl_dict["interval"] = lbl_interval
+            else:
+                lbl_dict.pop("interval", None)
             lbl_dict["font_size"] = self._vt_label_font_size.value()
             fn = self._vt_label_font.text().strip()
             if fn:
@@ -1162,7 +1194,9 @@ class PropertiesForm(QWidget):
         self._vt_ppu.setValue(5.0)
         self._vt_tick_side.setCurrentIndex(0)
         self._vt_tick_color.set_rgba(None)
+        self._vt_ticks.load([])
         self._vt_labels_cache = {}
+        self._vt_label_interval.setValue(0.0)
         self._vt_label_side.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font.clear()
