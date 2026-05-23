@@ -149,13 +149,55 @@ The original implementation mixed Arduino-input handling and a few Python-side s
 
 ---
 
+## EPIC 9 — Vector Primitive Components
+
+Static and dataref-driven vector shapes rendered via Arcade's `draw_*` API.  Intended as building blocks for custom bezel artwork and for composite glass-cockpit instrument types.  All primitives support `visibility` (same predicate mechanism as `ImagePanel`) and `apply_scale` / `apply_offset` so they compose correctly inside a panel.
+
+| ID | Story | Status |
+|----|-------|--------|
+| VEC-01 | As a user, a `Line` component draws a straight line between two points with configurable color and width. | ✅ |
+| VEC-02 | As a user, an `Arc` component draws a circular arc segment with configurable center, radius, start/end angles, color, and line width. | ✅ |
+| VEC-03 | As a user, a `FilledRect` component draws a solid rectangle with configurable position, size, and color. | ✅ |
+| VEC-04 | As a user, a `Polygon` component draws an open or filled polygon from a list of points with configurable color. | ✅ |
+| VEC-05 | As a developer, all vector primitives accept an optional `visibility` block (same schema as `ImagePanel`) so any shape can be shown/hidden via a dataref predicate. | ✅ |
+
+---
+
+## EPIC 10 — Glass Cockpit Instrument Types
+
+High-level procedural instrument components for jetliner-style glass panels (B737, A320).  Unlike sprite-based components, these generate geometry in Python each frame from dataref values — no pre-rendered texture strips required.
+
+| ID | Story | Status |
+|----|-------|--------|
+| GLASS-01 | As a user, a `VectorTape` component draws a scrolling tape (airspeed or altitude) with configurable tick intervals, label intervals, label format string, colored speed/altitude bands, and a scissor viewport — driven by a dataref + calibration table. | 🔲 |
+| GLASS-02 | As a user, a `TapeBug` component overlays a filled triangle marker on a `VectorTape` viewport at a position driven by a separate dataref (e.g. selected speed bug, selected altitude). | 🔲 |
+| GLASS-03 | As a user, a `HeadingTape` component draws a horizontal scrolling compass tape with configurable tick/label intervals and a center lubber line — driven by a heading dataref. | 🔲 |
+| GLASS-04 | As a user, an `AttitudeIndicator` component renders a full AI: sky/ground background, pitch ladder (lines + labels CPU-rotated by bank angle), bank angle arc with tick marks, and roll pointer — all clipped to a configurable rectangular viewport. | 🔲 |
+| GLASS-05 | As a user, a `FlightPathVector` component renders the FPV symbol (circle + wing stubs + tail) positioned from pitch/roll/FPA datarefs within the AI viewport. | 🔲 |
+| GLASS-06 | As a user, an `ILSDeviation` component renders a two-axis dot-style deviation indicator (localizer + glideslope) driven by the relevant datarefs. | 🔲 |
+
+---
+
+## EPIC 11 — B737 PFD Panel
+
+Full procedural Primary Flight Display modelled on the Boeing 737-800 NG layout (see `Primary_Flight_Display_of_a_Boeing_737-800.png` in project root).
+
+| ID | Story | Status |
+|----|-------|--------|
+| B737-01 | As a user, `instruments/B737/b737_airspeed_tape.yaml` renders a working vector airspeed tape with VNO/VFE/stall colored bands and selected-speed bug. | 🔲 |
+| B737-02 | As a user, `instruments/B737/b737_altitude_tape.yaml` renders a working vector altitude tape with 20 ft minor / 100 ft major ticks and selected-altitude bug. | 🔲 |
+| B737-03 | As a user, `instruments/B737/b737_heading_tape.yaml` renders a working horizontal heading tape with 5° minor / 10° major ticks and heading bug. | 🔲 |
+| B737-04 | As a user, `instruments/B737/b737_attitude_indicator.yaml` renders a working AI with pitch ladder, bank scale, and roll pointer. | 🔲 |
+| B737-05 | As a user, `instruments/B737/b737_vsi.yaml` renders a vertical speed indicator (vector scale + digital readout). | 🔲 |
+| B737-06 | As a user, selected speed, altitude, and heading digital readout boxes render as `Text` components with colored borders (matching 737 magenta/cyan convention). | 🔲 |
+| B737-07 | As a user, `panels/b737_pfd.yaml` composes all B737 instruments into the full PFD layout at the correct positions. | 🔲 |
+
+---
+
 ## Out of MVP1 (Backlog)
 
-These are tracked here for visibility but are not in scope for MVP1:
-
-- G1000-style UV-scrolling speed/altitude tapes
-- Framebuffer-based rectangular clipping
-- Vector primitives (`Line`, `Polygon`, `Arc`) for jetliner glass cockpits (737, A320)
+- G1000-style UV-scrolling speed/altitude tapes (superseded by EPIC 10 vector approach)
+- Framebuffer-based rectangular clipping (not needed if AI uses CPU-side rotation)
 - Frame-based animated images
 - Multi-panel / multi-monitor coordination
 - Mouse interaction / draggable windows
@@ -213,3 +255,5 @@ High-level pointer to recent commits. Use `git log` for full detail.
 - *2026-05-16* — feat(panel-designer): Grid Layout containers with drag-and-drop. +Grid button adds a grid entry; instruments can be dragged into grids or reordered within them; tree order determines cell position (first item = top-left, fills left-to-right). Marks DESIGN-10 ✅.
 - *2026-05-16* — fix(panel-designer): grid instruments no longer disappear on drag-reorder (DragDrop mode + IgnoreAction); all children now visible (setExpanded after blockSignals); tree order matches grid display order. Marks DESIGN-10 improvements ✅.
 - *2026-05-17* — fix(panel-designer): layout canvas colors now follow the instrument (file-path hash) rather than the cell position, so reordering instruments inside a grid produces a visually obvious change. Also defensive .get() for grid instruments list in tree rebuild. Marks DESIGN-11 ✅.
+- *2026-05-23* — feat(designer): instrument file tree shows YAML `name` field instead of filename stem; label updates live when the Name field is edited; filename shown as tooltip. Added `_update_tree_label()` helper in `InstrumentView`.
+- *2026-05-23* — feat(core): vector primitive components — `Line`, `Arc`, `FilledRect`, `Polygon`. All registered in the component registry via `gauge_core/vector_primitives.py`; imported for side-effects in `loader.py`. All four support `visibility` blocks. Added EPIC 9 (vector primitives), EPIC 10 (glass cockpit instrument types), EPIC 11 (B737 PFD panel) to USER_STORIES.md. Marks VEC-01..05 ✅.
