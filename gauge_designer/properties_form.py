@@ -22,7 +22,7 @@ from gauge_designer.ui_utils import flip_y, is_y_down
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
-    QPushButton, QCheckBox, QDialog, QColorDialog,
+    QPushButton, QCheckBox, QDialog, QColorDialog, QFontDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QFileDialog,
 )
@@ -640,9 +640,19 @@ class PropertiesForm(QWidget):
         self._vt_sec.row("Label size px", self._vt_label_font_size)
 
         self._vt_label_font = QLineEdit()
-        self._vt_label_font.setPlaceholderText("e.g. Arial  (blank = default)")
+        self._vt_label_font.setPlaceholderText("Arial  (blank = default)")
         self._vt_label_font.editingFinished.connect(self._emit)
-        self._vt_sec.row("Label font", self._vt_label_font)
+        _font_btn = QPushButton("…")
+        _font_btn.setFixedWidth(28)
+        _font_btn.setToolTip("Choose font")
+        _font_btn.clicked.connect(self._pick_label_font)
+        _font_row = QWidget()
+        _font_hl = QHBoxLayout(_font_row)
+        _font_hl.setContentsMargins(0, 0, 0, 0)
+        _font_hl.setSpacing(4)
+        _font_hl.addWidget(self._vt_label_font)
+        _font_hl.addWidget(_font_btn)
+        self._vt_sec.row("Label font", _font_row)
 
         hint = QLabel("Ticks, label interval/color/format and bands are preserved as-is from YAML.")
         hint.setWordWrap(True)
@@ -1295,6 +1305,17 @@ class PropertiesForm(QWidget):
         btn.clicked.connect(lambda: self._pick_dataref(lineedit))
         hl.addWidget(btn)
         return box
+
+    def _pick_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        current_name = self._vt_label_font.text().strip() or "Arial"
+        current_size = int(self._vt_label_font_size.value())
+        initial = QFont(current_name, current_size)
+        font, ok = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._vt_label_font.setText(font.family())
+            self._vt_label_font_size.setValue(float(font.pointSize()))
+            self._emit()
 
     def _pick_dataref(self, lineedit: QLineEdit) -> None:
         from gauge_designer.dataref_picker import DatarefPickerDialog
