@@ -399,7 +399,7 @@ class InstrumentCanvas(QWidget):
                                    outline=SEL, width=2)
                 elif ctype == "Polygon":
                     pts = [(int(p[0]), h - int(p[1])) for p in comp.get("points", [])]
-                    if pts:
+                    if len(pts) >= 2:
                         draw.polygon(pts, outline=SEL)
                 else:
                     self._draw_crosshair(draw, comp.get("position", [w//2, h//2]), h, SEL)
