@@ -586,6 +586,7 @@ class PropertiesForm(QWidget):
     def _mk_vectortape_sec(self):
         self._vt_sec = _Section("Vector Tape")
         self._vt_sec.setVisible(False)
+        self._vt_labels_cache: dict = {}   # preserves interval/color/format/offset
 
         self._vt_axis = _NoScrollComboBox()
         self._vt_axis.addItems(["y  (vertical)", "x  (horizontal)"])
@@ -607,7 +608,23 @@ class PropertiesForm(QWidget):
         self._vt_tick_color.color_changed.connect(self._emit)
         self._vt_sec.row("Tick color", self._vt_tick_color)
 
-        hint = QLabel("Ticks, labels and bands are preserved as-is from YAML.")
+        self._vt_label_side = _NoScrollComboBox()
+        self._vt_label_side.addItems(["(same as tick side)", "left", "right", "top", "bottom"])
+        self._vt_label_side.currentTextChanged.connect(self._emit)
+        self._vt_sec.row("Label side", self._vt_label_side)
+
+        self._vt_label_font_size = QDoubleSpinBox()
+        self._vt_label_font_size.setRange(4.0, 120.0); self._vt_label_font_size.setDecimals(1)
+        self._vt_label_font_size.setValue(18.0)
+        self._vt_label_font_size.valueChanged.connect(self._emit)
+        self._vt_sec.row("Label size px", self._vt_label_font_size)
+
+        self._vt_label_font = QLineEdit()
+        self._vt_label_font.setPlaceholderText("e.g. Arial  (blank = default)")
+        self._vt_label_font.editingFinished.connect(self._emit)
+        self._vt_sec.row("Label font", self._vt_label_font)
+
+        hint = QLabel("Ticks, label interval/color/format and bands are preserved as-is from YAML.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #999; font-size: 10px;")
         self._vt_sec.row_widget(hint)
@@ -747,8 +764,8 @@ class PropertiesForm(QWidget):
             # shared across vector types
             "color", "width",
             "outline_color", "outline_width",
-            # VectorTape (ticks/labels/bands are complex nested lists; stored in _extra)
-            "pixels_per_unit", "tick_side", "tick_color",
+            # VectorTape (ticks/bands are complex nested lists; stored in _extra)
+            "pixels_per_unit", "tick_side", "tick_color", "labels",
             # shared across all
             "viewport", "visibility",
         }
@@ -856,6 +873,14 @@ class PropertiesForm(QWidget):
         ts = str(comp.get("tick_side", "left"))
         self._vt_tick_side.setCurrentIndex(max(self._vt_tick_side.findText(ts), 0))
         self._vt_tick_color.set_rgba(comp.get("tick_color"))
+        lbl = comp.get("labels") or {}
+        self._vt_labels_cache = dict(lbl)
+        ls = str(lbl.get("side", "")) if lbl.get("side") else ""
+        self._vt_label_side.setCurrentIndex(
+            max(self._vt_label_side.findText(ls), 0) if ls else 0
+        )
+        self._vt_label_font_size.setValue(float(lbl.get("font_size", 18.0)))
+        self._vt_label_font.setText(str(lbl.get("font", "")))
 
         # ImagePanel rotation
         rot = comp.get("rotation")
@@ -1061,6 +1086,22 @@ class PropertiesForm(QWidget):
                 if cf != _NONE:
                     vt_scroll["convert_function"] = cf
                 data["scroll"] = vt_scroll
+            # Labels dict: cache preserves interval/color/format/offset;
+            # form controls font_size, font, and side.
+            lbl_dict = dict(self._vt_labels_cache)
+            lbl_dict["font_size"] = self._vt_label_font_size.value()
+            fn = self._vt_label_font.text().strip()
+            if fn:
+                lbl_dict["font"] = fn
+            else:
+                lbl_dict.pop("font", None)
+            ls = self._vt_label_side.currentText()
+            if ls != "(same as tick side)":
+                lbl_dict["side"] = ls
+            else:
+                lbl_dict.pop("side", None)
+            if lbl_dict:
+                data["labels"] = lbl_dict
 
         if self._vp_sec.active:
             vh = self._vp_h.value()
@@ -1121,6 +1162,10 @@ class PropertiesForm(QWidget):
         self._vt_ppu.setValue(5.0)
         self._vt_tick_side.setCurrentIndex(0)
         self._vt_tick_color.set_rgba(None)
+        self._vt_labels_cache = {}
+        self._vt_label_side.setCurrentIndex(0)
+        self._vt_label_font_size.setValue(18.0)
+        self._vt_label_font.clear()
         self._extra = {}
         self._loading = False
 

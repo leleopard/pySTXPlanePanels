@@ -33,9 +33,12 @@ YAML schema
       labels:
         interval: 20
         font_size: 18
+        font: Arial                  # optional font name (Arcade/pyglet font family)
         color: [255, 255, 255]
         format: "{:.0f}"             # Python format string
         offset: 8                    # gap (px) between spine and label edge
+        side: left                   # optional: left/right (y) or top/bottom (x)
+                                     # default = same as tick_side
       bands:
         - range: [0, 67]
           color: [200, 0, 0, 180]
@@ -94,6 +97,8 @@ class VectorTape:
         label_color: tuple = (255, 255, 255, 255),
         label_format: str = "{:.0f}",
         label_offset: float = 8.0,
+        label_side: str | None = None,
+        label_font: str | None = None,
         bands: list[dict] | None = None,
     ) -> None:
         self.name = name
@@ -110,6 +115,8 @@ class VectorTape:
         self._label_color = label_color
         self._label_format = label_format
         self._label_offset = float(label_offset)
+        self._label_side = label_side  # None → fall back to tick_side
+        self._label_font = label_font  # None → Arcade default font
         self._bands: list[dict] = []
         for b in (bands or []):
             self._bands.append({
@@ -240,7 +247,8 @@ class VectorTape:
     def _draw_labels_y(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
             return
-        if self._tick_side == "left":
+        side = self._label_side if self._label_side is not None else self._tick_side
+        if side == "left":
             lx, anchor_x = vx - self._label_offset, "right"
         else:
             lx, anchor_x = vx + vw + self._label_offset, "left"
@@ -248,6 +256,9 @@ class VectorTape:
         v_min = val - half_range - 1
         v_max = val + half_range + 1
         v = math.floor(v_min / self._label_interval) * self._label_interval
+        txt_kw: dict = {}
+        if self._label_font:
+            txt_kw["font_name"] = self._label_font
         while v <= v_max + self._label_interval * 0.001:
             y = self._cy + (v - val) * self._ppu
             if vy - 2 <= y <= vy + vh + 2:
@@ -258,6 +269,7 @@ class VectorTape:
                     font_size=self._label_font_size,
                     anchor_x=anchor_x,
                     anchor_y="center",
+                    **txt_kw,
                 )
             v += self._label_interval
 
@@ -303,7 +315,8 @@ class VectorTape:
     def _draw_labels_x(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
             return
-        if self._tick_side == "top":
+        side = self._label_side if self._label_side is not None else self._tick_side
+        if side == "top":
             ly, anchor_y = vy + vh + self._label_offset, "bottom"
         else:
             ly, anchor_y = vy - self._label_offset, "top"
@@ -311,6 +324,9 @@ class VectorTape:
         v_min = val - half_range - 1
         v_max = val + half_range + 1
         v = math.floor(v_min / self._label_interval) * self._label_interval
+        txt_kw: dict = {}
+        if self._label_font:
+            txt_kw["font_name"] = self._label_font
         while v <= v_max + self._label_interval * 0.001:
             x = self._cx + (v - val) * self._ppu
             if vx - 2 <= x <= vx + vw + 2:
@@ -321,6 +337,7 @@ class VectorTape:
                     font_size=self._label_font_size,
                     anchor_x="center",
                     anchor_y=anchor_y,
+                    **txt_kw,
                 )
             v += self._label_interval
 
@@ -352,6 +369,7 @@ def _vector_tape_factory(
         for b in bands_raw
     ]
 
+    label_side_raw = lbl.get("side")
     tape = VectorTape(
         name=comp["name"],
         position_xy=tuple(comp["position"]),
@@ -366,6 +384,8 @@ def _vector_tape_factory(
         label_color=_col(lbl.get("color")),
         label_format=str(lbl.get("format", "{:.0f}")),
         label_offset=float(lbl.get("offset", 8.0)),
+        label_side=str(label_side_raw) if label_side_raw is not None else None,
+        label_font=str(lbl["font"]) if lbl.get("font") else None,
         bands=bands,
     )
 
