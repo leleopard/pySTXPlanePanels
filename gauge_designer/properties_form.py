@@ -622,6 +622,12 @@ class PropertiesForm(QWidget):
         self._vt_label_interval.valueChanged.connect(self._emit)
         self._vt_sec.row("Label interval", self._vt_label_interval)
 
+        self._vt_label_offset = QDoubleSpinBox()
+        self._vt_label_offset.setRange(0.0, 200.0); self._vt_label_offset.setDecimals(1)
+        self._vt_label_offset.setValue(8.0)
+        self._vt_label_offset.valueChanged.connect(self._emit)
+        self._vt_sec.row("Label offset px", self._vt_label_offset)
+
         self._vt_label_side = _NoScrollComboBox()
         self._vt_label_side.addItems(["(same as tick side)", "left", "right", "top", "bottom"])
         self._vt_label_side.currentTextChanged.connect(self._emit)
@@ -893,8 +899,9 @@ class PropertiesForm(QWidget):
         )
         lbl = comp.get("labels") or {}
         self._vt_labels_cache = {k: v for k, v in lbl.items()
-                                 if k not in ("interval", "font_size", "font", "side")}
+                                 if k not in ("interval", "font_size", "font", "side", "offset")}
         self._vt_label_interval.setValue(float(lbl.get("interval", 0.0)))
+        self._vt_label_offset.setValue(float(lbl.get("offset", 8.0)))
         ls = str(lbl.get("side", "")) if lbl.get("side") else ""
         self._vt_label_side.setCurrentIndex(
             max(self._vt_label_side.findText(ls), 0) if ls else 0
@@ -1122,6 +1129,7 @@ class PropertiesForm(QWidget):
             else:
                 lbl_dict.pop("interval", None)
             lbl_dict["font_size"] = self._vt_label_font_size.value()
+            lbl_dict["offset"] = self._vt_label_offset.value()
             fn = self._vt_label_font.text().strip()
             if fn:
                 lbl_dict["font"] = fn
@@ -1197,6 +1205,7 @@ class PropertiesForm(QWidget):
         self._vt_ticks.load([])
         self._vt_labels_cache = {}
         self._vt_label_interval.setValue(0.0)
+        self._vt_label_offset.setValue(8.0)
         self._vt_label_side.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font.clear()
