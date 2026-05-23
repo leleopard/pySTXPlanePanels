@@ -196,11 +196,43 @@ def collect_datarefs(yaml_path: Path) -> list[_DatarefInfo]:
     return list(registry.values())
 
 
-# ── No-scroll spinbox ─────────────────────────────────────────────────────────
+# ── Digit-aware spinbox ───────────────────────────────────────────────────────
 
-class _NoScrollSpin(QDoubleSpinBox):
+class _DigitSpinBox(QDoubleSpinBox):
+    """Steps the digit at the cursor position rather than a fixed step size.
+
+    Click on any digit in the displayed number, then press Up/Down (or click
+    the arrows) to increment/decrement that digit's power of 10.
+    """
+
     def wheelEvent(self, event):
         event.ignore()
+
+    def stepBy(self, steps: int) -> None:
+        le = self.lineEdit()
+        text = le.text()
+        cur = le.cursorPosition()
+
+        sign_len = 1 if text.startswith('-') else 0
+        dec_pos = text.find('.')
+        if dec_pos == -1:
+            dec_pos = len(text)
+
+        # Digit immediately to the left of the cursor (clamped to first digit)
+        idx = max(sign_len, cur - 1)
+        # If cursor sits on the decimal point itself, use the units digit
+        if idx < len(text) and text[idx] == '.':
+            idx = max(sign_len, idx - 1)
+
+        if idx < dec_pos:
+            power = dec_pos - idx - 1      # e.g. hundreds=2, tens=1, units=0
+        else:
+            power = -(idx - dec_pos)       # e.g. tenths=-1, hundredths=-2
+
+        step_size = (10.0 ** power) * steps
+        self.setValue(round(self.value() + step_size, self.decimals()))
+        # Restore cursor so repeated presses keep stepping the same digit
+        le.setCursorPosition(cur)
 
 
 # ── Main window ───────────────────────────────────────────────────────────────
@@ -286,10 +318,9 @@ class TestHarnessWindow(QMainWindow):
             self._table.setItem(row, _COL_DATAREF, dr_item)
 
             # Value spinbox
-            spin = _NoScrollSpin()
+            spin = _DigitSpinBox()
             spin.setRange(info.input_min, info.input_max)
             spin.setDecimals(2)
-            spin.setSingleStep(max(1.0, (info.input_max - info.input_min) / 100))
             spin.setValue(0.0)
             spin.setMinimumWidth(90)
             # capture row/info in closure
