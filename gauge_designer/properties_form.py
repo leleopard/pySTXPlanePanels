@@ -174,71 +174,63 @@ class _TableEditor(QWidget):
 # ── Band endpoint editor ─────────────────────────────────────────────────────
 
 class _BandEndpointWidget(QWidget):
-    """Edits one band range endpoint: static value or dataref+table."""
+    """Compact single-row endpoint editor: static spinbox or dataref + table dialog."""
     changed = Signal()
 
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
+        self._table_data: list = []   # kept in memory; edited via dialog
+
         self._mode = _NoScrollComboBox()
         self._mode.addItems(["Static", "Dataref"])
+        self._mode.setFixedWidth(72)
         self._mode.currentIndexChanged.connect(self._on_mode_changed)
 
-        # Static page
+        # Static controls
         self._static_spin = QDoubleSpinBox()
         self._static_spin.setRange(-99999.0, 99999.0)
         self._static_spin.setDecimals(2)
         self._static_spin.valueChanged.connect(self.changed)
-        static_page = QWidget()
-        sp_layout = QHBoxLayout(static_page)
-        sp_layout.setContentsMargins(0, 0, 0, 0)
-        sp_layout.addWidget(self._static_spin)
 
-        # Dataref page
+        static_w = QWidget()
+        sl = QHBoxLayout(static_w)
+        sl.setContentsMargins(0, 0, 0, 0); sl.setSpacing(2)
+        sl.addWidget(self._static_spin)
+
+        # Dataref controls (all on one line)
         self._dr_edit = QLineEdit()
         self._dr_edit.setPlaceholderText("dataref path")
         self._dr_edit.editingFinished.connect(self.changed)
         self._dr_btn = QPushButton("…")
-        self._dr_btn.setFixedWidth(28)
+        self._dr_btn.setFixedWidth(26)
         self._dr_btn.setToolTip("Pick dataref")
         self._dr_btn.clicked.connect(self._pick_dr)
         self._fn_combo = _NoScrollComboBox()
         self._fn_combo.addItems(_VALUE_FUNCS)
+        self._fn_combo.setToolTip("Convert function")
         self._fn_combo.currentTextChanged.connect(self.changed)
-        self._table = _TableEditor("Input", "Output")
-        self._table.changed.connect(self.changed)
+        self._tbl_btn = QPushButton("Table…")
+        self._tbl_btn.setFixedWidth(58)
+        self._tbl_btn.setToolTip("Edit calibration table")
+        self._tbl_btn.clicked.connect(self._edit_table)
 
-        dr_page = QWidget()
-        dr_layout = QVBoxLayout(dr_page)
-        dr_layout.setContentsMargins(0, 0, 0, 0)
-        dr_layout.setSpacing(2)
-        dr_row = QHBoxLayout()
-        dr_row.setContentsMargins(0, 0, 0, 0)
-        dr_row.addWidget(self._dr_edit)
-        dr_row.addWidget(self._dr_btn)
-        dr_layout.addLayout(dr_row)
-        fn_row = QHBoxLayout()
-        fn_row.setContentsMargins(0, 0, 0, 0)
-        fn_row.addWidget(QLabel("Convert:"))
-        fn_row.addWidget(self._fn_combo, 1)
-        dr_layout.addLayout(fn_row)
-        dr_layout.addWidget(QLabel("Table:"))
-        dr_layout.addWidget(self._table)
+        dr_w = QWidget()
+        dl = QHBoxLayout(dr_w)
+        dl.setContentsMargins(0, 0, 0, 0); dl.setSpacing(2)
+        dl.addWidget(self._dr_edit, 1)
+        dl.addWidget(self._dr_btn)
+        dl.addWidget(self._fn_combo)
+        dl.addWidget(self._tbl_btn)
 
         self._stack = QStackedWidget()
-        self._stack.addWidget(static_page)
-        self._stack.addWidget(dr_page)
+        self._stack.addWidget(static_w)
+        self._stack.addWidget(dr_w)
 
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        top.setSpacing(4)
-        top.addWidget(QLabel(label))
-        top.addWidget(self._mode)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-        layout.addLayout(top)
-        layout.addWidget(self._stack)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0); row.setSpacing(4)
+        row.addWidget(QLabel(label))
+        row.addWidget(self._mode)
+        row.addWidget(self._stack, 1)
 
     def _on_mode_changed(self, idx: int):
         self._stack.setCurrentIndex(idx)
@@ -251,18 +243,32 @@ class _BandEndpointWidget(QWidget):
             self._dr_edit.setText(dlg.selected_dataref())
             self.changed.emit()
 
+    def _edit_table(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Calibration table")
+        dlg.resize(300, 220)
+        tbl = _TableEditor("Input", "Output")
+        tbl.load(self._table_data)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(tbl, 1)
+        lay.addWidget(btns)
+        if dlg.exec() == QDialog.Accepted:
+            self._table_data = tbl.get_data()
+            self.changed.emit()
+
     def load(self, raw):
-        """Load from a plain number (static) or dict (dataref)."""
         if isinstance(raw, dict):
             self._mode.blockSignals(True)
             self._mode.setCurrentIndex(1)
             self._stack.setCurrentIndex(1)
             self._mode.blockSignals(False)
             self._dr_edit.setText(str(raw.get("dataref", "")))
-            self._table.load(raw.get("table", []))
+            self._table_data = raw.get("table", [])
             fn = raw.get("convert_function") or _NONE
-            idx = self._fn_combo.findText(fn)
-            self._fn_combo.setCurrentIndex(max(idx, 0))
+            self._fn_combo.setCurrentIndex(max(self._fn_combo.findText(fn), 0))
         else:
             self._mode.blockSignals(True)
             self._mode.setCurrentIndex(0)
@@ -274,11 +280,12 @@ class _BandEndpointWidget(QWidget):
                 self._static_spin.setValue(0.0)
 
     def get_data(self):
-        """Return float (static) or dict (dataref)."""
         if self._mode.currentIndex() == 0:
             return self._static_spin.value()
-        dr = self._dr_edit.text().strip()
-        result: dict = {"dataref": dr, "table": self._table.get_data()}
+        result: dict = {
+            "dataref": self._dr_edit.text().strip(),
+            "table": self._table_data,
+        }
         fn = self._fn_combo.currentText()
         if fn != _NONE:
             result["convert_function"] = fn
