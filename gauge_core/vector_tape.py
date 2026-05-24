@@ -134,6 +134,8 @@ class VectorTape:
         label_offset: float = 8.0,
         label_side: str | None = None,
         label_font: str | None = None,
+        label_bold: bool = False,
+        label_italic: bool = False,
         bands: list[dict] | None = None,
         wrap: float | None = None,
     ) -> None:
@@ -153,6 +155,8 @@ class VectorTape:
         self._label_offset = float(label_offset)
         self._label_side = label_side  # None → fall back to tick_side
         self._label_font = label_font  # None → Arcade default font
+        self._label_bold = label_bold
+        self._label_italic = label_italic
         self._wrap = float(wrap) if wrap is not None else None
         self._bands: list[dict] = []
         for b in (bands or []):
@@ -327,7 +331,7 @@ class VectorTape:
         while v <= v_max + self._label_interval * 0.001:
             y = self._cy + (v - val) * self._ppu
             if idx >= len(self._label_pool):
-                kw: dict = {}
+                kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
                 if self._label_font:
                     kw["font_name"] = self._label_font
                 self._label_pool.append(arcade.Text(
@@ -402,7 +406,7 @@ class VectorTape:
         while v <= v_max + self._label_interval * 0.001:
             x = self._cx + (v - val) * self._ppu
             if idx >= len(self._label_pool):
-                kw: dict = {}
+                kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
                 if self._label_font:
                     kw["font_name"] = self._label_font
                 self._label_pool.append(arcade.Text(
@@ -466,6 +470,8 @@ def _vector_tape_factory(
         label_offset=float(lbl.get("offset", 8.0)),
         label_side=str(label_side_raw) if label_side_raw is not None else None,
         label_font=str(lbl["font"]) if lbl.get("font") else None,
+        label_bold=bool(lbl.get("bold", False)),
+        label_italic=bool(lbl.get("italic", False)),
         bands=bands,
         wrap=float(comp["wrap"]) if comp.get("wrap") is not None else None,
     )

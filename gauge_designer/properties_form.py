@@ -1069,6 +1069,19 @@ class PropertiesForm(QWidget):
         _font_hl.addWidget(_font_btn)
         self._vt_sec.row("Label font", _font_row)
 
+        _vt_style_row = QWidget()
+        _vt_style_hl = QHBoxLayout(_vt_style_row)
+        _vt_style_hl.setContentsMargins(0, 0, 0, 0)
+        _vt_style_hl.setSpacing(12)
+        self._vt_label_bold = QCheckBox("Bold")
+        self._vt_label_bold.toggled.connect(self._emit)
+        self._vt_label_italic = QCheckBox("Italic")
+        self._vt_label_italic.toggled.connect(self._emit)
+        _vt_style_hl.addWidget(self._vt_label_bold)
+        _vt_style_hl.addWidget(self._vt_label_italic)
+        _vt_style_hl.addStretch()
+        self._vt_sec.row("Label style", _vt_style_row)
+
         hint = QLabel("Label color/format and ticks color are preserved as-is from YAML.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #999; font-size: 10px;")
@@ -1333,7 +1346,8 @@ class PropertiesForm(QWidget):
         )
         lbl = comp.get("labels") or {}
         self._vt_labels_cache = {k: v for k, v in lbl.items()
-                                 if k not in ("interval", "font_size", "font", "side", "offset")}
+                                 if k not in ("interval", "font_size", "font", "bold", "italic",
+                                              "side", "offset")}
         self._vt_label_interval.setValue(float(lbl.get("interval", 0.0)))
         self._vt_label_offset.setValue(float(lbl.get("offset", 8.0)))
         ls = str(lbl.get("side", "")) if lbl.get("side") else ""
@@ -1342,6 +1356,8 @@ class PropertiesForm(QWidget):
         )
         self._vt_label_font_size.setValue(float(lbl.get("font_size", 18.0)))
         self._vt_label_font.setText(str(lbl.get("font", "")))
+        self._vt_label_bold.setChecked(bool(lbl.get("bold", False)))
+        self._vt_label_italic.setChecked(bool(lbl.get("italic", False)))
         self._vt_bands.load(comp.get("bands", []))
 
         # Text component
@@ -1636,6 +1652,14 @@ class PropertiesForm(QWidget):
                 lbl_dict["font"] = fn
             else:
                 lbl_dict.pop("font", None)
+            if self._vt_label_bold.isChecked():
+                lbl_dict["bold"] = True
+            else:
+                lbl_dict.pop("bold", None)
+            if self._vt_label_italic.isChecked():
+                lbl_dict["italic"] = True
+            else:
+                lbl_dict.pop("italic", None)
             ls = self._vt_label_side.currentText()
             if ls != "(same as tick side)":
                 lbl_dict["side"] = ls
@@ -1714,6 +1738,8 @@ class PropertiesForm(QWidget):
         self._vt_label_side.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font.clear()
+        self._vt_label_bold.setChecked(False)
+        self._vt_label_italic.setChecked(False)
         self._vt_bands.load([])
         self._txt_mode.setCurrentIndex(0)
         self._txt_stack.setCurrentIndex(0)
@@ -1825,10 +1851,14 @@ class PropertiesForm(QWidget):
         current_name = self._vt_label_font.text().strip() or "Arial"
         current_size = int(self._vt_label_font_size.value())
         initial = QFont(current_name, current_size)
+        initial.setBold(self._vt_label_bold.isChecked())
+        initial.setItalic(self._vt_label_italic.isChecked())
         ok, font = QFontDialog.getFont(initial, self, "Choose label font")
         if ok:
             self._vt_label_font.setText(font.family())
             self._vt_label_font_size.setValue(float(font.pointSize()))
+            self._vt_label_bold.setChecked(font.bold())
+            self._vt_label_italic.setChecked(font.italic())
             self._emit()
 
     def _pick_txt_font(self) -> None:
