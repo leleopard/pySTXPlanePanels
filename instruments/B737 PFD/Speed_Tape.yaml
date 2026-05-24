@@ -32,6 +32,48 @@ components:
   - 88
   - 87
   - 255
+- name: main_speed_tape
+  type: VectorTape
+  position:
+  - 81
+  - 307
+  scroll_axis: y
+  pixels_per_unit: 3.0
+  tick_side: right
+  tick_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 0
+    - - 382
+      - 382
+  ticks:
+  - interval: 10
+    length: 15
+    width: 2
+  - interval: 20
+    length: 15
+    width: 2
+  labels:
+    color:
+    - 255
+    - 255
+    - 255
+    format: '{:.0f}'
+    interval: 20.0
+    font_size: 16.0
+    offset: 23.0
+    side: left
+  viewport:
+  - 50
+  - 114
+  - 32
+  - 382
 - name: alt_tape_window
   type: Polygon
   points:
@@ -60,45 +102,104 @@ components:
   - 255
   - 255
   outline_width: 2.0
-- name: main_speed_tape
+- name: units_speed_tape
   type: VectorTape
   position:
-  - 74
-  - 300
+  - 45
+  - 307
   scroll_axis: y
-  pixels_per_unit: 5.0
-  tick_side: right
+  pixels_per_unit: 20.0
+  wrap: 10.0
+  tick_side: left
   tick_color:
   - 255
   - 255
   - 255
   - 255
-  ticks:
-  - interval: 10
-    length: 8
-    width: 2
-  - interval: 20
-    length: 16
-    width: 2
-  labels:
-    interval: 20
-    font_size: 14
-    side: left
-    color:
-    - 255
-    - 255
-    - 255
-    format: '{:.0f}'
-    offset: 4
   scroll:
     dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
     table:
     - - 0
       - 0
-    - - 382
-      - 382
+    - - 9.9
+      - 9.9
+    convert_function: return_units_decimal
+  labels:
+    interval: 1.0
+    font_size: 19.0
+    offset: 0.0
+    font: Arial
+    side: right
   viewport:
-  - 59
-  - 114
-  - 32
-  - 382
+  - 44
+  - 282
+  - 16
+  - 47
+- name: tens_speed_tape
+  type: VectorTape
+  position:
+  - 28
+  - 307
+  scroll_axis: y
+  pixels_per_unit: 20.0
+  tick_side: left
+  tick_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 0
+    - - 9
+      - 9
+    - - 10
+      - 0
+    convert_function: return_tens_digit_int
+  labels:
+    interval: 1.0
+    font_size: 19.0
+    offset: 0.0
+    font: Arial
+    side: right
+  viewport:
+  - 27
+  - 296
+  - 17
+  - 22
+- name: hundreds_speed_tape
+  type: VectorTape
+  position:
+  - 12
+  - 307
+  scroll_axis: y
+  pixels_per_unit: 20.0
+  tick_side: left
+  tick_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 0
+    - - 9
+      - 9
+    - - 10
+      - 0
+    convert_function: return_hundreds_digit_int
+  labels:
+    interval: 1.0
+    font_size: 19.0
+    offset: 0.0
+    font: Arial
+    side: right
+  viewport:
+  - 10
+  - 296
+  - 17
+  - 22

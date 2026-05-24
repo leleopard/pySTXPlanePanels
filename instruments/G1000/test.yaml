@@ -1,0 +1,60 @@
+name: G1000_altimeter2
+size:
+- 310
+- 304
+components:
+- name: c1
+  type: ScrollingTape
+  position:
+  - 155
+  - 232
+  texture: assets/G1000AirspeedIndicator/G1000_airspeed_nr_tape.png
+  scroll_axis: y
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 171
+    - - 9
+      - 0
+    convert_function: return_units_decimal
+  viewport:
+  - 145
+  - 155
+  - 19
+  - 21
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    predicate: true_if_over_zero
+- name: c10
+  type: ScrollingTape
+  position:
+  - 138
+  - 232
+  texture: assets/G1000AirspeedIndicator/G1000_airspeed_nr_tape.png
+  scroll_axis: y
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 171
+    - - 9
+      - 0
+    convert_function: return_tens_digit_int
+  viewport:
+  - 128
+  - 155
+  - 19
+  - 21
+- name: background
+  type: ImagePanel
+  position:
+  - 155
+  - 152
+  texture: assets/G1000AirspeedIndicator/G1000_airspeed_background.png
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 95
+  - 304

@@ -101,30 +101,19 @@ def return_units_decimal(value: float, _get: GetData) -> float:
     return value % 10.0
 
 
-def return_tens_digit(value: float, _get: GetData) -> float:
-    """Tens digit (0–9) as a whole number.
-
-    Input 1234.7 → 3.  Used to index a static tens-digit drum.
-    """
+def return_tens_digit_int(value: float, _get: GetData) -> float:
+    """Tens digit only (0–9), no fractional part.  Input 1234.7 → 3."""
     return float((int(value) // 10) % 10)
 
 
-def return_hundreds_digit(value: float, _get: GetData) -> float:
-    """Hundreds drum position including fractional carry from tens/units.
-
-    Input 1234.7 → 2.347  so the drum sits 34.7 % of the way between
-    '2' and '3'.  Pair with wrap: 10 on the tape.
-    """
-    return (value / 100.0) % 10.0
+def return_hundreds_digit_int(value: float, _get: GetData) -> float:
+    """Hundreds digit only (0–9), no fractional part.  Input 1234.7 → 2."""
+    return float((int(value) // 100) % 10)
 
 
-def return_thousands_digit(value: float, _get: GetData) -> float:
-    """Thousands drum position including fractional carry from lower digits.
-
-    Input 12345.6 → 2.3456  so the drum sits 34.56 % of the way between
-    '2' and '3'.  Pair with wrap: 10 on the tape.
-    """
-    return (value / 1000.0) % 10.0
+def return_thousands_digit_int(value: float, _get: GetData) -> float:
+    """Thousands digit only (0–9), no fractional part.  Input 12345.6 → 2."""
+    return float((int(value) // 1000) % 10)
 
 
 # -- Predicates -----------------------------------------------------------
@@ -212,9 +201,9 @@ for _name, _func in {
     "convert_suction": convert_suction,
     "nav_gsflg_visible": nav_gsflg_visible,
     "return_units_decimal": return_units_decimal,
-    "return_tens_digit": return_tens_digit,
-    "return_hundreds_digit": return_hundreds_digit,
-    "return_thousands_digit": return_thousands_digit,
+    "return_tens_digit_int": return_tens_digit_int,
+    "return_hundreds_digit_int": return_hundreds_digit_int,
+    "return_thousands_digit_int": return_thousands_digit_int,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
