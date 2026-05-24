@@ -603,6 +603,13 @@ class PropertiesForm(QWidget):
         self._vt_ppu.valueChanged.connect(self._emit)
         self._vt_sec.row("Pixels / unit", self._vt_ppu)
 
+        self._vt_wrap = QDoubleSpinBox()
+        self._vt_wrap.setRange(0.0, 99999.0); self._vt_wrap.setDecimals(2)
+        self._vt_wrap.setSpecialValueText("(none)")
+        self._vt_wrap.setValue(0.0)
+        self._vt_wrap.valueChanged.connect(self._emit)
+        self._vt_sec.row("Wrap (modulo)", self._vt_wrap)
+
         self._vt_tick_side = _NoScrollComboBox()
         self._vt_tick_side.addItems(["left", "right", "top", "bottom"])
         self._vt_tick_side.currentTextChanged.connect(self._emit)
@@ -795,7 +802,7 @@ class PropertiesForm(QWidget):
             "color", "width",
             "outline_color", "outline_width",
             # VectorTape (bands are stored in _extra; ticks + labels handled by form)
-            "pixels_per_unit", "tick_side", "tick_color", "ticks", "labels",
+            "pixels_per_unit", "wrap", "tick_side", "tick_color", "ticks", "labels",
             # shared across all
             "viewport", "visibility",
         }
@@ -900,6 +907,8 @@ class PropertiesForm(QWidget):
         # VectorTape
         self._vt_axis.setCurrentIndex(0 if str(comp.get("scroll_axis", "y")) == "y" else 1)
         self._vt_ppu.setValue(float(comp.get("pixels_per_unit", 5.0)))
+        wrap_val = comp.get("wrap")
+        self._vt_wrap.setValue(float(wrap_val) if wrap_val is not None else 0.0)
         ts = str(comp.get("tick_side", "left"))
         self._vt_tick_side.setCurrentIndex(max(self._vt_tick_side.findText(ts), 0))
         self._vt_tick_color.set_rgba(comp.get("tick_color"))
@@ -1113,6 +1122,9 @@ class PropertiesForm(QWidget):
         elif ct == "VectorTape":
             data["scroll_axis"] = "y" if self._vt_axis.currentIndex() == 0 else "x"
             data["pixels_per_unit"] = self._vt_ppu.value()
+            wrap = self._vt_wrap.value()
+            if wrap > 0.0:
+                data["wrap"] = wrap
             data["tick_side"] = self._vt_tick_side.currentText()
             data["tick_color"] = list(self._vt_tick_color.get_rgba())
             anim_dr = self._anim_dr.text().strip()
@@ -1210,6 +1222,7 @@ class PropertiesForm(QWidget):
         self._poly_outline_color.set_rgba(None); self._poly_outline_width.setValue(1.0)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
+        self._vt_wrap.setValue(0.0)
         self._vt_tick_side.setCurrentIndex(0)
         self._vt_tick_color.set_rgba(None)
         self._vt_ticks.load([])

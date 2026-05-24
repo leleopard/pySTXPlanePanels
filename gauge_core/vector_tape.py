@@ -46,6 +46,8 @@ YAML schema
         - range: [67, 200]
           color: [0, 180, 0, 180]
           width: 8
+      wrap: 10                         # optional: label digits cycle modulo this
+                                     # value (e.g. 10 for a 0-9 counter drum)
       scroll:
         dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
         table: [[0, 0], [400, 400]]
@@ -100,6 +102,7 @@ class VectorTape:
         label_side: str | None = None,
         label_font: str | None = None,
         bands: list[dict] | None = None,
+        wrap: float | None = None,
     ) -> None:
         self.name = name
         self._cx = float(position_xy[0])
@@ -117,6 +120,7 @@ class VectorTape:
         self._label_offset = float(label_offset)
         self._label_side = label_side  # None → fall back to tick_side
         self._label_font = label_font  # None → Arcade default font
+        self._wrap = float(wrap) if wrap is not None else None
         self._bands: list[dict] = []
         for b in (bands or []):
             self._bands.append({
@@ -171,6 +175,10 @@ class VectorTape:
         self._label_pool.clear()  # font size changed; pool objects are stale
         for band in self._bands:
             band["width"] *= scale
+
+    def _label_text(self, v: float) -> str:
+        display = v % self._wrap if self._wrap is not None else v
+        return self._label_format.format(display)
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._cx += dx;  self._cy += dy
@@ -287,7 +295,7 @@ class VectorTape:
                     **kw,
                 ))
             t = self._label_pool[idx]
-            t.value = self._label_format.format(v)
+            t.value = self._label_text(v)
             t.x = lx
             t.y = y
             t.draw()
@@ -362,7 +370,7 @@ class VectorTape:
                     **kw,
                 ))
             t = self._label_pool[idx]
-            t.value = self._label_format.format(v)
+            t.value = self._label_text(v)
             t.x = x
             t.y = ly
             t.draw()
@@ -415,6 +423,7 @@ def _vector_tape_factory(
         label_side=str(label_side_raw) if label_side_raw is not None else None,
         label_font=str(lbl["font"]) if lbl.get("font") else None,
         bands=bands,
+        wrap=float(comp["wrap"]) if comp.get("wrap") is not None else None,
     )
 
     if "scroll" in comp:
