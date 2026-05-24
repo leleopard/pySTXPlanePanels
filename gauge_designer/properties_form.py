@@ -549,6 +549,7 @@ class PropertiesForm(QWidget):
         self._mk_texture()
         self._mk_spritesheet()
         self._mk_scrolltape()
+        self._mk_text_sec()
         self._mk_line_sec()
         self._mk_arc_sec()
         self._mk_filledrect_sec()
@@ -705,6 +706,128 @@ class PropertiesForm(QWidget):
         self._st_sec.row("Scroll axis", self._st_axis)
 
         self._vbox.addWidget(self._st_sec)
+
+    def _mk_text_sec(self):
+        self._txt_sec = _Section("Text")
+        self._txt_sec.setVisible(False)
+
+        # Mode: Static text or Dataref-driven
+        self._txt_mode = _NoScrollComboBox()
+        self._txt_mode.addItems(["Static", "Dataref"])
+        self._txt_mode.currentIndexChanged.connect(self._on_txt_mode_changed)
+        self._txt_mode.currentIndexChanged.connect(self._emit)
+        self._txt_sec.row("Mode", self._txt_mode)
+
+        # Stacked pages: [0] Static, [1] Dataref
+        self._txt_stack = QStackedWidget()
+
+        # Page 0 — static text
+        static_page = QWidget()
+        sp_form = QFormLayout(static_page)
+        sp_form.setContentsMargins(0, 2, 0, 2)
+        sp_form.setHorizontalSpacing(8)
+        sp_form.setVerticalSpacing(4)
+        self._txt_static = QLineEdit()
+        self._txt_static.setPlaceholderText("label text")
+        self._txt_static.editingFinished.connect(self._emit)
+        sp_form.addRow("Text", self._txt_static)
+
+        # Page 1 — dataref-driven
+        dr_page = QWidget()
+        dp_form = QFormLayout(dr_page)
+        dp_form.setContentsMargins(0, 2, 0, 2)
+        dp_form.setHorizontalSpacing(8)
+        dp_form.setVerticalSpacing(4)
+
+        self._txt_dr = QLineEdit()
+        self._txt_dr.editingFinished.connect(self._emit)
+        dp_form.addRow("Dataref", self._dr_field(self._txt_dr))
+
+        self._txt_fn = _NoScrollComboBox()
+        self._txt_fn.addItems(_VALUE_FUNCS)
+        self._txt_fn.currentTextChanged.connect(self._emit)
+        dp_form.addRow("Convert fn", self._txt_fn)
+
+        self._txt_decimals = QSpinBox()
+        self._txt_decimals.setRange(0, 6)
+        self._txt_decimals.setValue(1)
+        self._txt_decimals.setMinimumWidth(50)
+        self._txt_decimals.valueChanged.connect(self._update_txt_format)
+        self._txt_decimals.valueChanged.connect(self._emit)
+        dp_form.addRow("Decimal places", self._txt_decimals)
+
+        self._txt_width = QSpinBox()
+        self._txt_width.setRange(0, 20)
+        self._txt_width.setValue(0)
+        self._txt_width.setSpecialValueText("auto")
+        self._txt_width.setMinimumWidth(50)
+        self._txt_width.valueChanged.connect(self._update_txt_format)
+        self._txt_width.valueChanged.connect(self._emit)
+        dp_form.addRow("Min width", self._txt_width)
+
+        self._txt_zerofill = QCheckBox("Zero fill")
+        self._txt_zerofill.toggled.connect(self._update_txt_format)
+        self._txt_zerofill.toggled.connect(self._emit)
+        dp_form.addRow(self._txt_zerofill)
+
+        fmt_w = QWidget()
+        fmt_hl = QHBoxLayout(fmt_w)
+        fmt_hl.setContentsMargins(0, 0, 0, 0)
+        fmt_hl.setSpacing(4)
+        self._txt_fmt_preview = QLabel("{:.1f}")
+        self._txt_fmt_preview.setStyleSheet("font-family: monospace; color: #aaa;")
+        fmt_hl.addWidget(self._txt_fmt_preview)
+        fmt_hl.addStretch()
+        dp_form.addRow("Format string", fmt_w)
+
+        self._txt_fmt_custom = QLineEdit()
+        self._txt_fmt_custom.setPlaceholderText("Override, e.g.  {:05.0f}  (blank = auto)")
+        self._txt_fmt_custom.editingFinished.connect(self._on_txt_fmt_custom_changed)
+        self._txt_fmt_custom.editingFinished.connect(self._emit)
+        dp_form.addRow("Custom fmt", self._txt_fmt_custom)
+
+        self._txt_stack.addWidget(static_page)
+        self._txt_stack.addWidget(dr_page)
+        self._txt_sec.row_widget(self._txt_stack)
+
+        # Font row (always visible)
+        self._txt_font_name = QLineEdit()
+        self._txt_font_name.setPlaceholderText("Arial  (blank = default)")
+        self._txt_font_name.editingFinished.connect(self._emit)
+        _txt_font_btn = QPushButton("…")
+        _txt_font_btn.setFixedWidth(28)
+        _txt_font_btn.setToolTip("Choose font")
+        _txt_font_btn.clicked.connect(self._pick_txt_font)
+        _txt_font_row = QWidget()
+        _txt_font_hl = QHBoxLayout(_txt_font_row)
+        _txt_font_hl.setContentsMargins(0, 0, 0, 0)
+        _txt_font_hl.setSpacing(4)
+        _txt_font_hl.addWidget(self._txt_font_name)
+        _txt_font_hl.addWidget(_txt_font_btn)
+        self._txt_sec.row("Font", _txt_font_row)
+
+        self._txt_font_size = QDoubleSpinBox()
+        self._txt_font_size.setRange(4.0, 200.0)
+        self._txt_font_size.setDecimals(1)
+        self._txt_font_size.setValue(12.0)
+        self._txt_font_size.valueChanged.connect(self._emit)
+        self._txt_sec.row("Font size", self._txt_font_size)
+
+        self._txt_color = _ColorButton()
+        self._txt_color.color_changed.connect(self._emit)
+        self._txt_sec.row("Color", self._txt_color)
+
+        self._txt_anchor_x = _NoScrollComboBox()
+        self._txt_anchor_x.addItems(["left", "center", "right"])
+        self._txt_anchor_x.currentTextChanged.connect(self._emit)
+        self._txt_sec.row("Anchor X", self._txt_anchor_x)
+
+        self._txt_anchor_y = _NoScrollComboBox()
+        self._txt_anchor_y.addItems(["baseline", "center", "top", "bottom"])
+        self._txt_anchor_y.currentTextChanged.connect(self._emit)
+        self._txt_sec.row("Anchor Y", self._txt_anchor_y)
+
+        self._vbox.addWidget(self._txt_sec)
 
     def _mk_line_sec(self):
         self._line_sec = _Section("Line")
@@ -1079,6 +1202,9 @@ class PropertiesForm(QWidget):
             "outline_color", "outline_width",
             # VectorTape (all form-managed)
             "pixels_per_unit", "wrap", "tick_side", "tick_color", "ticks", "labels", "bands",
+            # Text
+            "text", "dataref", "text_format", "convert_function",
+            "font_name", "font_size", "anchor_x", "anchor_y", "font_file",
             # shared across all
             "viewport", "visibility",
         }
@@ -1204,6 +1330,29 @@ class PropertiesForm(QWidget):
         self._vt_label_font_size.setValue(float(lbl.get("font_size", 18.0)))
         self._vt_label_font.setText(str(lbl.get("font", "")))
         self._vt_bands.load(comp.get("bands", []))
+
+        # Text component
+        has_dr = "dataref" in comp
+        self._txt_mode.blockSignals(True)
+        self._txt_mode.setCurrentIndex(1 if has_dr else 0)
+        self._txt_stack.setCurrentIndex(1 if has_dr else 0)
+        self._txt_mode.blockSignals(False)
+        self._txt_static.setText(str(comp.get("text", "")))
+        self._txt_dr.setText(str(comp.get("dataref", "")))
+        txt_cf = str(comp.get("convert_function") or _NONE)
+        self._txt_fn.setCurrentIndex(max(self._txt_fn.findText(txt_cf), 0))
+        txt_fmt = str(comp.get("text_format", ""))
+        self._txt_fmt_custom.setText(txt_fmt)
+        self._update_txt_format()  # refresh preview from builder
+        if txt_fmt:
+            self._txt_fmt_preview.setText(txt_fmt)  # custom overrides preview
+        self._txt_font_name.setText(str(comp.get("font_name", "")))
+        self._txt_font_size.setValue(float(comp.get("font_size", 12.0)))
+        self._txt_color.set_rgba(comp.get("color"))
+        ax = str(comp.get("anchor_x", "left"))
+        self._txt_anchor_x.setCurrentIndex(max(self._txt_anchor_x.findText(ax), 0))
+        ay = str(comp.get("anchor_y", "baseline"))
+        self._txt_anchor_y.setCurrentIndex(max(self._txt_anchor_y.findText(ay), 0))
 
         # ImagePanel rotation
         rot = comp.get("rotation")
@@ -1396,6 +1545,40 @@ class PropertiesForm(QWidget):
                     scroll["convert_function"] = cf
                 data["scroll"] = scroll
 
+        elif ct == "Text":
+            if self._txt_mode.currentIndex() == 0:  # Static
+                txt = self._txt_static.text()
+                if txt:
+                    data["text"] = txt
+            else:  # Dataref
+                dr = self._txt_dr.text().strip()
+                if dr:
+                    data["dataref"] = dr
+                cf = self._txt_fn.currentText()
+                if cf != _NONE:
+                    data["convert_function"] = cf
+                custom_fmt = self._txt_fmt_custom.text().strip()
+                if custom_fmt:
+                    data["text_format"] = custom_fmt
+                else:
+                    d = self._txt_decimals.value()
+                    w = self._txt_width.value()
+                    z = self._txt_zerofill.isChecked()
+                    fill = "0" if z and w > 0 else ""
+                    width_str = str(w) if w > 0 else ""
+                    data["text_format"] = "{:" + fill + width_str + "." + str(d) + "f}"
+            fn = self._txt_font_name.text().strip()
+            if fn:
+                data["font_name"] = fn
+            data["font_size"] = self._txt_font_size.value()
+            data["color"] = list(self._txt_color.get_rgba())
+            ax = self._txt_anchor_x.currentText()
+            if ax != "left":
+                data["anchor_x"] = ax
+            ay = self._txt_anchor_y.currentText()
+            if ay != "baseline":
+                data["anchor_y"] = ay
+
         elif ct == "VectorTape":
             data["scroll_axis"] = "y" if self._vt_axis.currentIndex() == 0 else "x"
             data["pixels_per_unit"] = self._vt_ppu.value()
@@ -1513,6 +1696,20 @@ class PropertiesForm(QWidget):
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font.clear()
         self._vt_bands.load([])
+        self._txt_mode.setCurrentIndex(0)
+        self._txt_stack.setCurrentIndex(0)
+        self._txt_static.clear()
+        self._txt_dr.clear()
+        self._txt_fn.setCurrentIndex(0)
+        self._txt_decimals.setValue(1)
+        self._txt_width.setValue(0)
+        self._txt_zerofill.setChecked(False)
+        self._txt_fmt_custom.clear()
+        self._txt_font_name.clear()
+        self._txt_font_size.setValue(12.0)
+        self._txt_color.set_rgba(None)
+        self._txt_anchor_x.setCurrentIndex(0)
+        self._txt_anchor_y.setCurrentIndex(0)
         self._extra = {}
         self._loading = False
 
@@ -1523,15 +1720,16 @@ class PropertiesForm(QWidget):
             self.changed.emit()
 
     def _on_type_changed(self, ct: str):
-        is_ip  = ct == "ImagePanel"
-        is_ss  = ct == "SpriteSheet"
-        is_st  = ct == "ScrollingTape"
-        is_img = is_ip or is_ss or is_st
+        is_ip   = ct == "ImagePanel"
+        is_ss   = ct == "SpriteSheet"
+        is_st   = ct == "ScrollingTape"
+        is_img  = is_ip or is_ss or is_st
         is_line = ct == "Line"
         is_arc  = ct == "Arc"
         is_frt  = ct == "FilledRect"
         is_poly = ct == "Polygon"
         is_vt   = ct == "VectorTape"
+        is_text = ct == "Text"
 
         # Position: hide for types that define geometry without a single centre point
         self._pos_sec.setVisible(not is_line and not is_arc and not is_poly)
@@ -1544,6 +1742,7 @@ class PropertiesForm(QWidget):
         # Type-specific sections
         self._ss_sec.setVisible(is_ss)
         self._st_sec.setVisible(is_st)
+        self._txt_sec.setVisible(is_text)
         self._line_sec.setVisible(is_line)
         self._arc_sec.setVisible(is_arc)
         self._frt_sec.setVisible(is_frt)
@@ -1610,6 +1809,37 @@ class PropertiesForm(QWidget):
             self._vt_label_font.setText(font.family())
             self._vt_label_font_size.setValue(float(font.pointSize()))
             self._emit()
+
+    def _pick_txt_font(self) -> None:
+        from PySide6.QtGui import QFont
+        current_name = self._txt_font_name.text().strip() or "Arial"
+        current_size = int(self._txt_font_size.value())
+        initial = QFont(current_name, current_size)
+        ok, font = QFontDialog.getFont(initial, self, "Choose font")
+        if ok:
+            self._txt_font_name.setText(font.family())
+            self._txt_font_size.setValue(float(font.pointSize()))
+            self._emit()
+
+    def _on_txt_mode_changed(self, idx: int) -> None:
+        self._txt_stack.setCurrentIndex(idx)
+
+    def _update_txt_format(self) -> None:
+        d = self._txt_decimals.value()
+        w = self._txt_width.value()
+        z = self._txt_zerofill.isChecked()
+        fill = "0" if z and w > 0 else ""
+        width_str = str(w) if w > 0 else ""
+        fmt = "{:" + fill + width_str + "." + str(d) + "f}"
+        if not self._txt_fmt_custom.text().strip():
+            self._txt_fmt_preview.setText(fmt)
+
+    def _on_txt_fmt_custom_changed(self) -> None:
+        custom = self._txt_fmt_custom.text().strip()
+        if custom:
+            self._txt_fmt_preview.setText(custom)
+        else:
+            self._update_txt_format()
 
     def _pick_dataref(self, lineedit: QLineEdit) -> None:
         from gauge_designer.dataref_picker import DatarefPickerDialog
