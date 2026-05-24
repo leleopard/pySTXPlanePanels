@@ -40,10 +40,14 @@ YAML schema
         side: left                   # optional: left/right (y) or top/bottom (x)
                                      # default = same as tick_side
       bands:
-        - range: [0, 67]
+        - range: [0, 67]             # both endpoints static
           color: [200, 0, 0, 180]
           width: 8
-        - range: [67, 200]
+        - range:                     # one or both endpoints dataref-driven
+            - dataref: sim/aircraft/view/acf_Vso
+              table: [[0, 0], [400, 400]]
+              convert_function: null
+            - 209                    # static upper bound
           color: [0, 180, 0, 180]
           width: 8
       wrap: 10                         # optional: label digits cycle modulo this
@@ -79,6 +83,35 @@ def _col(raw) -> tuple[int, int, int, int]:
 
 def _as_dataref(raw: Any) -> Any:
     return tuple(raw) if isinstance(raw, list) else raw
+
+
+class _BandEndpoint:
+    """A band range endpoint that is resolved from a dataref each frame."""
+    __slots__ = ("dataref", "table", "convert_fn", "_cached")
+
+    def __init__(self, dataref: Any, table: list, convert_fn: Callable | None):
+        self.dataref = dataref
+        self.table = table
+        self.convert_fn = convert_fn
+        self._cached: float = 0.0
+
+    def resolve(self, get_data: Callable) -> float:
+        raw = float(get_data(self.dataref))
+        if self.convert_fn is not None:
+            raw = float(self.convert_fn(raw, get_data))
+        self._cached = lookup_piecewise(self.table, raw)
+        return self._cached
+
+
+def _parse_endpoint(raw: Any) -> float | _BandEndpoint:
+    """Parse a band range entry: plain number → float, dict → _BandEndpoint."""
+    if isinstance(raw, dict):
+        return _BandEndpoint(
+            dataref=_as_dataref(raw["dataref"]),
+            table=raw.get("table", [[0, 0], [1, 1]]),
+            convert_fn=get_convert(raw.get("convert_function")),
+        )
+    return float(raw)
 
 
 class VectorTape:
@@ -123,8 +156,14 @@ class VectorTape:
         self._wrap = float(wrap) if wrap is not None else None
         self._bands: list[dict] = []
         for b in (bands or []):
+            rng = b["range"]
+            lo = _parse_endpoint(rng[0])
+            hi = _parse_endpoint(rng[1])
             self._bands.append({
-                "range": list(b["range"]),
+                "lo": lo,           # float or _BandEndpoint
+                "hi": hi,
+                "lo_val": lo if isinstance(lo, float) else 0.0,  # resolved cache
+                "hi_val": hi if isinstance(hi, float) else 0.0,
                 "color": _col(b["color"]),
                 "width": float(b.get("width", 8.0)),
             })
@@ -196,6 +235,11 @@ class VectorTape:
             if self._scroll_convert is not None:
                 raw = float(self._scroll_convert(raw, get_data))
             self._current_value = lookup_piecewise(self._scroll_table, raw)
+        for band in self._bands:
+            if isinstance(band["lo"], _BandEndpoint):
+                band["lo_val"] = band["lo"].resolve(get_data)
+            if isinstance(band["hi"], _BandEndpoint):
+                band["hi_val"] = band["hi"].resolve(get_data)
 
     def draw(self) -> None:
         if not self._visible:
@@ -229,7 +273,7 @@ class VectorTape:
 
     def _draw_bands_y(self, vx, vy, vw, vh, val):
         for band in self._bands:
-            bv_min, bv_max = band["range"]
+            bv_min, bv_max = band["lo_val"], band["hi_val"]
             bw = band["width"]
             y_bot = self._cy + (bv_min - val) * self._ppu
             y_top = self._cy + (bv_max - val) * self._ppu
@@ -306,7 +350,7 @@ class VectorTape:
 
     def _draw_bands_x(self, vx, vy, vw, vh, val):
         for band in self._bands:
-            bv_min, bv_max = band["range"]
+            bv_min, bv_max = band["lo_val"], band["hi_val"]
             bh = band["width"]
             x_left  = self._cx + (bv_min - val) * self._ppu
             x_right = self._cx + (bv_max - val) * self._ppu
@@ -398,7 +442,7 @@ def _vector_tape_factory(
     bands_raw = comp.get("bands", [])
     bands = [
         {
-            "range": list(b["range"]),
+            "range": b["range"],   # kept as-is; _parse_endpoint handles float or dict
             "color": b["color"],
             "width": float(b.get("width", 8.0)),
         }

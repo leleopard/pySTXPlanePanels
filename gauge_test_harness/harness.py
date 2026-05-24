@@ -150,6 +150,13 @@ def _collect_from_instrument(
             _register(vis["dataref"], [],
                       f"{label_base}  (visibility)")
 
+        for band in comp.get("bands", []):
+            for i, endpoint in enumerate(band.get("range", [])):
+                if isinstance(endpoint, dict) and "dataref" in endpoint:
+                    _register(endpoint["dataref"], endpoint.get("table", []),
+                              f"{label_base}  (band range[{i}])",
+                              convert_fn=endpoint.get("convert_function"))
+
 
 def _find_panels_project_root(yaml_path: Path) -> Path:
     """Walk up to the 'panels' ancestor and return its parent (project root)."""
