@@ -109,6 +109,24 @@ def return_tens_digit(value: float, _get: GetData) -> float:
     return float((int(value) // 10) % 10)
 
 
+def return_hundreds_digit(value: float, _get: GetData) -> float:
+    """Hundreds drum position including fractional carry from tens/units.
+
+    Input 1234.7 → 2.347  so the drum sits 34.7 % of the way between
+    '2' and '3'.  Pair with wrap: 10 on the tape.
+    """
+    return (value / 100.0) % 10.0
+
+
+def return_thousands_digit(value: float, _get: GetData) -> float:
+    """Thousands drum position including fractional carry from lower digits.
+
+    Input 12345.6 → 2.3456  so the drum sits 34.56 % of the way between
+    '2' and '3'.  Pair with wrap: 10 on the tape.
+    """
+    return (value / 1000.0) % 10.0
+
+
 # -- Predicates -----------------------------------------------------------
 # Predicates return a bool. Used by visibility transforms and
 # (potentially) for state-dependent component swapping.
@@ -195,6 +213,8 @@ for _name, _func in {
     "nav_gsflg_visible": nav_gsflg_visible,
     "return_units_decimal": return_units_decimal,
     "return_tens_digit": return_tens_digit,
+    "return_hundreds_digit": return_hundreds_digit,
+    "return_thousands_digit": return_thousands_digit,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
