@@ -24,7 +24,8 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
     QPushButton, QCheckBox, QDialog, QColorDialog, QFontDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
-    QFileDialog,
+    QFileDialog, QListWidget, QListWidgetItem, QStackedWidget, QFrame,
+    QGroupBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -168,6 +169,270 @@ class _TableEditor(QWidget):
         if r >= 0:
             self._tbl.removeRow(r)
             self.changed.emit()
+
+
+# ── Band endpoint editor ─────────────────────────────────────────────────────
+
+class _BandEndpointWidget(QWidget):
+    """Edits one band range endpoint: static value or dataref+table."""
+    changed = Signal()
+
+    def __init__(self, label: str, parent=None):
+        super().__init__(parent)
+        self._mode = _NoScrollComboBox()
+        self._mode.addItems(["Static", "Dataref"])
+        self._mode.currentIndexChanged.connect(self._on_mode_changed)
+
+        # Static page
+        self._static_spin = QDoubleSpinBox()
+        self._static_spin.setRange(-99999.0, 99999.0)
+        self._static_spin.setDecimals(2)
+        self._static_spin.valueChanged.connect(self.changed)
+        static_page = QWidget()
+        sp_layout = QHBoxLayout(static_page)
+        sp_layout.setContentsMargins(0, 0, 0, 0)
+        sp_layout.addWidget(self._static_spin)
+
+        # Dataref page
+        self._dr_edit = QLineEdit()
+        self._dr_edit.setPlaceholderText("dataref path")
+        self._dr_edit.editingFinished.connect(self.changed)
+        self._dr_btn = QPushButton("…")
+        self._dr_btn.setFixedWidth(28)
+        self._dr_btn.setToolTip("Pick dataref")
+        self._dr_btn.clicked.connect(self._pick_dr)
+        self._fn_combo = _NoScrollComboBox()
+        self._fn_combo.addItems(_VALUE_FUNCS)
+        self._fn_combo.currentTextChanged.connect(self.changed)
+        self._table = _TableEditor("Input", "Output")
+        self._table.changed.connect(self.changed)
+
+        dr_page = QWidget()
+        dr_layout = QVBoxLayout(dr_page)
+        dr_layout.setContentsMargins(0, 0, 0, 0)
+        dr_layout.setSpacing(2)
+        dr_row = QHBoxLayout()
+        dr_row.setContentsMargins(0, 0, 0, 0)
+        dr_row.addWidget(self._dr_edit)
+        dr_row.addWidget(self._dr_btn)
+        dr_layout.addLayout(dr_row)
+        fn_row = QHBoxLayout()
+        fn_row.setContentsMargins(0, 0, 0, 0)
+        fn_row.addWidget(QLabel("Convert:"))
+        fn_row.addWidget(self._fn_combo, 1)
+        dr_layout.addLayout(fn_row)
+        dr_layout.addWidget(QLabel("Table:"))
+        dr_layout.addWidget(self._table)
+
+        self._stack = QStackedWidget()
+        self._stack.addWidget(static_page)
+        self._stack.addWidget(dr_page)
+
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.setSpacing(4)
+        top.addWidget(QLabel(label))
+        top.addWidget(self._mode)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addLayout(top)
+        layout.addWidget(self._stack)
+
+    def _on_mode_changed(self, idx: int):
+        self._stack.setCurrentIndex(idx)
+        self.changed.emit()
+
+    def _pick_dr(self):
+        from gauge_designer.dataref_picker import DatarefPickerDialog
+        dlg = DatarefPickerDialog(current=self._dr_edit.text().strip(), parent=self)
+        if dlg.exec() == QDialog.Accepted and dlg.selected_dataref():
+            self._dr_edit.setText(dlg.selected_dataref())
+            self.changed.emit()
+
+    def load(self, raw):
+        """Load from a plain number (static) or dict (dataref)."""
+        if isinstance(raw, dict):
+            self._mode.blockSignals(True)
+            self._mode.setCurrentIndex(1)
+            self._stack.setCurrentIndex(1)
+            self._mode.blockSignals(False)
+            self._dr_edit.setText(str(raw.get("dataref", "")))
+            self._table.load(raw.get("table", []))
+            fn = raw.get("convert_function") or _NONE
+            idx = self._fn_combo.findText(fn)
+            self._fn_combo.setCurrentIndex(max(idx, 0))
+        else:
+            self._mode.blockSignals(True)
+            self._mode.setCurrentIndex(0)
+            self._stack.setCurrentIndex(0)
+            self._mode.blockSignals(False)
+            try:
+                self._static_spin.setValue(float(raw))
+            except (TypeError, ValueError):
+                self._static_spin.setValue(0.0)
+
+    def get_data(self):
+        """Return float (static) or dict (dataref)."""
+        if self._mode.currentIndex() == 0:
+            return self._static_spin.value()
+        dr = self._dr_edit.text().strip()
+        result: dict = {"dataref": dr, "table": self._table.get_data()}
+        fn = self._fn_combo.currentText()
+        if fn != _NONE:
+            result["convert_function"] = fn
+        return result
+
+
+# ── Band list editor ──────────────────────────────────────────────────────────
+
+class _BandsEditor(QWidget):
+    """Edits the full list of VectorTape bands."""
+    changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bands: list[dict] = []   # raw band dicts, parallel to list rows
+        self._loading = False
+
+        # List
+        self._list = QListWidget()
+        self._list.setFixedHeight(90)
+        self._list.currentRowChanged.connect(self._on_row_changed)
+
+        # List toolbar
+        add_btn = QPushButton("+"); add_btn.setFixedWidth(26)
+        add_btn.setToolTip("Add band"); add_btn.clicked.connect(self._add)
+        rm_btn  = QPushButton("−"); rm_btn.setFixedWidth(26)
+        rm_btn.setToolTip("Remove band"); rm_btn.clicked.connect(self._remove)
+        list_bar = QHBoxLayout()
+        list_bar.setContentsMargins(0, 0, 0, 0); list_bar.setSpacing(2)
+        list_bar.addWidget(add_btn); list_bar.addWidget(rm_btn)
+        list_bar.addStretch()
+
+        # Edit panel (shown when a band is selected)
+        self._edit_panel = QFrame()
+        self._edit_panel.setFrameShape(QFrame.StyledPanel)
+        self._edit_panel.setVisible(False)
+        ep_layout = QVBoxLayout(self._edit_panel)
+        ep_layout.setContentsMargins(6, 6, 6, 6)
+        ep_layout.setSpacing(4)
+
+        self._ep_min = _BandEndpointWidget("Min:")
+        self._ep_max = _BandEndpointWidget("Max:")
+        self._ep_min.changed.connect(self._on_endpoint_changed)
+        self._ep_max.changed.connect(self._on_endpoint_changed)
+
+        color_row = QHBoxLayout()
+        color_row.setContentsMargins(0, 0, 0, 0)
+        color_row.addWidget(QLabel("Color:"))
+        self._ep_color = _ColorButton()
+        self._ep_color.color_changed.connect(self._on_endpoint_changed)
+        color_row.addWidget(self._ep_color, 1)
+
+        width_row = QHBoxLayout()
+        width_row.setContentsMargins(0, 0, 0, 0)
+        width_row.addWidget(QLabel("Width px:"))
+        self._ep_width = QDoubleSpinBox()
+        self._ep_width.setRange(1.0, 200.0); self._ep_width.setDecimals(1)
+        self._ep_width.setValue(8.0)
+        self._ep_width.valueChanged.connect(self._on_endpoint_changed)
+        width_row.addWidget(self._ep_width)
+        width_row.addStretch()
+
+        ep_layout.addWidget(self._ep_min)
+        ep_layout.addWidget(self._ep_max)
+        ep_layout.addLayout(color_row)
+        ep_layout.addLayout(width_row)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self._list)
+        layout.addLayout(list_bar)
+        layout.addWidget(self._edit_panel)
+
+    def _band_label(self, band: dict) -> str:
+        def _ep_str(v):
+            if isinstance(v, dict):
+                dr = v.get("dataref", "?")
+                return f"DR:{dr.split('/')[-1]}"
+            return str(v)
+        lo = _ep_str(band["range"][0])
+        hi = _ep_str(band["range"][1])
+        c  = band.get("color", [255, 255, 255, 255])
+        return f"{lo} → {hi}   (w={band.get('width', 8)})"
+
+    def _refresh_list(self):
+        self._list.blockSignals(True)
+        current = self._list.currentRow()
+        self._list.clear()
+        for band in self._bands:
+            item = QListWidgetItem(self._band_label(band))
+            c = band.get("color", [255, 255, 255, 255])
+            item.setForeground(QColor(int(c[0]), int(c[1]), int(c[2])))
+            self._list.addItem(item)
+        self._list.setCurrentRow(current)
+        self._list.blockSignals(False)
+
+    def _on_row_changed(self, row: int):
+        if row < 0 or row >= len(self._bands):
+            self._edit_panel.setVisible(False)
+            return
+        self._loading = True
+        band = self._bands[row]
+        self._ep_min.load(band["range"][0])
+        self._ep_max.load(band["range"][1])
+        self._ep_color.set_rgba(band.get("color"))
+        self._ep_width.setValue(float(band.get("width", 8.0)))
+        self._edit_panel.setVisible(True)
+        self._loading = False
+
+    def _on_endpoint_changed(self):
+        if self._loading:
+            return
+        row = self._list.currentRow()
+        if row < 0 or row >= len(self._bands):
+            return
+        self._bands[row]["range"] = [self._ep_min.get_data(), self._ep_max.get_data()]
+        self._bands[row]["color"] = list(self._ep_color.get_rgba())
+        self._bands[row]["width"] = self._ep_width.value()
+        self._refresh_list()
+        self.changed.emit()
+
+    def _add(self):
+        self._bands.append({"range": [0.0, 100.0], "color": [255, 255, 255, 180], "width": 8.0})
+        self._refresh_list()
+        self._list.setCurrentRow(len(self._bands) - 1)
+        self.changed.emit()
+
+    def _remove(self):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        self._bands.pop(row)
+        self._refresh_list()
+        self.changed.emit()
+
+    def load(self, bands: list):
+        self._loading = True
+        self._bands = []
+        for b in bands:
+            self._bands.append({
+                "range": list(b.get("range", [0.0, 100.0])),
+                "color": b.get("color", [255, 255, 255, 180]),
+                "width": float(b.get("width", 8.0)),
+            })
+        self._refresh_list()
+        self._edit_panel.setVisible(False)
+        self._loading = False
+
+    def get_data(self) -> list:
+        return [
+            {"range": list(b["range"]), "color": list(b["color"]), "width": b["width"]}
+            for b in self._bands
+        ]
 
 
 # ── Collapsible section ───────────────────────────────────────────────────────
@@ -661,10 +926,14 @@ class PropertiesForm(QWidget):
         _font_hl.addWidget(_font_btn)
         self._vt_sec.row("Label font", _font_row)
 
-        hint = QLabel("Ticks, label interval/color/format and bands are preserved as-is from YAML.")
+        hint = QLabel("Label color/format and ticks color are preserved as-is from YAML.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #999; font-size: 10px;")
         self._vt_sec.row_widget(hint)
+
+        self._vt_bands = _BandsEditor()
+        self._vt_bands.changed.connect(self._emit)
+        self._vt_sec.row("Bands", self._vt_bands)
 
         self._vbox.addWidget(self._vt_sec)
 
@@ -801,8 +1070,8 @@ class PropertiesForm(QWidget):
             # shared across vector types
             "color", "width",
             "outline_color", "outline_width",
-            # VectorTape (bands are stored in _extra; ticks + labels handled by form)
-            "pixels_per_unit", "wrap", "tick_side", "tick_color", "ticks", "labels",
+            # VectorTape (all form-managed)
+            "pixels_per_unit", "wrap", "tick_side", "tick_color", "ticks", "labels", "bands",
             # shared across all
             "viewport", "visibility",
         }
@@ -927,6 +1196,7 @@ class PropertiesForm(QWidget):
         )
         self._vt_label_font_size.setValue(float(lbl.get("font_size", 18.0)))
         self._vt_label_font.setText(str(lbl.get("font", "")))
+        self._vt_bands.load(comp.get("bands", []))
 
         # ImagePanel rotation
         rot = comp.get("rotation")
@@ -1164,6 +1434,9 @@ class PropertiesForm(QWidget):
                 lbl_dict.pop("side", None)
             if lbl_dict:
                 data["labels"] = lbl_dict
+            bands = self._vt_bands.get_data()
+            if bands:
+                data["bands"] = bands
 
         if self._vp_sec.active:
             vh = self._vp_h.value()
@@ -1232,6 +1505,7 @@ class PropertiesForm(QWidget):
         self._vt_label_side.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font.clear()
+        self._vt_bands.load([])
         self._extra = {}
         self._loading = False
 
