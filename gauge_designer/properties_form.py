@@ -813,6 +813,19 @@ class PropertiesForm(QWidget):
         self._txt_font_size.valueChanged.connect(self._emit)
         self._txt_sec.row("Font size", self._txt_font_size)
 
+        _style_row = QWidget()
+        _style_hl = QHBoxLayout(_style_row)
+        _style_hl.setContentsMargins(0, 0, 0, 0)
+        _style_hl.setSpacing(12)
+        self._txt_bold = QCheckBox("Bold")
+        self._txt_bold.toggled.connect(self._emit)
+        self._txt_italic = QCheckBox("Italic")
+        self._txt_italic.toggled.connect(self._emit)
+        _style_hl.addWidget(self._txt_bold)
+        _style_hl.addWidget(self._txt_italic)
+        _style_hl.addStretch()
+        self._txt_sec.row("Style", _style_row)
+
         self._txt_color = _ColorButton()
         self._txt_color.color_changed.connect(self._emit)
         self._txt_sec.row("Color", self._txt_color)
@@ -1204,7 +1217,7 @@ class PropertiesForm(QWidget):
             "pixels_per_unit", "wrap", "tick_side", "tick_color", "ticks", "labels", "bands",
             # Text
             "text", "dataref", "text_format", "convert_function",
-            "font_name", "font_size", "anchor_x", "anchor_y", "font_file",
+            "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # shared across all
             "viewport", "visibility",
         }
@@ -1348,6 +1361,8 @@ class PropertiesForm(QWidget):
             self._txt_fmt_preview.setText(txt_fmt)  # custom overrides preview
         self._txt_font_name.setText(str(comp.get("font_name", "")))
         self._txt_font_size.setValue(float(comp.get("font_size", 12.0)))
+        self._txt_bold.setChecked(bool(comp.get("bold", False)))
+        self._txt_italic.setChecked(bool(comp.get("italic", False)))
         self._txt_color.set_rgba(comp.get("color"))
         ax = str(comp.get("anchor_x", "left"))
         self._txt_anchor_x.setCurrentIndex(max(self._txt_anchor_x.findText(ax), 0))
@@ -1571,6 +1586,10 @@ class PropertiesForm(QWidget):
             if fn:
                 data["font_name"] = fn
             data["font_size"] = self._txt_font_size.value()
+            if self._txt_bold.isChecked():
+                data["bold"] = True
+            if self._txt_italic.isChecked():
+                data["italic"] = True
             data["color"] = list(self._txt_color.get_rgba())
             ax = self._txt_anchor_x.currentText()
             if ax != "left":
@@ -1707,6 +1726,8 @@ class PropertiesForm(QWidget):
         self._txt_fmt_custom.clear()
         self._txt_font_name.clear()
         self._txt_font_size.setValue(12.0)
+        self._txt_bold.setChecked(False)
+        self._txt_italic.setChecked(False)
         self._txt_color.set_rgba(None)
         self._txt_anchor_x.setCurrentIndex(0)
         self._txt_anchor_y.setCurrentIndex(0)
@@ -1815,10 +1836,14 @@ class PropertiesForm(QWidget):
         current_name = self._txt_font_name.text().strip() or "Arial"
         current_size = int(self._txt_font_size.value())
         initial = QFont(current_name, current_size)
+        initial.setBold(self._txt_bold.isChecked())
+        initial.setItalic(self._txt_italic.isChecked())
         ok, font = QFontDialog.getFont(initial, self, "Choose font")
         if ok:
             self._txt_font_name.setText(font.family())
             self._txt_font_size.setValue(float(font.pointSize()))
+            self._txt_bold.setChecked(font.bold())
+            self._txt_italic.setChecked(font.italic())
             self._emit()
 
     def _on_txt_mode_changed(self, idx: int) -> None:

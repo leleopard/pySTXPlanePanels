@@ -59,6 +59,8 @@ class Text:
         color: tuple[int, int, int, int] = (255, 255, 255, 255),
         anchor_x: str = "left",
         anchor_y: str = "baseline",
+        bold: bool = False,
+        italic: bool = False,
     ) -> None:
         self.name = name
         # arcade.Text font_name accepts a tuple of fallbacks too; use the
@@ -71,6 +73,8 @@ class Text:
             font_size=font_size,
             anchor_x=anchor_x,
             anchor_y=anchor_y,
+            bold=bold,
+            italic=italic,
         )
         if font_name:
             kwargs["font_name"] = font_name
@@ -170,6 +174,8 @@ def _text_factory(
         color=_as_color(comp.get("color")),
         anchor_x=comp.get("anchor_x", "left"),
         anchor_y=comp.get("anchor_y", "baseline"),
+        bold=bool(comp.get("bold", False)),
+        italic=bool(comp.get("italic", False)),
     )
     if "dataref" in comp:
         text.set_dataref(
