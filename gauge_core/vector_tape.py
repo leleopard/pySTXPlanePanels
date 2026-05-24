@@ -134,6 +134,10 @@ class VectorTape:
         self._vis_dataref: Any = None
         self._vis_predicate: Callable | None = None
 
+        # Pool of arcade.Text objects reused each frame to avoid the cost of
+        # draw_text (which rebuilds a glyph batch on every call).
+        self._label_pool: list[arcade.Text] = []
+
     # -- configuration --------------------------------------------------------
 
     def set_scroll(
@@ -164,6 +168,7 @@ class VectorTape:
             td["width"]  = max(1.0, float(td["width"]) * scale)
         self._label_offset    *= scale
         self._label_font_size *= scale
+        self._label_pool.clear()  # font size changed; pool objects are stale
         for band in self._bands:
             band["width"] *= scale
 
@@ -266,20 +271,27 @@ class VectorTape:
         v_min = val - half_range - 1
         v_max = val + half_range + 1
         v = math.floor(v_min / self._label_interval) * self._label_interval
-        txt_kw: dict = {}
-        if self._label_font:
-            txt_kw["font_name"] = self._label_font
+        idx = 0
         while v <= v_max + self._label_interval * 0.001:
             y = self._cy + (v - val) * self._ppu
-            arcade.draw_text(
-                self._label_format.format(v),
-                lx, y,
-                self._label_color,
-                font_size=self._label_font_size,
-                anchor_x=anchor_x,
-                anchor_y="center",
-                **txt_kw,
-            )
+            if idx >= len(self._label_pool):
+                kw: dict = {}
+                if self._label_font:
+                    kw["font_name"] = self._label_font
+                self._label_pool.append(arcade.Text(
+                    "", 0, 0,
+                    color=self._label_color,
+                    font_size=self._label_font_size,
+                    anchor_x=anchor_x,
+                    anchor_y="center",
+                    **kw,
+                ))
+            t = self._label_pool[idx]
+            t.value = self._label_format.format(v)
+            t.x = lx
+            t.y = y
+            t.draw()
+            idx += 1
             v += self._label_interval
 
     # -- horizontal tape ------------------------------------------------------
@@ -334,20 +346,27 @@ class VectorTape:
         v_min = val - half_range - 1
         v_max = val + half_range + 1
         v = math.floor(v_min / self._label_interval) * self._label_interval
-        txt_kw: dict = {}
-        if self._label_font:
-            txt_kw["font_name"] = self._label_font
+        idx = 0
         while v <= v_max + self._label_interval * 0.001:
             x = self._cx + (v - val) * self._ppu
-            arcade.draw_text(
-                self._label_format.format(v),
-                x, ly,
-                self._label_color,
-                font_size=self._label_font_size,
-                anchor_x="center",
-                anchor_y=anchor_y,
-                **txt_kw,
-            )
+            if idx >= len(self._label_pool):
+                kw: dict = {}
+                if self._label_font:
+                    kw["font_name"] = self._label_font
+                self._label_pool.append(arcade.Text(
+                    "", 0, 0,
+                    color=self._label_color,
+                    font_size=self._label_font_size,
+                    anchor_x="center",
+                    anchor_y=anchor_y,
+                    **kw,
+                ))
+            t = self._label_pool[idx]
+            t.value = self._label_format.format(v)
+            t.x = x
+            t.y = ly
+            t.draw()
+            idx += 1
             v += self._label_interval
 
 
