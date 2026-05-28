@@ -150,6 +150,12 @@ def _collect_from_instrument(
             _register(vis["dataref"], [],
                       f"{label_base}  (visibility)")
 
+        # Text component: dataref at the top level of the component dict
+        if "dataref" in comp and not isinstance(comp["dataref"], dict):
+            _register(comp["dataref"], [],
+                      f"{label_base}  (text)",
+                      convert_fn=comp.get("convert_function"))
+
         for band in comp.get("bands", []):
             for i, endpoint in enumerate(band.get("range", [])):
                 if isinstance(endpoint, dict) and "dataref" in endpoint:
