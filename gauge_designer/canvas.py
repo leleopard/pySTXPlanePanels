@@ -594,10 +594,10 @@ class InstrumentCanvas(QWidget):
                 spine_x = int(vx) if tick_side == "left" else int(vx + vw)
                 if label_side == "left":
                     lx = spine_x - int(label_offset)
-                    right_align = True
+                    pil_anchor = "rm"   # right edge at lx, middle at y
                 else:
                     lx = spine_x + int(label_offset)
-                    right_align = False
+                    pil_anchor = "lm"   # left edge at lx, middle at y
                 half_range = vh / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
@@ -606,23 +606,18 @@ class InstrumentCanvas(QWidget):
                     if int(py_top) <= y_pil <= int(py_top + vh):
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
-                        try:
-                            bb = draw.textbbox((0, 0), text, font=font)
-                            tw, th = bb[2] - bb[0], bb[3] - bb[1]
-                        except Exception:
-                            tw, th = len(text) * font_size // 2, font_size
-                        tx = lx - tw if right_align else lx
-                        draw.text((tx, y_pil - th // 2), text, fill=label_color, font=font)
+                        draw.text((lx, y_pil), text, fill=label_color,
+                                  font=font, anchor=pil_anchor)
                     v += label_interval
             else:
                 label_side = labels.get("side") or tick_side
                 spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
                 if label_side == "top":
                     ly_base = spine_y - int(label_offset)
-                    anchor_bottom = True
+                    pil_anchor = "mb"   # centre x, bottom edge at ly_base
                 else:
                     ly_base = spine_y + int(label_offset)
-                    anchor_bottom = False
+                    pil_anchor = "mt"   # centre x, top edge at ly_base
                 half_range = vw / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
@@ -631,14 +626,8 @@ class InstrumentCanvas(QWidget):
                     if int(vx) <= x_pil <= int(vx + vw):
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
-                        try:
-                            bb = draw.textbbox((0, 0), text, font=font)
-                            tw, th = bb[2] - bb[0], bb[3] - bb[1]
-                        except Exception:
-                            tw, th = len(text) * font_size // 2, font_size
-                        tx = x_pil - tw // 2
-                        ty = ly_base - th if anchor_bottom else ly_base
-                        draw.text((tx, ty), text, fill=label_color, font=font)
+                        draw.text((x_pil, ly_base), text, fill=label_color,
+                                  font=font, anchor=pil_anchor)
                     v += label_interval
 
         # Viewport border
