@@ -520,6 +520,11 @@ class InstrumentCanvas(QWidget):
         ppu = float(comp.get("pixels_per_unit", 5.0))
         ticks = comp.get("ticks", [])
 
+        # Component position in PIL coords — anchor point for value=0
+        pos = comp.get("position", [vx + vw / 2, vy_bottom + vh / 2])
+        cy_pil = canvas_h - pos[1]   # y-axis anchor (PIL)
+        cx_pil = pos[0]              # x-axis anchor
+
         if axis == "y":
             spine_x = int(vx) if tick_side == "left" else int(vx + vw)
             tick_dir = 1 if tick_side == "left" else -1
@@ -530,20 +535,24 @@ class InstrumentCanvas(QWidget):
                 bside = band.get("side") or tick_side
                 bx = int(vx) if bside == "left" else int(vx + vw - bw)
                 draw.rectangle([bx, int(py_top), int(bx + bw), int(py_top + vh)], fill=bc)
-            # Spine line (only when ticks are defined)
+            # Spine line
             if ticks:
                 draw.line([(spine_x, int(py_top)), (spine_x, int(py_top + vh))],
                           fill=tc, width=1)
-            # Evenly-spaced tick marks — one pass per tick definition
+            # Tick marks — anchored to pos[1] so they align with labels
+            half_range = vh / 2 / ppu
             for td in ticks:
                 interval = float(td["interval"])
-                length = float(td.get("length", 15))
-                step_px = max(1, int(interval * ppu))
-                y = int(py_top)
-                while y <= int(py_top + vh):
-                    draw.line([(spine_x, y), (spine_x + tick_dir * int(length), y)],
-                              fill=tc, width=max(1, int(td.get("width", 2))))
-                    y += step_px
+                length   = float(td.get("length", 15))
+                tw       = max(1, int(td.get("width", 2)))
+                tc_col   = _rgba(td["color"]) if td.get("color") else tc
+                v = math.floor((-half_range - interval) / interval) * interval
+                while v <= half_range + interval + interval * 0.001:
+                    y = int(cy_pil - v * ppu)
+                    if int(py_top) <= y <= int(py_top + vh):
+                        draw.line([(spine_x, y), (spine_x + tick_dir * int(length), y)],
+                                  fill=tc_col, width=tw)
+                    v += interval
         else:
             spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
             tick_dir = 1 if tick_side != "top" else -1
@@ -555,18 +564,21 @@ class InstrumentCanvas(QWidget):
                 draw.rectangle([int(vx), by, int(vx + vw), int(by + bh)], fill=bc)
             if ticks:
                 draw.line([(int(vx), spine_y), (int(vx + vw), spine_y)], fill=tc, width=1)
+            half_range = vw / 2 / ppu
             for td in ticks:
                 interval = float(td["interval"])
-                length = float(td.get("length", 15))
-                step_px = max(1, int(interval * ppu))
-                x = int(vx)
-                while x <= int(vx + vw):
-                    draw.line([(x, spine_y), (x, spine_y + tick_dir * int(length))],
-                              fill=tc, width=max(1, int(td.get("width", 2))))
-                    x += step_px
+                length   = float(td.get("length", 15))
+                tw       = max(1, int(td.get("width", 2)))
+                tc_col   = _rgba(td["color"]) if td.get("color") else tc
+                v = math.floor((-half_range - interval) / interval) * interval
+                while v <= half_range + interval + interval * 0.001:
+                    x = int(cx_pil + v * ppu)
+                    if int(vx) <= x <= int(vx + vw):
+                        draw.line([(x, spine_y), (x, spine_y + tick_dir * int(length))],
+                                  fill=tc_col, width=tw)
+                    v += interval
 
         # Labels
-        pos = comp.get("position", [vx + vw / 2, vy_bottom + vh / 2])
         labels = comp.get("labels") or {}
         label_interval = float(labels.get("interval", 0))
         if label_interval > 0:
@@ -586,7 +598,6 @@ class InstrumentCanvas(QWidget):
                 else:
                     lx = spine_x + int(label_offset)
                     right_align = False
-                cy_pil = canvas_h - pos[1]
                 half_range = vh / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
@@ -612,7 +623,6 @@ class InstrumentCanvas(QWidget):
                 else:
                     ly_base = spine_y + int(label_offset)
                     anchor_bottom = False
-                cx_pil = pos[0]
                 half_range = vw / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
@@ -636,7 +646,7 @@ class InstrumentCanvas(QWidget):
                        outline=(80, 80, 150, 255), width=1)
 
         # Position marker (where current value sits)
-        mx, my = int(pos[0]), canvas_h - int(pos[1])
+        mx, my = int(cx_pil), int(cy_pil)
         draw.line([(mx - 8, my), (mx + 8, my)], fill=(255, 200, 0, 255), width=1)
         draw.line([(mx, my - 8), (mx, my + 8)], fill=(255, 200, 0, 255), width=1)
 
