@@ -170,6 +170,7 @@ class VectorTape:
                 "hi_val": hi if isinstance(hi, float) else 0.0,
                 "color": _col(b["color"]),
                 "width": float(b.get("width", 8.0)),
+                "side": b.get("side"),  # None → follow tick_side
             })
 
         self._current_value: float = 0.0
@@ -285,7 +286,8 @@ class VectorTape:
             y_top = min(y_top, vy + vh)
             if y_top <= y_bot:
                 continue
-            bx = vx if self._tick_side == "left" else vx + vw - bw
+            side = band.get("side") or self._tick_side
+            bx = vx if side == "left" else vx + vw - bw
             arcade.draw_rect_filled(
                 arcade.LBWH(bx, y_bot, bw, y_top - y_bot),
                 band["color"],
@@ -362,7 +364,8 @@ class VectorTape:
             x_right = min(x_right, vx + vw)
             if x_right <= x_left:
                 continue
-            by = (vy + vh - bh) if self._tick_side == "top" else vy
+            side = band.get("side") or self._tick_side
+            by = (vy + vh - bh) if side == "top" else vy
             arcade.draw_rect_filled(
                 arcade.LBWH(x_left, by, x_right - x_left, bh),
                 band["color"],
@@ -449,6 +452,7 @@ def _vector_tape_factory(
             "range": b["range"],   # kept as-is; _parse_endpoint handles float or dict
             "color": b["color"],
             "width": float(b.get("width", 8.0)),
+            "side": b.get("side"),
         }
         for b in bands_raw
     ]

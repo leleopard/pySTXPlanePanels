@@ -346,6 +346,11 @@ class _BandsEditor(QWidget):
         self._ep_width.setValue(8.0)
         self._ep_width.valueChanged.connect(self._on_endpoint_changed)
         width_row.addWidget(self._ep_width)
+        width_row.addWidget(QLabel("Side:"))
+        self._ep_side = _NoScrollComboBox()
+        self._ep_side.addItems(["left", "right", "top", "bottom"])
+        self._ep_side.currentTextChanged.connect(self._on_endpoint_changed)
+        width_row.addWidget(self._ep_side)
         width_row.addStretch()
 
         ep_layout.addWidget(self._ep_min)
@@ -393,6 +398,8 @@ class _BandsEditor(QWidget):
         self._ep_max.load(band["range"][1])
         self._ep_color.set_rgba(band.get("color"))
         self._ep_width.setValue(float(band.get("width", 8.0)))
+        side = band.get("side") or "left"
+        self._ep_side.setCurrentText(side)
         self._edit_panel.setVisible(True)
         self._loading = False
 
@@ -405,11 +412,12 @@ class _BandsEditor(QWidget):
         self._bands[row]["range"] = [self._ep_min.get_data(), self._ep_max.get_data()]
         self._bands[row]["color"] = list(self._ep_color.get_rgba())
         self._bands[row]["width"] = self._ep_width.value()
+        self._bands[row]["side"] = self._ep_side.currentText()
         self._refresh_list()
         self.changed.emit()
 
     def _add(self):
-        self._bands.append({"range": [0.0, 100.0], "color": [255, 255, 255, 180], "width": 8.0})
+        self._bands.append({"range": [0.0, 100.0], "color": [255, 255, 255, 180], "width": 8.0, "side": "left"})
         self._refresh_list()
         self._list.setCurrentRow(len(self._bands) - 1)
         self.changed.emit()
@@ -430,6 +438,7 @@ class _BandsEditor(QWidget):
                 "range": list(b.get("range", [0.0, 100.0])),
                 "color": b.get("color", [255, 255, 255, 180]),
                 "width": float(b.get("width", 8.0)),
+                "side": b.get("side") or "left",
             })
         self._refresh_list()
         self._edit_panel.setVisible(False)
@@ -437,7 +446,8 @@ class _BandsEditor(QWidget):
 
     def get_data(self) -> list:
         return [
-            {"range": list(b["range"]), "color": list(b["color"]), "width": b["width"]}
+            {"range": list(b["range"]), "color": list(b["color"]),
+             "width": b["width"], "side": b.get("side", "left")}
             for b in self._bands
         ]
 
