@@ -13,9 +13,10 @@ Interaction:
 """
 
 import io
+import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter
@@ -28,6 +29,35 @@ def _rgba(raw) -> tuple:
     if len(raw) == 3:
         return (int(raw[0]), int(raw[1]), int(raw[2]), 255)
     return tuple(int(v) for v in raw[:4])
+
+
+_PIL_FONT_CACHE: dict[tuple, ImageFont.FreeTypeFont] = {}
+
+def _pil_font(name: str | None, size: int) -> ImageFont.ImageFont:
+    """Load a PIL font by family name, falling back to the default bitmap font."""
+    key = (name or "", size)
+    if key in _PIL_FONT_CACHE:
+        return _PIL_FONT_CACHE[key]
+    font = None
+    if name:
+        fonts_dir = Path("C:/Windows/Fonts")
+        if fonts_dir.exists():
+            needle = name.lower().replace(" ", "")
+            for f in sorted(fonts_dir.iterdir()):
+                if f.suffix.lower() in (".ttf", ".otf"):
+                    if needle in f.stem.lower().replace(" ", "").replace("-", ""):
+                        try:
+                            font = ImageFont.truetype(str(f), size)
+                            break
+                        except Exception:
+                            continue
+    if font is None:
+        try:
+            font = ImageFont.load_default(size=size)
+        except TypeError:
+            font = ImageFont.load_default()
+    _PIL_FONT_CACHE[key] = font
+    return font
 
 
 class _CanvasSurface(QWidget):
@@ -497,7 +527,8 @@ class InstrumentCanvas(QWidget):
             for band in comp.get("bands", []):
                 bc = _rgba(band.get("color"))
                 bw = float(band.get("width", 8))
-                bx = int(vx) if tick_side == "left" else int(vx + vw - bw)
+                bside = band.get("side") or tick_side
+                bx = int(vx) if bside == "left" else int(vx + vw - bw)
                 draw.rectangle([bx, int(py_top), int(bx + bw), int(py_top + vh)], fill=bc)
             # Spine line (only when ticks are defined)
             if ticks:
@@ -519,7 +550,8 @@ class InstrumentCanvas(QWidget):
             for band in comp.get("bands", []):
                 bc = _rgba(band.get("color"))
                 bh = float(band.get("width", 8))
-                by = int(py_top) if tick_side == "top" else int(py_top + vh - bh)
+                bside = band.get("side") or tick_side
+                by = int(py_top) if bside == "top" else int(py_top + vh - bh)
                 draw.rectangle([int(vx), by, int(vx + vw), int(by + bh)], fill=bc)
             if ticks:
                 draw.line([(int(vx), spine_y), (int(vx + vw), spine_y)], fill=tc, width=1)
@@ -533,12 +565,77 @@ class InstrumentCanvas(QWidget):
                               fill=tc, width=max(1, int(td.get("width", 2))))
                     x += step_px
 
+        # Labels
+        pos = comp.get("position", [vx + vw / 2, vy_bottom + vh / 2])
+        labels = comp.get("labels") or {}
+        label_interval = float(labels.get("interval", 0))
+        if label_interval > 0:
+            label_offset = float(labels.get("offset", 8))
+            label_color  = _rgba(labels.get("color", [255, 255, 255, 255]))
+            label_fmt    = labels.get("format", "{:.0f}")
+            wrap         = comp.get("wrap")
+            font_size    = max(8, int(float(labels.get("font_size", 18))))
+            font         = _pil_font(labels.get("font"), font_size)
+
+            if axis == "y":
+                label_side = labels.get("side") or tick_side
+                spine_x = int(vx) if tick_side == "left" else int(vx + vw)
+                if label_side == "left":
+                    lx = spine_x - int(label_offset)
+                    right_align = True
+                else:
+                    lx = spine_x + int(label_offset)
+                    right_align = False
+                cy_pil = canvas_h - pos[1]
+                half_range = vh / 2 / ppu
+                v = math.floor((-half_range - label_interval) / label_interval) * label_interval
+                v_max = half_range + label_interval
+                while v <= v_max + label_interval * 0.001:
+                    y_pil = int(cy_pil - v * ppu)
+                    if int(py_top) <= y_pil <= int(py_top + vh):
+                        display = v % wrap if wrap else v
+                        text = label_fmt.format(display)
+                        try:
+                            bb = draw.textbbox((0, 0), text, font=font)
+                            tw, th = bb[2] - bb[0], bb[3] - bb[1]
+                        except Exception:
+                            tw, th = len(text) * font_size // 2, font_size
+                        tx = lx - tw if right_align else lx
+                        draw.text((tx, y_pil - th // 2), text, fill=label_color, font=font)
+                    v += label_interval
+            else:
+                label_side = labels.get("side") or tick_side
+                spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
+                if label_side == "top":
+                    ly_base = spine_y - int(label_offset)
+                    anchor_bottom = True
+                else:
+                    ly_base = spine_y + int(label_offset)
+                    anchor_bottom = False
+                cx_pil = pos[0]
+                half_range = vw / 2 / ppu
+                v = math.floor((-half_range - label_interval) / label_interval) * label_interval
+                v_max = half_range + label_interval
+                while v <= v_max + label_interval * 0.001:
+                    x_pil = int(cx_pil + v * ppu)
+                    if int(vx) <= x_pil <= int(vx + vw):
+                        display = v % wrap if wrap else v
+                        text = label_fmt.format(display)
+                        try:
+                            bb = draw.textbbox((0, 0), text, font=font)
+                            tw, th = bb[2] - bb[0], bb[3] - bb[1]
+                        except Exception:
+                            tw, th = len(text) * font_size // 2, font_size
+                        tx = x_pil - tw // 2
+                        ty = ly_base - th if anchor_bottom else ly_base
+                        draw.text((tx, ty), text, fill=label_color, font=font)
+                    v += label_interval
+
         # Viewport border
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
                        outline=(80, 80, 150, 255), width=1)
 
         # Position marker (where current value sits)
-        pos = comp.get("position", [vx + vw / 2, vy_bottom + vh / 2])
         mx, my = int(pos[0]), canvas_h - int(pos[1])
         draw.line([(mx - 8, my), (mx + 8, my)], fill=(255, 200, 0, 255), width=1)
         draw.line([(mx, my - 8), (mx, my + 8)], fill=(255, 200, 0, 255), width=1)
