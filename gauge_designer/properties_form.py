@@ -98,7 +98,8 @@ def _build_func_lists() -> tuple[list[str], list[str]]:
 _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
-               "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector"]
+               "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector",
+               "AttitudeIndicator"]
 
 
 def _coerce_num(text: str):
@@ -597,6 +598,7 @@ class PropertiesForm(QWidget):
         self._mk_polygon_sec()
         self._mk_vector_sec()
         self._mk_vectortape_sec()
+        self._mk_ai_sec()
         self._mk_rotation()
         self._mk_translation()
         self._mk_animation()
@@ -1206,6 +1208,110 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._vt_sec)
 
+    def _mk_ai_sec(self):
+        self._ai_sec = _Section("Attitude Indicator")
+        self._ai_sec.setVisible(False)
+
+        # Viewport (required — defines position and size of the AI)
+        self._ai_vp_x = _sb(0, 4096); self._ai_vp_y = _sb(0, 4096)
+        for w in (self._ai_vp_x, self._ai_vp_y):
+            w.valueChanged.connect(self._emit)
+        y_label = "VP X  /  Y top" if is_y_down() else "VP X  /  Y bottom"
+        self._ai_sec.row_pair(y_label, self._ai_vp_x, self._ai_vp_y)
+
+        self._ai_vp_w = _sb(0, 4096); self._ai_vp_h = _sb(0, 4096)
+        self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
+        for w in (self._ai_vp_w, self._ai_vp_h):
+            w.valueChanged.connect(self._emit)
+        self._ai_sec.row_pair("VP W  /  H", self._ai_vp_w, self._ai_vp_h)
+
+        # Datarefs
+        self._ai_pitch_dr = QLineEdit()
+        self._ai_pitch_dr.setPlaceholderText("pitch dataref")
+        self._ai_pitch_dr.editingFinished.connect(self._emit)
+        self._ai_sec.row("Pitch dataref", self._dr_field(self._ai_pitch_dr))
+
+        self._ai_roll_dr = QLineEdit()
+        self._ai_roll_dr.setPlaceholderText("roll/bank dataref")
+        self._ai_roll_dr.editingFinished.connect(self._emit)
+        self._ai_sec.row("Roll dataref", self._dr_field(self._ai_roll_dr))
+
+        # Pixels per degree
+        self._ai_ppu = QDoubleSpinBox()
+        self._ai_ppu.setRange(0.5, 50.0); self._ai_ppu.setDecimals(1)
+        self._ai_ppu.setValue(8.0)
+        self._ai_ppu.valueChanged.connect(self._emit)
+        self._ai_sec.row("Pixels / degree", self._ai_ppu)
+
+        # Sky / ground
+        self._ai_sky_color = _ColorButton()
+        self._ai_sky_color.set_rgba([0, 100, 180, 255])
+        self._ai_sky_color.color_changed.connect(self._emit)
+        self._ai_sec.row("Sky color", self._ai_sky_color)
+
+        self._ai_gnd_color = _ColorButton()
+        self._ai_gnd_color.set_rgba([100, 60, 10, 255])
+        self._ai_gnd_color.color_changed.connect(self._emit)
+        self._ai_sec.row("Ground color", self._ai_gnd_color)
+
+        # Horizon
+        self._ai_hor_color = _ColorButton()
+        self._ai_hor_color.color_changed.connect(self._emit)
+        self._ai_sec.row("Horizon color", self._ai_hor_color)
+
+        self._ai_hor_width = QDoubleSpinBox()
+        self._ai_hor_width.setRange(0.5, 20.0); self._ai_hor_width.setDecimals(1)
+        self._ai_hor_width.setValue(3.0)
+        self._ai_hor_width.valueChanged.connect(self._emit)
+        self._ai_sec.row("Horizon width", self._ai_hor_width)
+
+        # Pitch ladder
+        self._ai_ldr_color = _ColorButton()
+        self._ai_ldr_color.color_changed.connect(self._emit)
+        self._ai_sec.row("Ladder color", self._ai_ldr_color)
+
+        self._ai_ldr_width = QDoubleSpinBox()
+        self._ai_ldr_width.setRange(0.5, 20.0); self._ai_ldr_width.setDecimals(1)
+        self._ai_ldr_width.setValue(2.0)
+        self._ai_ldr_width.valueChanged.connect(self._emit)
+        self._ai_sec.row("Ladder width", self._ai_ldr_width)
+
+        self._ai_font_size = QSpinBox()
+        self._ai_font_size.setRange(6, 36); self._ai_font_size.setValue(14)
+        self._ai_font_size.setMinimumWidth(64)
+        self._ai_font_size.valueChanged.connect(self._emit)
+        self._ai_sec.row("Label font size", self._ai_font_size)
+
+        # Bank arc
+        self._ai_arc_color = _ColorButton()
+        self._ai_arc_color.color_changed.connect(self._emit)
+        self._ai_sec.row("Arc color", self._ai_arc_color)
+
+        self._ai_arc_width = QDoubleSpinBox()
+        self._ai_arc_width.setRange(0.5, 20.0); self._ai_arc_width.setDecimals(1)
+        self._ai_arc_width.setValue(2.0)
+        self._ai_arc_width.valueChanged.connect(self._emit)
+        self._ai_sec.row("Arc width", self._ai_arc_width)
+
+        self._ai_arc_r = QDoubleSpinBox()
+        self._ai_arc_r.setRange(0.0, 4096.0); self._ai_arc_r.setDecimals(1)
+        self._ai_arc_r.setSpecialValueText("(auto)")
+        self._ai_arc_r.valueChanged.connect(self._emit)
+        self._ai_sec.row("Arc radius  (0=auto)", self._ai_arc_r)
+
+        # Roll pointer
+        self._ai_ptr_color = _ColorButton()
+        self._ai_ptr_color.color_changed.connect(self._emit)
+        self._ai_sec.row("Pointer color", self._ai_ptr_color)
+
+        self._ai_ptr_size = QDoubleSpinBox()
+        self._ai_ptr_size.setRange(1.0, 100.0); self._ai_ptr_size.setDecimals(1)
+        self._ai_ptr_size.setValue(12.0)
+        self._ai_ptr_size.valueChanged.connect(self._emit)
+        self._ai_sec.row("Pointer size px", self._ai_ptr_size)
+
+        self._vbox.addWidget(self._ai_sec)
+
     def _mk_rotation(self):
         self._rot_sec = _Section("Rotation", optional=True)
         self._rot_sec.toggled.connect(self._emit)
@@ -1346,6 +1452,12 @@ class PropertiesForm(QWidget):
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # Vector
             "direction", "length", "cap", "cap_width", "cap_height", "cap_filled",
+            # AttitudeIndicator
+            "pitch_dataref", "roll_dataref", "pixels_per_degree",
+            "sky_color", "ground_color", "horizon_color", "horizon_width",
+            "ladder_color", "ladder_width", "label_font_size",
+            "bank_arc_color", "bank_arc_width", "bank_arc_radius",
+            "roll_pointer_color", "roll_pointer_size",
             # shared across all
             "viewport", "visibility",
         }
@@ -1569,19 +1681,45 @@ class PropertiesForm(QWidget):
             self._anim_fn.setCurrentIndex(0)
             self._anim_tbl.load([])
 
-        # Viewport (shared)
-        vp = comp.get("viewport")
-        self._vp_sec.set_active(vp is not None)
-        if vp:
-            self._vp_x.setValue(int(vp[0]))
-            self._vp_w.setValue(int(vp[2]))
-            self._vp_h.setValue(int(vp[3]))
-            # vp[1] is the bottom edge (y-up YAML).  In y-down mode display the top edge.
-            vy_display = (self._ref_height - int(vp[1]) - int(vp[3])) if is_y_down() else int(vp[1])
-            self._vp_y.setValue(vy_display)
+        # AttitudeIndicator fields
+        ai_vp = comp.get("viewport", [0, 0, 300, 300])
+        self._ai_vp_x.setValue(int(ai_vp[0]))
+        self._ai_vp_w.setValue(int(ai_vp[2]))
+        self._ai_vp_h.setValue(int(ai_vp[3]))
+        ai_vy_display = (self._ref_height - int(ai_vp[1]) - int(ai_vp[3])) if is_y_down() else int(ai_vp[1])
+        self._ai_vp_y.setValue(ai_vy_display)
+        self._ai_pitch_dr.setText(str(comp.get("pitch_dataref", "")))
+        self._ai_roll_dr.setText(str(comp.get("roll_dataref", "")))
+        self._ai_ppu.setValue(float(comp.get("pixels_per_degree", 8.0)))
+        self._ai_sky_color.set_rgba(comp.get("sky_color", [0, 100, 180]))
+        self._ai_gnd_color.set_rgba(comp.get("ground_color", [100, 60, 10]))
+        self._ai_hor_color.set_rgba(comp.get("horizon_color"))
+        self._ai_hor_width.setValue(float(comp.get("horizon_width", 3.0)))
+        self._ai_ldr_color.set_rgba(comp.get("ladder_color"))
+        self._ai_ldr_width.setValue(float(comp.get("ladder_width", 2.0)))
+        self._ai_font_size.setValue(int(comp.get("label_font_size", 14)))
+        self._ai_arc_color.set_rgba(comp.get("bank_arc_color"))
+        self._ai_arc_width.setValue(float(comp.get("bank_arc_width", 2.0)))
+        self._ai_arc_r.setValue(float(comp.get("bank_arc_radius", 0.0)))
+        self._ai_ptr_color.set_rgba(comp.get("roll_pointer_color"))
+        self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
+
+        # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
+        if ct != "AttitudeIndicator":
+            vp = comp.get("viewport")
+            self._vp_sec.set_active(vp is not None)
+            if vp:
+                self._vp_x.setValue(int(vp[0]))
+                self._vp_w.setValue(int(vp[2]))
+                self._vp_h.setValue(int(vp[3]))
+                # vp[1] is the bottom edge (y-up YAML).  In y-down mode display the top edge.
+                vy_display = (self._ref_height - int(vp[1]) - int(vp[3])) if is_y_down() else int(vp[1])
+                self._vp_y.setValue(vy_display)
+            else:
+                self._vp_x.setValue(0); self._vp_y.setValue(0)
+                self._vp_w.setValue(0); self._vp_h.setValue(0)
         else:
-            self._vp_x.setValue(0); self._vp_y.setValue(0)
-            self._vp_w.setValue(0); self._vp_h.setValue(0)
+            self._vp_sec.set_active(False)
 
         # Visibility (shared)
         vis = comp.get("visibility")
@@ -1604,7 +1742,7 @@ class PropertiesForm(QWidget):
         data["type"] = ct
 
         # Position only for types that use a single centre point
-        if ct not in ("Line", "Arc", "Polygon"):
+        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator"):
             data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
         if ct == "Line":
@@ -1663,6 +1801,46 @@ class PropertiesForm(QWidget):
                     data["cap_height"] = self._vec_cap_height.value()
                     if not self._vec_cap_filled.isChecked():
                         data["cap_filled"] = False
+
+        elif ct == "AttitudeIndicator":
+            ai_vh = self._ai_vp_h.value()
+            ai_vy_display = self._ai_vp_y.value()
+            ai_vy_yaml = (self._ref_height - ai_vy_display - ai_vh) if is_y_down() else ai_vy_display
+            data["viewport"] = [self._ai_vp_x.value(), ai_vy_yaml,
+                                 self._ai_vp_w.value(), ai_vh]
+            pd = self._ai_pitch_dr.text().strip()
+            if pd:
+                data["pitch_dataref"] = pd
+            rd = self._ai_roll_dr.text().strip()
+            if rd:
+                data["roll_dataref"] = rd
+            ppu = self._ai_ppu.value()
+            if ppu != 8.0:
+                data["pixels_per_degree"] = ppu
+            data["sky_color"]    = list(self._ai_sky_color.get_rgba())
+            data["ground_color"] = list(self._ai_gnd_color.get_rgba())
+            data["horizon_color"] = list(self._ai_hor_color.get_rgba())
+            hw = self._ai_hor_width.value()
+            if hw != 3.0:
+                data["horizon_width"] = hw
+            data["ladder_color"] = list(self._ai_ldr_color.get_rgba())
+            lw = self._ai_ldr_width.value()
+            if lw != 2.0:
+                data["ladder_width"] = lw
+            fs = self._ai_font_size.value()
+            if fs != 14:
+                data["label_font_size"] = fs
+            data["bank_arc_color"] = list(self._ai_arc_color.get_rgba())
+            aw = self._ai_arc_width.value()
+            if aw != 2.0:
+                data["bank_arc_width"] = aw
+            ar = self._ai_arc_r.value()
+            if ar > 0:
+                data["bank_arc_radius"] = ar
+            data["roll_pointer_color"] = list(self._ai_ptr_color.get_rgba())
+            ps = self._ai_ptr_size.value()
+            if ps != 12.0:
+                data["roll_pointer_size"] = ps
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
@@ -1890,6 +2068,19 @@ class PropertiesForm(QWidget):
         self._vec_cap_width.setValue(10.0); self._vec_cap_width.setEnabled(False)
         self._vec_cap_height.setValue(5.0); self._vec_cap_height.setEnabled(False)
         self._vec_cap_filled.setChecked(True); self._vec_cap_filled.setEnabled(False)
+        # AttitudeIndicator
+        self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
+        self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
+        self._ai_pitch_dr.clear(); self._ai_roll_dr.clear()
+        self._ai_ppu.setValue(8.0)
+        self._ai_sky_color.set_rgba([0, 100, 180, 255])
+        self._ai_gnd_color.set_rgba([100, 60, 10, 255])
+        self._ai_hor_color.set_rgba(None); self._ai_hor_width.setValue(3.0)
+        self._ai_ldr_color.set_rgba(None); self._ai_ldr_width.setValue(2.0)
+        self._ai_font_size.setValue(14)
+        self._ai_arc_color.set_rgba(None); self._ai_arc_width.setValue(2.0)
+        self._ai_arc_r.setValue(0.0)
+        self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
@@ -1945,9 +2136,10 @@ class PropertiesForm(QWidget):
         is_vt   = ct == "VectorTape"
         is_text = ct == "Text"
         is_vec  = ct == "Vector"
+        is_ai   = ct == "AttitudeIndicator"
 
         # Position: hide for types that define geometry without a single centre point
-        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly)
+        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai)
 
         # Texture section visible for image types; atlas detail only for ImagePanel
         self._tex_sec.setVisible(is_img)
@@ -1964,6 +2156,7 @@ class PropertiesForm(QWidget):
         self._poly_sec.setVisible(is_poly)
         self._vec_sec.setVisible(is_vec)
         self._vt_sec.setVisible(is_vt)
+        self._ai_sec.setVisible(is_ai)
 
         # Rotation and Translation: ImagePanel only
         self._rot_sec.setVisible(is_ip)
@@ -1972,7 +2165,7 @@ class PropertiesForm(QWidget):
         # Animation: SpriteSheet, ScrollingTape, and VectorTape (scroll dataref)
         self._anim_sec.setVisible(is_ss or is_st or is_vt)
 
-        # Viewport clip: image types and VectorTape (always required for tape)
+        # Viewport clip: image types and VectorTape; AI uses its own viewport spinboxes
         self._vp_sec.setVisible(is_img or is_vt)
         if is_vt:
             self._vp_sec.set_active(True)

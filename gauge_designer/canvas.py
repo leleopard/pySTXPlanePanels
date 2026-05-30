@@ -239,6 +239,9 @@ class InstrumentCanvas(QWidget):
         elif ctype == "Polygon":
             pts = comp.get("points", [])
             ref = pts[0] if pts else [0, 0]
+        elif ctype == "AttitudeIndicator":
+            vp = comp.get("viewport", [0, 0, 200, 200])
+            ref = [int(vp[0]), int(vp[1])]
         else:
             ref = comp.get("position", [0, 0]) if comp else [0, 0]
         self._drag_orig = [int(ref[0]), int(ref[1])]
@@ -274,6 +277,13 @@ class InstrumentCanvas(QWidget):
             elif ctype == "Arc":
                 oc = orig.get("center", [0, 0])
                 comp["center"] = [int(round(oc[0] + dx_yaml)), int(round(oc[1] + dy_yaml))]
+            elif ctype == "AttitudeIndicator":
+                ovp = orig.get("viewport", [0, 0, 200, 200])
+                comp["viewport"] = [
+                    int(round(ovp[0] + dx_yaml)),
+                    int(round(ovp[1] + dy_yaml)),
+                    int(ovp[2]), int(ovp[3])
+                ]
             else:
                 op = orig.get("position", [0, 0])
                 comp["position"] = [int(round(op[0] + dx_yaml)), int(round(op[1] + dy_yaml))]
@@ -296,6 +306,9 @@ class InstrumentCanvas(QWidget):
             elif ctype == "Polygon":
                 pts = comp.get("points", [[0, 0]])
                 ref = pts[0] if pts else [0, 0]
+            elif ctype == "AttitudeIndicator":
+                vp = comp.get("viewport", [0, 0, 200, 200])
+                ref = [int(vp[0]), int(vp[1])]
             else:
                 ref = comp.get("position", [0, 0])
             self.component_moved.emit(self._drag_name, int(ref[0]), int(ref[1]))
@@ -369,7 +382,7 @@ class InstrumentCanvas(QWidget):
                     if (min(ox_p, ex_p) - pad <= cx <= max(ox_p, ex_p) + pad and
                             min(oy_p, ey_p) - pad <= cy <= max(oy_p, ey_p) + pad):
                         result.append(comp.get("name"))
-                elif ctype == "VectorTape":
+                elif ctype in ("VectorTape", "AttitudeIndicator"):
                     rect = self._viewport_rect_pil(comp, h)
                     if rect is not None:
                         rx, ry, rw, rh = rect
@@ -450,6 +463,8 @@ class InstrumentCanvas(QWidget):
                     self._render_vector(comp, draw, h)
                 elif ctype == "VectorTape":
                     self._render_vectortape(comp, composite, draw, w, h)
+                elif ctype == "AttitudeIndicator":
+                    self._render_ai(comp, composite, draw, w, h)
             except Exception:
                 continue
 
@@ -467,7 +482,7 @@ class InstrumentCanvas(QWidget):
                                        outline=SEL, width=2)
                     except Exception:
                         pass
-                elif ctype in ("SpriteSheet", "ScrollingTape", "VectorTape"):
+                elif ctype in ("SpriteSheet", "ScrollingTape", "VectorTape", "AttitudeIndicator"):
                     rect = self._viewport_rect_pil(comp, h)
                     if rect is not None:
                         rx, ry, rw, rh = rect
@@ -624,8 +639,8 @@ class InstrumentCanvas(QWidget):
                     draw.polygon(pts, outline=color)
             elif cap == "bar":
                 draw.line([
-                    (int(round(ex_p + px_p * half)), int(round(ey_p + py_p * half))),
-                    (int(round(ex_p - px_p * half)), int(round(ey_p - py_p * half))),
+                    (int(round(ex_p + px_p * half_w)), int(round(ey_p + py_p * half_w))),
+                    (int(round(ex_p - px_p * half_w)), int(round(ey_p - py_p * half_w))),
                 ], fill=color, width=width)
 
     def _render_vectortape(self, comp: dict, composite: Image.Image,
@@ -807,6 +822,114 @@ class InstrumentCanvas(QWidget):
         mx, my = int(cx_pil), int(cy_pil)
         draw.line([(mx - 8, my), (mx + 8, my)], fill=(255, 200, 0, 255), width=1)
         draw.line([(mx, my - 8), (mx, my + 8)], fill=(255, 200, 0, 255), width=1)
+
+    def _render_ai(self, comp: dict, composite: Image.Image,
+                   draw: ImageDraw.ImageDraw, canvas_w: int, canvas_h: int) -> None:
+        vp = comp.get("viewport")
+        if not vp:
+            return
+        vx, vy_bottom, vw, vh = (float(v) for v in vp)
+        py_top = canvas_h - vy_bottom - vh  # PIL top edge (y-down)
+
+        sky_c = _rgba(comp.get("sky_color",    [0, 100, 180]))
+        gnd_c = _rgba(comp.get("ground_color", [100, 60, 10]))
+        hor_c = _rgba(comp.get("horizon_color"))
+        ldr_c = _rgba(comp.get("ladder_color"))
+        arc_c = _rgba(comp.get("bank_arc_color"))
+        ptr_c = _rgba(comp.get("roll_pointer_color"))
+        hor_w = max(1, int(float(comp.get("horizon_width", 3))))
+        ldr_w = max(1, int(float(comp.get("ladder_width", 2))))
+        arc_w = max(1, int(float(comp.get("bank_arc_width", 2))))
+        ppu   = float(comp.get("pixels_per_degree", 8.0))
+        arc_r_raw = float(comp.get("bank_arc_radius", 0.0))
+        arc_r = arc_r_raw if arc_r_raw > 0 else 0.45 * min(vw, vh)
+        ptr_s = float(comp.get("roll_pointer_size", 12.0))
+        font_sz = max(8, int(comp.get("label_font_size", 14)))
+        font  = _pil_font(None, font_sz)
+
+        clip_w = max(1, int(vw))
+        clip_h = max(1, int(vh))
+        ci = Image.new("RGBA", (clip_w, clip_h), (0, 0, 0, 0))
+        cd = ImageDraw.Draw(ci)
+
+        cx_c = clip_w / 2.0
+        cy_c = clip_h / 2.0
+
+        # Sky / ground background (static preview, bank=0, pitch=0)
+        cd.rectangle([0, 0, clip_w - 1, int(cy_c)], fill=sky_c)
+        cd.rectangle([0, int(cy_c), clip_w - 1, clip_h - 1], fill=gnd_c)
+
+        # Pitch ladder
+        major_hw = vw * 0.40 / 2.0
+        minor_hw = vw * 0.22 / 2.0
+        for p_deg in range(-90, 91, 5):
+            if p_deg == 0:
+                continue
+            ly = int(cy_c - p_deg * ppu)  # positive pitch → above centre (PIL y-down)
+            if ly < 0 or ly >= clip_h:
+                continue
+            is_major = (p_deg % 10 == 0)
+            hw = major_hw if is_major else minor_hw
+            lw = hor_w if is_major else ldr_w
+            x0, x1 = int(cx_c - hw), int(cx_c + hw)
+            cd.line([(x0, ly), (x1, ly)], fill=ldr_c, width=lw)
+            if is_major:
+                label = str(abs(p_deg))
+                gap = 6
+                try:
+                    cd.text((x1 + gap, ly), label, fill=ldr_c, font=font, anchor="lm")
+                    cd.text((x0 - gap, ly), label, fill=ldr_c, font=font, anchor="rm")
+                except TypeError:
+                    cd.text((x1 + gap, ly), label, fill=ldr_c, font=font)
+
+        # Horizon line
+        cd.line([(0, int(cy_c)), (clip_w - 1, int(cy_c))], fill=hor_c, width=hor_w)
+
+        # Bank arc — upper portion ±60° from vertical
+        # PIL arc CW from 210° to 330° passes through 270° (top) = the upper half ✓
+        arc_r_i = int(arc_r)
+        bbox = [int(cx_c - arc_r_i), int(cy_c - arc_r_i),
+                int(cx_c + arc_r_i), int(cy_c + arc_r_i)]
+        cd.arc(bbox, 210, 330, fill=arc_c, width=arc_w)
+
+        # 0° reference tick at top
+        ref_outer_y = int(cy_c - arc_r_i)
+        cd.line([(int(cx_c), ref_outer_y - 10), (int(cx_c), ref_outer_y)],
+                fill=arc_c, width=arc_w + 1)
+
+        # Tick marks — position formula same as runtime, y-flipped for PIL
+        for a in [10, 20, 30, 45, 60]:
+            for sign in (-1, 1):
+                ba_rad = math.radians(sign * a)
+                ox = int(cx_c + arc_r * math.sin(ba_rad))
+                oy = int(cy_c - arc_r * math.cos(ba_rad))
+                tick_len = 10 if a == 30 else 6
+                ix = int(cx_c + (arc_r - tick_len) * math.sin(ba_rad))
+                iy = int(cy_c - (arc_r - tick_len) * math.cos(ba_rad))
+                cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)
+
+        # Roll pointer at bank=0: triangle tip pointing inward (down in PIL)
+        ptr_base_y = int(cy_c - arc_r_i)
+        ptr_tip_y  = ptr_base_y + int(ptr_s)
+        half_ptr   = int(ptr_s * 0.5)
+        cd.polygon([
+            (int(cx_c), ptr_tip_y),
+            (int(cx_c) - half_ptr, ptr_base_y),
+            (int(cx_c) + half_ptr, ptr_base_y),
+        ], fill=ptr_c)
+
+        # Aircraft reference (fixed wing stubs + centre dot)
+        stub = 30; gap = 6
+        cd.line([(int(cx_c) - stub - gap, int(cy_c)),
+                 (int(cx_c) - gap, int(cy_c))], fill=ptr_c, width=3)
+        cd.line([(int(cx_c) + gap, int(cy_c)),
+                 (int(cx_c) + stub + gap, int(cy_c))], fill=ptr_c, width=3)
+        cd.ellipse([int(cx_c) - 4, int(cy_c) - 4,
+                    int(cx_c) + 4, int(cy_c) + 4], fill=ptr_c)
+
+        composite.paste(ci, (int(vx), int(py_top)), mask=ci)
+        draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
+                       outline=(80, 80, 150, 255), width=1)
 
     def _viewport_rect_pil(self, comp: dict, canvas_h: int) -> tuple[int, int, int, int] | None:
         """Return (x, y, w, h) in PIL (y-down) coords for the component's viewport."""
