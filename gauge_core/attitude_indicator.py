@@ -89,6 +89,7 @@ class AttitudeIndicator(_VecBase):
         ladder_font_name: str = "",
         ladder_bold: bool = False,
         ladder_italic: bool = False,
+        smoothing: float = 0.0,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -115,6 +116,8 @@ class AttitudeIndicator(_VecBase):
         self._ladder_font  = str(ladder_font_name)
         self._ladder_bold  = bool(ladder_bold)
         self._ladder_italic = bool(ladder_italic)
+        # Clamp to [0, 0.99]: 0 = no smoothing, higher = heavier EMA low-pass.
+        self._smooth = max(0.0, min(0.99, float(smoothing)))
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -160,16 +163,17 @@ class AttitudeIndicator(_VecBase):
 
     def update(self, get_data: Callable[[Any], float]) -> None:
         self._update_visibility(get_data)
+        alpha = 1.0 - self._smooth
         if self._pitch_dr is not None:
             raw = float(get_data(self._pitch_dr))
             if self._pitch_conv is not None:
                 raw = float(self._pitch_conv(raw, get_data))
-            self._pitch = raw
+            self._pitch = raw if self._smooth == 0.0 else self._pitch + alpha * (raw - self._pitch)
         if self._bank_dr is not None:
             raw = float(get_data(self._bank_dr))
             if self._bank_conv is not None:
                 raw = float(self._bank_conv(raw, get_data))
-            self._bank = raw
+            self._bank = raw if self._smooth == 0.0 else self._bank + alpha * (raw - self._bank)
 
     # ── draw ────────────────────────────────────────────────────────────────
 
@@ -370,6 +374,7 @@ def _ai_factory(
         ladder_font_name=str(comp.get("ladder_font_name", "")),
         ladder_bold=bool(comp.get("ladder_bold", False)),
         ladder_italic=bool(comp.get("ladder_italic", False)),
+        smoothing=float(comp.get("smoothing", 0.0)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],

@@ -1243,6 +1243,17 @@ class PropertiesForm(QWidget):
         self._ai_ppu.valueChanged.connect(self._emit)
         self._ai_sec.row("Pixels / degree", self._ai_ppu)
 
+        self._ai_smoothing = QDoubleSpinBox()
+        self._ai_smoothing.setRange(0.0, 0.99); self._ai_smoothing.setDecimals(2)
+        self._ai_smoothing.setSingleStep(0.05)
+        self._ai_smoothing.setValue(0.0)
+        self._ai_smoothing.setToolTip(
+            "EMA smoothing factor (0 = none, 0.9 = heavy). "
+            "Reduces jitter from UDP data at the cost of a small lag."
+        )
+        self._ai_smoothing.valueChanged.connect(self._emit)
+        self._ai_sec.row("Smoothing", self._ai_smoothing)
+
         self._ai_ladder_step = QDoubleSpinBox()
         self._ai_ladder_step.setRange(0.5, 45.0); self._ai_ladder_step.setDecimals(1)
         self._ai_ladder_step.setValue(5.0)
@@ -1512,7 +1523,7 @@ class PropertiesForm(QWidget):
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
-            "ladder_font_name", "ladder_bold", "ladder_italic",
+            "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing",
             # shared across all
             "viewport", "visibility",
         }
@@ -1746,6 +1757,7 @@ class PropertiesForm(QWidget):
         self._ai_pitch_dr.setText(str(comp.get("pitch_dataref", "")))
         self._ai_roll_dr.setText(str(comp.get("roll_dataref", "")))
         self._ai_ppu.setValue(float(comp.get("pixels_per_degree", 8.0)))
+        self._ai_smoothing.setValue(float(comp.get("smoothing", 0.0)))
         self._ai_ladder_step.setValue(float(comp.get("ladder_step", 5.0)))
         self._ai_ladder_hw_4.setValue(float(comp.get("ladder_hw_4", 0.40)))
         self._ai_ladder_hw_2.setValue(float(comp.get("ladder_hw_2", 0.31)))
@@ -1879,6 +1891,9 @@ class PropertiesForm(QWidget):
             ppu = self._ai_ppu.value()
             if ppu != 8.0:
                 data["pixels_per_degree"] = ppu
+            sm = self._ai_smoothing.value()
+            if sm > 0.0:
+                data["smoothing"] = round(sm, 2)
             data["sky_color"]    = list(self._ai_sky_color.get_rgba())
             data["ground_color"] = list(self._ai_gnd_color.get_rgba())
             data["horizon_color"] = list(self._ai_hor_color.get_rgba())
@@ -2154,6 +2169,7 @@ class PropertiesForm(QWidget):
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
         self._ai_pitch_dr.clear(); self._ai_roll_dr.clear()
         self._ai_ppu.setValue(8.0)
+        self._ai_smoothing.setValue(0.0)
         self._ai_ladder_step.setValue(5.0)
         self._ai_ladder_hw_4.setValue(0.40)
         self._ai_ladder_hw_2.setValue(0.31)
