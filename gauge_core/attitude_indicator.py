@@ -54,6 +54,7 @@ from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
 
 _BANK_TICKS   = [10, 20, 30, 45, 60]  # drawn on both sides (± each)
 _LADDER_RANGE = 90   # draw ladder from -90° to +90°
+_SSAA         = 3    # supersample factor — render 3× larger, blit down with bilinear
 
 
 def _rot(x: float, y: float, cos_b: float, sin_b: float,
@@ -121,6 +122,10 @@ class AttitudeIndicator(_VecBase):
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
+        # SSAA offscreen FBO — lazy-created on first draw, recreated if size changes.
+        self._ssaa_fbo: Any | None = None
+        self._ssaa_tex: Any | None = None
+        self._ssaa_dim: tuple[int, int] = (0, 0)
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -196,14 +201,58 @@ class AttitudeIndicator(_VecBase):
         arc_r = self._arc_r if self._arc_r > 0 else 0.45 * min(vw, vh)
 
         ctx = arcade.get_window().ctx
+
+        # ── Lazy-create / resize SSAA FBO ────────────────────────────────────
+        ssaa_w = int(vw * _SSAA)
+        ssaa_h = int(vh * _SSAA)
+        if self._ssaa_fbo is None or self._ssaa_dim != (ssaa_w, ssaa_h):
+            if self._ssaa_tex is not None:
+                self._ssaa_fbo.release()
+                self._ssaa_tex.release()
+            self._ssaa_tex = ctx.texture((ssaa_w, ssaa_h), components=4)
+            self._ssaa_fbo = ctx.framebuffer(color_attachments=[self._ssaa_tex])
+            self._ssaa_dim = (ssaa_w, ssaa_h)
+
+        # ── Phase 1: all geometry → SSAA FBO ─────────────────────────────────
+        from pyglet.math import Mat4
+        self._ssaa_fbo.use()
+        self._ssaa_fbo.viewport = (0, 0, ssaa_w, ssaa_h)
+        self._ssaa_fbo.clear(0.0, 0.0, 0.0, 0.0)
+        ctx.projection_matrix = Mat4.orthogonal_projection(
+            vx, vx + vw, vy, vy + vh, -100.0, 100.0
+        )
+
+        self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
+        self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, labels=False)
+        self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
+        self._draw_bank_arc(cx, cy, arc_r)
+        self._draw_roll_pointer(cx, cy, arc_r)
+        self._draw_reference(cx, cy)
+
+        # ── Blit SSAA FBO → screen (bilinear downsample = supersampled AA) ───
+        # Restore arcade's screen target + camera projection before the blit.
+        ctx.screen.use()
+        ctx.current_camera.use()
+
+        from pyglet.gl import (
+            glBindFramebuffer, glBlitFramebuffer,
+            GL_READ_FRAMEBUFFER,
+            GL_COLOR_BUFFER_BIT, GL_LINEAR,
+        )
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, self._ssaa_fbo.glo)
+        # GL_DRAW_FRAMEBUFFER is already ctx.screen (set above).
+        glBlitFramebuffer(
+            0, 0, ssaa_w, ssaa_h,
+            int(vx), int(vy), int(vx + vw), int(vy + vh),
+            GL_COLOR_BUFFER_BIT, GL_LINEAR,
+        )
+        ctx.screen.use()  # re-sync moderngl after raw GL framebuffer calls
+
+        # ── Phase 2: text labels at native resolution ─────────────────────────
+        # arcade.Text uses pyglet's own projection — must render at screen res.
         ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
         try:
-            self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
-            self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw)
-            self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
-            self._draw_bank_arc(cx, cy, arc_r)
-            self._draw_roll_pointer(cx, cy, arc_r)
-            self._draw_reference(cx, cy)
+            self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=False)
         finally:
             ctx.scissor = None
 
@@ -232,7 +281,10 @@ class AttitudeIndicator(_VecBase):
         x2, y2 = _rot( big, pitch_y, cos_b, sin_b, cx, cy)
         arcade.draw_line(x1, y1, x2, y2, self._hor_color, self._hor_width)
 
-    def _draw_ladder(self, cx, cy, pitch_y, cos_b, sin_b, vw) -> None:
+    def _draw_ladder(
+        self, cx, cy, pitch_y, cos_b, sin_b, vw,
+        *, lines: bool = True, labels: bool = True,
+    ) -> None:
         half_vw = vw / 2.0
         hw_4 = half_vw * self._ladder_hw_4
         hw_2 = half_vw * self._ladder_hw_2
@@ -253,41 +305,43 @@ class AttitudeIndicator(_VecBase):
             else:
                 hw, lw, labeled = hw_1, self._ldr_width, False
 
-            x1, y1 = _rot(-hw, y_ai, cos_b, sin_b, cx, cy)
-            x2, y2 = _rot( hw, y_ai, cos_b, sin_b, cx, cy)
-            arcade.draw_line(x1, y1, x2, y2, self._ldr_color, lw)
+            if lines:
+                x1, y1 = _rot(-hw, y_ai, cos_b, sin_b, cx, cy)
+                x2, y2 = _rot( hw, y_ai, cos_b, sin_b, cx, cy)
+                arcade.draw_line(x1, y1, x2, y2, self._ldr_color, lw)
 
             if labeled:
-                label_text = str(abs(round(p)))
-                gap   = 6
-                lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
-                lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
-                rot  = self._bank  # labels stay level in the AI reference frame
+                if labels:
+                    label_text = str(abs(round(p)))
+                    gap   = 6
+                    lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
+                    lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
+                    rot  = self._bank  # labels stay level in the AI reference frame
 
-                if lbl_idx >= len(self._lbl_pool_r):
-                    fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
-                    if self._ladder_font:
-                        fkw["font_name"] = self._ladder_font
-                    self._lbl_pool_r.append(arcade.Text(
-                        "", 0.0, 0.0, color=self._ldr_color,
-                        font_size=self._font_size, anchor_x="left", anchor_y="center",
-                        **fkw,
-                    ))
-                    self._lbl_pool_l.append(arcade.Text(
-                        "", 0.0, 0.0, color=self._ldr_color,
-                        font_size=self._font_size, anchor_x="right", anchor_y="center",
-                        **fkw,
-                    ))
+                    if lbl_idx >= len(self._lbl_pool_r):
+                        fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
+                        if self._ladder_font:
+                            fkw["font_name"] = self._ladder_font
+                        self._lbl_pool_r.append(arcade.Text(
+                            "", 0.0, 0.0, color=self._ldr_color,
+                            font_size=self._font_size, anchor_x="left", anchor_y="center",
+                            **fkw,
+                        ))
+                        self._lbl_pool_l.append(arcade.Text(
+                            "", 0.0, 0.0, color=self._ldr_color,
+                            font_size=self._font_size, anchor_x="right", anchor_y="center",
+                            **fkw,
+                        ))
 
-                tr = self._lbl_pool_r[lbl_idx]
-                tr.text = label_text
-                tr.x = lx_r;  tr.y = ly_r;  tr.rotation = rot
-                tr.draw()
+                    tr = self._lbl_pool_r[lbl_idx]
+                    tr.text = label_text
+                    tr.x = lx_r;  tr.y = ly_r;  tr.rotation = rot
+                    tr.draw()
 
-                tl = self._lbl_pool_l[lbl_idx]
-                tl.text = label_text
-                tl.x = lx_l;  tl.y = ly_l;  tl.rotation = rot
-                tl.draw()
+                    tl = self._lbl_pool_l[lbl_idx]
+                    tl.text = label_text
+                    tl.x = lx_l;  tl.y = ly_l;  tl.rotation = rot
+                    tl.draw()
 
                 lbl_idx += 1
 
