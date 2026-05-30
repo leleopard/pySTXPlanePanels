@@ -442,8 +442,11 @@ class InstrumentView(QWidget):
         self._form.clear()
         self._components = instrument_data.get("components", [])
         for comp in self._components:
+            is_visible = not comp.get("hidden", False)
+            if not is_visible:
+                self._hidden.add(comp.get("name", ""))
             self._list.addItem(comp.get("name", "(unnamed)"))
-            self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
+            self._list.item(self._list.count() - 1).setData(Qt.UserRole, is_visible)
 
         w, h = instrument_data.get("size", [310, 310])
         self._gauge_w.blockSignals(True); self._gauge_h.blockSignals(True)
@@ -460,7 +463,7 @@ class InstrumentView(QWidget):
         self._form.set_yaml_dir(assets_root)
         self._form.set_ref_height(int(h))
         self._canvas.load(instrument_data, assets_root)
-        self._canvas.set_hidden(set())
+        self._canvas.set_hidden(self._hidden.copy())
         if self._components:
             self._list.setCurrentRow(0)
         self._editor_content.setVisible(True)
@@ -705,12 +708,16 @@ class InstrumentView(QWidget):
     def _on_visibility_toggled(self, row: int, visible: bool):
         if row < 0 or row >= len(self._components):
             return
-        name = self._components[row].get("name", "")
+        comp = self._components[row]
+        name = comp.get("name", "")
         if visible:
             self._hidden.discard(name)
+            comp.pop("hidden", None)
         else:
             self._hidden.add(name)
+            comp["hidden"] = True
         self._canvas.set_hidden(self._hidden.copy())
+        self.changed.emit()
 
     # ── Row selection ─────────────────────────────────────────────────────
 

@@ -83,6 +83,8 @@ def load_instrument(yaml_path: str | Path) -> Instrument:
     container_size: tuple[int, int] = tuple(data["size"])
     components: list[Any] = []
     for comp_def in data.get("components", []):
+        if comp_def.get("hidden", False):
+            continue
         ctype = comp_def.get("type")
         if not ctype:
             raise ValueError(f"Component is missing `type:` in {yaml_path}")
