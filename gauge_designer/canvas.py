@@ -36,9 +36,13 @@ def _rgba(raw) -> tuple:
 
 _PIL_FONT_CACHE: dict[tuple, ImageFont.FreeTypeFont] = {}
 
-def _pil_font(name: str | None, size: int) -> ImageFont.ImageFont:
-    """Load a PIL font by family name, falling back to the default bitmap font."""
-    key = (name or "", size)
+_BOLD_MARKERS   = ("bold", "bd", "heavy", "black", "b")
+_ITALIC_MARKERS = ("italic", "oblique", "it", "i")
+
+def _pil_font(name: str | None, size: int, *,
+              bold: bool = False, italic: bool = False) -> ImageFont.ImageFont:
+    """Load a PIL font by family name and style, falling back to the default bitmap font."""
+    key = (name or "", size, bold, italic)
     if key in _PIL_FONT_CACHE:
         return _PIL_FONT_CACHE[key]
     font = None
@@ -46,14 +50,27 @@ def _pil_font(name: str | None, size: int) -> ImageFont.ImageFont:
         fonts_dir = Path("C:/Windows/Fonts")
         if fonts_dir.exists():
             needle = name.lower().replace(" ", "")
+            candidates: list[tuple[Path, bool, bool]] = []
             for f in sorted(fonts_dir.iterdir()):
-                if f.suffix.lower() in (".ttf", ".otf"):
-                    if needle in f.stem.lower().replace(" ", "").replace("-", ""):
-                        try:
-                            font = ImageFont.truetype(str(f), size)
-                            break
-                        except Exception:
-                            continue
+                if f.suffix.lower() not in (".ttf", ".otf"):
+                    continue
+                stem = f.stem.lower().replace(" ", "").replace("-", "")
+                if needle not in stem:
+                    continue
+                # Everything after the family name needle is the style suffix
+                suffix = stem[stem.index(needle) + len(needle):]
+                is_bold   = any(m in suffix for m in _BOLD_MARKERS)   if suffix else False
+                is_italic = any(m in suffix for m in _ITALIC_MARKERS) if suffix else False
+                candidates.append((f, is_bold, is_italic))
+            if candidates:
+                # Sort by match quality: exact bold/italic match scores 0
+                candidates.sort(key=lambda t: (t[1] != bold) * 2 + (t[2] != italic))
+                for f, _, _ in candidates:
+                    try:
+                        font = ImageFont.truetype(str(f), size)
+                        break
+                    except Exception:
+                        continue
     if font is None:
         try:
             font = ImageFont.load_default(size=size)
@@ -752,7 +769,9 @@ class InstrumentCanvas(QWidget):
             label_fmt    = labels.get("format", "{:.0f}")
             wrap         = comp.get("wrap")
             font_size    = max(8, int(float(labels.get("font_size", 18))))
-            font         = _pil_font(labels.get("font"), font_size)
+            font         = _pil_font(labels.get("font"), font_size,
+                                     bold=bool(labels.get("bold", False)),
+                                     italic=bool(labels.get("italic", False)))
 
             # Sub-image exactly the size of the viewport — matches the OpenGL
             # scissor rectangle used at runtime, clipping in both axes.
@@ -845,7 +864,9 @@ class InstrumentCanvas(QWidget):
         arc_r = arc_r_raw if arc_r_raw > 0 else 0.45 * min(vw, vh)
         ptr_s = float(comp.get("roll_pointer_size", 12.0))
         font_sz = max(8, int(comp.get("label_font_size", 14)))
-        font  = _pil_font(comp.get("ladder_font_name") or None, font_sz)
+        font  = _pil_font(comp.get("ladder_font_name") or None, font_sz,
+                          bold=bool(comp.get("ladder_bold", False)),
+                          italic=bool(comp.get("ladder_italic", False)))
 
         clip_w = max(1, int(vw))
         clip_h = max(1, int(vh))
