@@ -1243,6 +1243,13 @@ class PropertiesForm(QWidget):
         self._ai_ppu.valueChanged.connect(self._emit)
         self._ai_sec.row("Pixels / degree", self._ai_ppu)
 
+        self._ai_ladder_step = QDoubleSpinBox()
+        self._ai_ladder_step.setRange(0.5, 45.0); self._ai_ladder_step.setDecimals(1)
+        self._ai_ladder_step.setValue(5.0)
+        self._ai_ladder_step.setSuffix(" °")
+        self._ai_ladder_step.valueChanged.connect(self._emit)
+        self._ai_sec.row("Ladder step", self._ai_ladder_step)
+
         # Sky / ground
         self._ai_sky_color = _ColorButton()
         self._ai_sky_color.set_rgba([0, 100, 180, 255])
@@ -1457,7 +1464,7 @@ class PropertiesForm(QWidget):
             "sky_color", "ground_color", "horizon_color", "horizon_width",
             "ladder_color", "ladder_width", "label_font_size",
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
-            "roll_pointer_color", "roll_pointer_size",
+            "roll_pointer_color", "roll_pointer_size", "ladder_step",
             # shared across all
             "viewport", "visibility",
         }
@@ -1691,6 +1698,7 @@ class PropertiesForm(QWidget):
         self._ai_pitch_dr.setText(str(comp.get("pitch_dataref", "")))
         self._ai_roll_dr.setText(str(comp.get("roll_dataref", "")))
         self._ai_ppu.setValue(float(comp.get("pixels_per_degree", 8.0)))
+        self._ai_ladder_step.setValue(float(comp.get("ladder_step", 5.0)))
         self._ai_sky_color.set_rgba(comp.get("sky_color", [0, 100, 180]))
         self._ai_gnd_color.set_rgba(comp.get("ground_color", [100, 60, 10]))
         self._ai_hor_color.set_rgba(comp.get("horizon_color"))
@@ -1841,6 +1849,9 @@ class PropertiesForm(QWidget):
             ps = self._ai_ptr_size.value()
             if ps != 12.0:
                 data["roll_pointer_size"] = ps
+            ls = self._ai_ladder_step.value()
+            if ls != 5.0:
+                data["ladder_step"] = ls
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
@@ -2073,6 +2084,7 @@ class PropertiesForm(QWidget):
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
         self._ai_pitch_dr.clear(); self._ai_roll_dr.clear()
         self._ai_ppu.setValue(8.0)
+        self._ai_ladder_step.setValue(5.0)
         self._ai_sky_color.set_rgba([0, 100, 180, 255])
         self._ai_gnd_color.set_rgba([100, 60, 10, 255])
         self._ai_hor_color.set_rgba(None); self._ai_hor_width.setValue(3.0)

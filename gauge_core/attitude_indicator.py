@@ -84,6 +84,7 @@ class AttitudeIndicator(_VecBase):
         bank_arc_radius: float = 0.0,
         roll_pointer_color: tuple = (255, 255, 255, 255),
         roll_pointer_size: float = 12.0,
+        ladder_step: float = 5.0,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -103,6 +104,7 @@ class AttitudeIndicator(_VecBase):
         self._arc_r       = float(bank_arc_radius)
         self._ptr_color   = roll_pointer_color
         self._ptr_size    = float(roll_pointer_size)
+        self._ladder_step = float(ladder_step)
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -220,20 +222,22 @@ class AttitudeIndicator(_VecBase):
         major_hw = half_vw * 0.40
         minor_hw = half_vw * 0.22
 
-        for p in range(-_LADDER_RANGE, _LADDER_RANGE + 1, _LADDER_MINOR):
-            if p == 0:
+        n_steps = round(_LADDER_RANGE / self._ladder_step)
+        for i in range(-n_steps, n_steps + 1):
+            p = i * self._ladder_step
+            if abs(p) < 0.001:
                 continue  # horizon is drawn separately
-            y_ai    = pitch_y + p * self._ppu
-            is_major = (p % _LADDER_MAJOR == 0)
-            hw      = major_hw if is_major else minor_hw
-            lw      = self._hor_width if is_major else self._ldr_width
+            y_ai     = pitch_y + p * self._ppu
+            is_major = abs(p) % _LADDER_MAJOR < 0.01
+            hw       = major_hw if is_major else minor_hw
+            lw       = self._hor_width if is_major else self._ldr_width
 
             x1, y1 = _rot(-hw, y_ai, cos_b, sin_b, cx, cy)
             x2, y2 = _rot( hw, y_ai, cos_b, sin_b, cx, cy)
             arcade.draw_line(x1, y1, x2, y2, self._ldr_color, lw)
 
             if is_major:
-                label = str(abs(p))
+                label = str(abs(round(p)))
                 gap   = 6
                 lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
                 lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
@@ -323,6 +327,7 @@ def _ai_factory(
         bank_arc_radius=float(comp.get("bank_arc_radius", 0.0)),
         roll_pointer_color=_as_color(comp.get("roll_pointer_color")),
         roll_pointer_size=float(comp.get("roll_pointer_size", 12.0)),
+        ladder_step=float(comp.get("ladder_step", 5.0)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],

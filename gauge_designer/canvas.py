@@ -862,19 +862,22 @@ class InstrumentCanvas(QWidget):
         # Pitch ladder
         major_hw = vw * 0.40 / 2.0
         minor_hw = vw * 0.22 / 2.0
-        for p_deg in range(-90, 91, 5):
-            if p_deg == 0:
+        ladder_step = float(comp.get("ladder_step", 5.0))
+        n_steps = round(90.0 / ladder_step)
+        for i in range(-n_steps, n_steps + 1):
+            p_deg = i * ladder_step
+            if abs(p_deg) < 0.001:
                 continue
             ly = int(cy_c - p_deg * ppu)  # positive pitch → above centre (PIL y-down)
             if ly < 0 or ly >= clip_h:
                 continue
-            is_major = (p_deg % 10 == 0)
+            is_major = abs(p_deg) % 10 < 0.01
             hw = major_hw if is_major else minor_hw
             lw = hor_w if is_major else ldr_w
             x0, x1 = int(cx_c - hw), int(cx_c + hw)
             cd.line([(x0, ly), (x1, ly)], fill=ldr_c, width=lw)
             if is_major:
-                label = str(abs(p_deg))
+                label = str(abs(round(p_deg)))
                 gap = 6
                 try:
                     cd.text((x1 + gap, ly), label, fill=ldr_c, font=font, anchor="lm")
