@@ -217,7 +217,7 @@ class AttitudeIndicator(_VecBase):
         from pyglet.math import Mat4
         self._ssaa_fbo.use()
         self._ssaa_fbo.viewport = (0, 0, ssaa_w, ssaa_h)
-        self._ssaa_fbo.clear(0.0, 0.0, 0.0, 0.0)
+        self._ssaa_fbo.clear(color=(0, 0, 0, 0))
         ctx.projection_matrix = Mat4.orthogonal_projection(
             vx, vx + vw, vy, vy + vh, -100.0, 100.0
         )
