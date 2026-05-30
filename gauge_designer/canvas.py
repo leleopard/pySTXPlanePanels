@@ -616,10 +616,14 @@ class InstrumentCanvas(QWidget):
                     if -font_size <= y_local <= clip_h + font_size:
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
-                        ldraw.text((lx - clip_x0, y_local), text, fill=label_color,
-                                   font=font, anchor=pil_anchor)
+                        try:
+                            ldraw.text((lx - clip_x0, y_local), text, fill=label_color,
+                                       font=font, anchor=pil_anchor)
+                        except TypeError:
+                            ldraw.text((lx - clip_x0, y_local), text, fill=label_color,
+                                       font=font)
                     v += label_interval
-                composite.alpha_composite(clip_img, dest=(clip_x0, int(py_top)))
+                composite.paste(clip_img, (clip_x0, int(py_top)), mask=clip_img)
             else:
                 label_side = labels.get("side") or tick_side
                 spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
@@ -640,10 +644,14 @@ class InstrumentCanvas(QWidget):
                     if -font_size <= x_local <= clip_w + font_size:
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
-                        ldraw.text((x_local, ly_base), text, fill=label_color,
-                                   font=font, anchor=pil_anchor)
+                        try:
+                            ldraw.text((x_local, ly_base), text, fill=label_color,
+                                       font=font, anchor=pil_anchor)
+                        except TypeError:
+                            ldraw.text((x_local, ly_base), text, fill=label_color,
+                                       font=font)
                     v += label_interval
-                composite.alpha_composite(clip_img, dest=(int(vx), 0))
+                composite.paste(clip_img, (int(vx), 0), mask=clip_img)
 
         # Viewport border
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
