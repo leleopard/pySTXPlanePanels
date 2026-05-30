@@ -536,7 +536,16 @@ class InstrumentCanvas(QWidget):
                 bw = float(band.get("width", 8))
                 bside = band.get("side") or tick_side
                 bx = int(vx) if bside == "left" else int(vx + vw - bw)
-                draw.rectangle([bx, int(py_top), int(bx + bw), int(py_top + vh)], fill=bc)
+                dash = int(band.get("dash", 0))
+                if dash > 0:
+                    y, on = int(py_top), True
+                    while y < int(py_top + vh):
+                        seg = min(y + dash, int(py_top + vh))
+                        if on:
+                            draw.rectangle([bx, y, int(bx + bw) - 1, seg - 1], fill=bc)
+                        y, on = seg, not on
+                else:
+                    draw.rectangle([bx, int(py_top), int(bx + bw), int(py_top + vh)], fill=bc)
             # Spine line
             if ticks:
                 draw.line([(spine_x, int(py_top)), (spine_x, int(py_top + vh))],
@@ -565,7 +574,16 @@ class InstrumentCanvas(QWidget):
                 bh = float(band.get("width", 8))
                 bside = band.get("side") or tick_side
                 by = int(py_top) if bside == "top" else int(py_top + vh - bh)
-                draw.rectangle([int(vx), by, int(vx + vw), int(by + bh)], fill=bc)
+                dash = int(band.get("dash", 0))
+                if dash > 0:
+                    x, on = int(vx), True
+                    while x < int(vx + vw):
+                        seg = min(x + dash, int(vx + vw))
+                        if on:
+                            draw.rectangle([x, by, seg - 1, int(by + bh) - 1], fill=bc)
+                        x, on = seg, not on
+                else:
+                    draw.rectangle([int(vx), by, int(vx + vw), int(by + bh)], fill=bc)
             if ticks:
                 draw.line([(int(vx), spine_y), (int(vx + vw), spine_y)], fill=tc, width=1)
             half_range = vw / 2 / ppu

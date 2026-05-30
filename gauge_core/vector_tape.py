@@ -298,10 +298,18 @@ class VectorTape:
                 continue
             side = band.get("side") or self._tick_side
             bx = vx if side == "left" else vx + vw - bw
-            arcade.draw_rect_filled(
-                arcade.LBWH(bx, y_bot, bw, y_top - y_bot),
-                band["color"],
-            )
+            dash = float(band.get("dash", 0.0))
+            if dash > 0:
+                y = y_bot
+                on = True
+                while y < y_top:
+                    seg = min(y + dash, y_top)
+                    if on:
+                        arcade.draw_rect_filled(arcade.LBWH(bx, y, bw, seg - y), band["color"])
+                    y = seg
+                    on = not on
+            else:
+                arcade.draw_rect_filled(arcade.LBWH(bx, y_bot, bw, y_top - y_bot), band["color"])
 
     def _draw_ticks_y(self, vx, vy, vw, vh, val):
         spine_x  = vx if self._tick_side == "left" else vx + vw
@@ -375,10 +383,18 @@ class VectorTape:
                 continue
             side = band.get("side") or self._tick_side
             by = (vy + vh - bh) if side == "top" else vy
-            arcade.draw_rect_filled(
-                arcade.LBWH(x_left, by, x_right - x_left, bh),
-                band["color"],
-            )
+            dash = float(band.get("dash", 0.0))
+            if dash > 0:
+                x = x_left
+                on = True
+                while x < x_right:
+                    seg = min(x + dash, x_right)
+                    if on:
+                        arcade.draw_rect_filled(arcade.LBWH(x, by, seg - x, bh), band["color"])
+                    x = seg
+                    on = not on
+            else:
+                arcade.draw_rect_filled(arcade.LBWH(x_left, by, x_right - x_left, bh), band["color"])
 
     def _draw_ticks_x(self, vx, vy, vw, vh, val):
         spine_y  = (vy + vh) if self._tick_side == "top" else vy

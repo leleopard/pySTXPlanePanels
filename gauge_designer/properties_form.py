@@ -353,10 +353,25 @@ class _BandsEditor(QWidget):
         width_row.addWidget(self._ep_side)
         width_row.addStretch()
 
+        dash_row = QHBoxLayout()
+        dash_row.setContentsMargins(0, 0, 0, 0); dash_row.setSpacing(4)
+        self._ep_dash_chk = QCheckBox("Dashed")
+        self._ep_dash_chk.toggled.connect(lambda on: self._ep_dash_len.setEnabled(on))
+        self._ep_dash_chk.toggled.connect(self._on_endpoint_changed)
+        self._ep_dash_len = QDoubleSpinBox()
+        self._ep_dash_len.setRange(1.0, 500.0); self._ep_dash_len.setDecimals(1)
+        self._ep_dash_len.setValue(5.0); self._ep_dash_len.setEnabled(False)
+        self._ep_dash_len.setSuffix(" px")
+        self._ep_dash_len.valueChanged.connect(self._on_endpoint_changed)
+        dash_row.addWidget(self._ep_dash_chk)
+        dash_row.addWidget(self._ep_dash_len)
+        dash_row.addStretch()
+
         ep_layout.addWidget(self._ep_min)
         ep_layout.addWidget(self._ep_max)
         ep_layout.addLayout(color_row)
         ep_layout.addLayout(width_row)
+        ep_layout.addLayout(dash_row)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -373,8 +388,8 @@ class _BandsEditor(QWidget):
             return str(v)
         lo = _ep_str(band["range"][0])
         hi = _ep_str(band["range"][1])
-        c  = band.get("color", [255, 255, 255, 255])
-        return f"{lo} → {hi}   (w={band.get('width', 8)})"
+        dash_str = f" dash={band['dash']}" if band.get("dash") else ""
+        return f"{lo} → {hi}   (w={band.get('width', 8)}{dash_str})"
 
     def _refresh_list(self):
         self._list.blockSignals(True)
@@ -400,6 +415,12 @@ class _BandsEditor(QWidget):
         self._ep_width.setValue(float(band.get("width", 8.0)))
         side = band.get("side") or "left"
         self._ep_side.setCurrentText(side)
+        dash = band.get("dash")
+        self._ep_dash_chk.blockSignals(True)
+        self._ep_dash_chk.setChecked(dash is not None)
+        self._ep_dash_chk.blockSignals(False)
+        self._ep_dash_len.setEnabled(dash is not None)
+        self._ep_dash_len.setValue(float(dash) if dash is not None else 5.0)
         self._edit_panel.setVisible(True)
         self._loading = False
 
@@ -413,6 +434,10 @@ class _BandsEditor(QWidget):
         self._bands[row]["color"] = list(self._ep_color.get_rgba())
         self._bands[row]["width"] = self._ep_width.value()
         self._bands[row]["side"] = self._ep_side.currentText()
+        if self._ep_dash_chk.isChecked():
+            self._bands[row]["dash"] = self._ep_dash_len.value()
+        else:
+            self._bands[row].pop("dash", None)
         self._refresh_list()
         self.changed.emit()
 
@@ -434,22 +459,28 @@ class _BandsEditor(QWidget):
         self._loading = True
         self._bands = []
         for b in bands:
-            self._bands.append({
+            entry = {
                 "range": list(b.get("range", [0.0, 100.0])),
                 "color": b.get("color", [255, 255, 255, 180]),
                 "width": float(b.get("width", 8.0)),
                 "side": b.get("side") or "left",
-            })
+            }
+            if b.get("dash") is not None:
+                entry["dash"] = float(b["dash"])
+            self._bands.append(entry)
         self._refresh_list()
         self._edit_panel.setVisible(False)
         self._loading = False
 
     def get_data(self) -> list:
-        return [
-            {"range": list(b["range"]), "color": list(b["color"]),
-             "width": b["width"], "side": b.get("side", "left")}
-            for b in self._bands
-        ]
+        result = []
+        for b in self._bands:
+            entry = {"range": list(b["range"]), "color": list(b["color"]),
+                     "width": b["width"], "side": b.get("side", "left")}
+            if b.get("dash") is not None:
+                entry["dash"] = b["dash"]
+            result.append(entry)
+        return result
 
 
 # ── Collapsible section ───────────────────────────────────────────────────────
