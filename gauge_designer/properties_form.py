@@ -1037,6 +1037,19 @@ class PropertiesForm(QWidget):
         self._vt_tick_color.color_changed.connect(self._emit)
         self._vt_sec.row("Tick color", self._vt_tick_color)
 
+        _vt_bg_row = QWidget()
+        _vt_bg_hl = QHBoxLayout(_vt_bg_row)
+        _vt_bg_hl.setContentsMargins(0, 0, 0, 0); _vt_bg_hl.setSpacing(6)
+        self._vt_bg_chk = QCheckBox()
+        self._vt_bg_chk.toggled.connect(lambda on: self._vt_bg_color.setEnabled(on))
+        self._vt_bg_chk.toggled.connect(self._emit)
+        self._vt_bg_color = _ColorButton()
+        self._vt_bg_color.setEnabled(False)
+        self._vt_bg_color.color_changed.connect(self._emit)
+        _vt_bg_hl.addWidget(self._vt_bg_chk)
+        _vt_bg_hl.addWidget(self._vt_bg_color, 1)
+        self._vt_sec.row("Background", _vt_bg_row)
+
         self._vt_ticks = _TableEditor("Interval", "Length", "Width")
         self._vt_ticks.changed.connect(self._emit)
         self._vt_sec.row("Ticks", self._vt_ticks)
@@ -1237,7 +1250,7 @@ class PropertiesForm(QWidget):
             "color", "width",
             "outline_color", "outline_width",
             # VectorTape (all form-managed)
-            "pixels_per_unit", "wrap", "tick_side", "tick_color", "ticks", "labels", "bands",
+            "pixels_per_unit", "wrap", "tick_side", "tick_color", "bg_color", "ticks", "labels", "bands",
             # Text
             "text", "dataref", "text_format", "convert_function",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
@@ -1350,6 +1363,12 @@ class PropertiesForm(QWidget):
         ts = str(comp.get("tick_side", "left"))
         self._vt_tick_side.setCurrentIndex(max(self._vt_tick_side.findText(ts), 0))
         self._vt_tick_color.set_rgba(comp.get("tick_color"))
+        bg_raw = comp.get("bg_color")
+        self._vt_bg_chk.blockSignals(True)
+        self._vt_bg_chk.setChecked(bg_raw is not None)
+        self._vt_bg_chk.blockSignals(False)
+        self._vt_bg_color.setEnabled(bg_raw is not None)
+        self._vt_bg_color.set_rgba(bg_raw if bg_raw is not None else [15, 15, 35, 220])
         ticks = comp.get("ticks") or []
         self._vt_ticks.load(
             [[td["interval"], td.get("length", 15), td.get("width", 2)] for td in ticks]
@@ -1632,6 +1651,8 @@ class PropertiesForm(QWidget):
                 data["wrap"] = wrap
             data["tick_side"] = self._vt_tick_side.currentText()
             data["tick_color"] = list(self._vt_tick_color.get_rgba())
+            if self._vt_bg_chk.isChecked():
+                data["bg_color"] = list(self._vt_bg_color.get_rgba())
             anim_dr = self._anim_dr.text().strip()
             anim_tbl = self._anim_tbl.get_data()
             if anim_dr or anim_tbl:
@@ -1741,6 +1762,9 @@ class PropertiesForm(QWidget):
         self._vt_wrap.setValue(0.0)
         self._vt_tick_side.setCurrentIndex(0)
         self._vt_tick_color.set_rgba(None)
+        self._vt_bg_chk.setChecked(False)
+        self._vt_bg_color.setEnabled(False)
+        self._vt_bg_color.set_rgba(None)
         self._vt_ticks.load([])
         self._vt_labels_cache = {}
         self._vt_label_interval.setValue(0.0)

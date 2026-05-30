@@ -52,6 +52,7 @@ YAML schema
           width: 8
       wrap: 10                         # optional: label digits cycle modulo this
                                      # value (e.g. 10 for a 0-9 counter drum)
+      bg_color: [20, 20, 40, 255]    # optional: fill the viewport before drawing
       scroll:
         dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
         table: [[0, 0], [400, 400]]
@@ -138,6 +139,7 @@ class VectorTape:
         label_italic: bool = False,
         bands: list[dict] | None = None,
         wrap: float | None = None,
+        bg_color: tuple | None = None,
     ) -> None:
         self.name = name
         self._cx = float(position_xy[0])
@@ -158,6 +160,7 @@ class VectorTape:
         self._label_bold = label_bold
         self._label_italic = label_italic
         self._wrap = float(wrap) if wrap is not None else None
+        self._bg_color: tuple | None = _col(bg_color) if bg_color is not None else None
         self._bands: list[dict] = []
         for b in (bands or []):
             rng = b["range"]
@@ -252,6 +255,9 @@ class VectorTape:
         ctx = arcade.get_window().ctx
         vx, vy, vw, vh = self._vp_x, self._vp_y, self._vp_w, self._vp_h
         val = self._current_value
+
+        if self._bg_color is not None:
+            arcade.draw_rect_filled(arcade.LBWH(vx, vy, vw, vh), self._bg_color)
 
         ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
         if self._axis == "y":
@@ -479,6 +485,7 @@ def _vector_tape_factory(
         label_italic=bool(lbl.get("italic", False)),
         bands=bands,
         wrap=float(comp["wrap"]) if comp.get("wrap") is not None else None,
+        bg_color=comp.get("bg_color"),
     )
 
     if "scroll" in comp:
