@@ -180,12 +180,10 @@ class AttitudeIndicator(_VecBase):
         cx = vx + vw / 2.0
         cy = vy + vh / 2.0
 
-        # Positive bank = right bank = CW rotation of AI background.
-        # Arcade uses CCW-positive angles, so the rotation angle is -bank_deg.
-        # cos(-x) = cos(x),  sin(-x) = -sin(x).
+        # Positive bank = right bank = CCW rotation of AI background.
         bank_rad = math.radians(self._bank)
-        cos_b =  math.cos(bank_rad)
-        sin_b = -math.sin(bank_rad)
+        cos_b = math.cos(bank_rad)
+        sin_b = math.sin(bank_rad)
 
         # y-offset in AI space where the natural horizon (pitch=0 line) sits.
         # Positive pitch → nose up → horizon sinks below centre → negative y offset.
@@ -260,7 +258,7 @@ class AttitudeIndicator(_VecBase):
                 gap   = 6
                 lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
                 lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
-                rot  = -self._bank  # labels stay level in the AI reference frame
+                rot  = self._bank  # labels stay level in the AI reference frame
 
                 if lbl_idx >= len(self._lbl_pool_r):
                     fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
@@ -320,7 +318,7 @@ class AttitudeIndicator(_VecBase):
 
     def _draw_roll_pointer(self, cx, cy, arc_r) -> None:
         # Triangle at the current bank position on the arc, tip pointing inward.
-        bank_rad = math.radians(self._bank)
+        bank_rad = math.radians(-self._bank)
         ux =  math.sin(bank_rad)   # outward radial unit vector
         uy =  math.cos(bank_rad)
         px_v = -uy                 # perpendicular (CCW from outward)
