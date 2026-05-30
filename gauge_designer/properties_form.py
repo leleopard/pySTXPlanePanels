@@ -1050,7 +1050,7 @@ class PropertiesForm(QWidget):
         _vt_bg_hl.addWidget(self._vt_bg_color, 1)
         self._vt_sec.row("Background", _vt_bg_row)
 
-        self._vt_ticks = _TableEditor("Interval", "Length", "Width")
+        self._vt_ticks = _TableEditor("Interval", "Length", "Width", "Offset")
         self._vt_ticks.changed.connect(self._emit)
         self._vt_sec.row("Ticks", self._vt_ticks)
 
@@ -1371,7 +1371,8 @@ class PropertiesForm(QWidget):
         self._vt_bg_color.set_rgba(bg_raw if bg_raw is not None else [15, 15, 35, 220])
         ticks = comp.get("ticks") or []
         self._vt_ticks.load(
-            [[td["interval"], td.get("length", 15), td.get("width", 2)] for td in ticks]
+            [[td["interval"], td.get("length", 15), td.get("width", 2), td.get("offset", 0)]
+             for td in ticks]
         )
         lbl = comp.get("labels") or {}
         self._vt_labels_cache = {k: v for k, v in lbl.items()
@@ -1665,7 +1666,8 @@ class PropertiesForm(QWidget):
             ticks_raw = self._vt_ticks.get_data()
             if ticks_raw:
                 data["ticks"] = [
-                    {"interval": r[0], "length": r[1], "width": r[2]}
+                    {"interval": r[0], "length": r[1], "width": r[2],
+                     **( {"offset": r[3]} if len(r) > 3 and r[3] != 0 else {} )}
                     for r in ticks_raw
                 ]
             # Labels dict: cache preserves color/format/offset;

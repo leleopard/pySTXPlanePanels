@@ -26,9 +26,11 @@ YAML schema
         - interval: 10
           length: 15
           width: 2
+          offset: 0                  # optional: gap (px) between spine and tick start
         - interval: 20
           length: 30
           width: 3
+          offset: 0
           color: [255, 220, 100]      # optional per-level override
       labels:
         interval: 20
@@ -217,6 +219,7 @@ class VectorTape:
         for td in self._tick_defs:
             td["length"] = float(td["length"]) * scale
             td["width"]  = max(1.0, float(td["width"]) * scale)
+            td["offset"] = float(td.get("offset", 0.0)) * scale
         self._label_offset    *= scale
         self._label_font_size *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
@@ -310,15 +313,14 @@ class VectorTape:
             interval = float(td["interval"])
             length   = float(td["length"])
             width    = max(1.0, float(td["width"]))
+            offset   = float(td.get("offset", 0.0))
             color    = _col(td.get("color", self._tick_color_default))
+            x0 = spine_x + tick_dir * offset
+            x1 = spine_x + tick_dir * (offset + length)
             v = math.floor(v_min / interval) * interval
             while v <= v_max + interval * 0.001:
                 y = self._cy + (v - val) * self._ppu
-                arcade.draw_line(
-                    spine_x, y,
-                    spine_x + tick_dir * length, y,
-                    color, width,
-                )
+                arcade.draw_line(x0, y, x1, y, color, width)
                 v += interval
 
     def _draw_labels_y(self, vx, vy, vw, vh, val):
@@ -388,15 +390,14 @@ class VectorTape:
             interval = float(td["interval"])
             length   = float(td["length"])
             width    = max(1.0, float(td["width"]))
+            offset   = float(td.get("offset", 0.0))
             color    = _col(td.get("color", self._tick_color_default))
+            y0 = spine_y + tick_dir * offset
+            y1 = spine_y + tick_dir * (offset + length)
             v = math.floor(v_min / interval) * interval
             while v <= v_max + interval * 0.001:
                 x = self._cx + (v - val) * self._ppu
-                arcade.draw_line(
-                    x, spine_y,
-                    x, spine_y + tick_dir * length,
-                    color, width,
-                )
+                arcade.draw_line(x, y0, x, y1, color, width)
                 v += interval
 
     def _draw_labels_x(self, vx, vy, vw, vh, val):
@@ -449,6 +450,7 @@ def _vector_tape_factory(
             "interval": float(td["interval"]),
             "length":   float(td["length"]),
             "width":    float(td.get("width", 2.0)),
+            "offset":   float(td.get("offset", 0.0)),
             "color":    td.get("color"),  # None → use tape-level default
         })
 

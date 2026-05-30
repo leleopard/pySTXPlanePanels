@@ -547,13 +547,15 @@ class InstrumentCanvas(QWidget):
                 interval = float(td["interval"])
                 length   = float(td.get("length", 15))
                 tw       = max(1, int(td.get("width", 2)))
+                toff     = int(td.get("offset", 0))
                 tc_col   = _rgba(td["color"]) if td.get("color") else tc
+                x0 = spine_x + tick_dir * toff
+                x1 = spine_x + tick_dir * (toff + int(length))
                 v = math.floor((-half_range - interval) / interval) * interval
                 while v <= half_range + interval + interval * 0.001:
                     y = int(cy_pil - v * ppu)
                     if int(py_top) <= y <= int(py_top + vh):
-                        draw.line([(spine_x, y), (spine_x + tick_dir * int(length), y)],
-                                  fill=tc_col, width=tw)
+                        draw.line([(x0, y), (x1, y)], fill=tc_col, width=tw)
                     v += interval
         else:
             spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
@@ -571,13 +573,15 @@ class InstrumentCanvas(QWidget):
                 interval = float(td["interval"])
                 length   = float(td.get("length", 15))
                 tw       = max(1, int(td.get("width", 2)))
+                toff     = int(td.get("offset", 0))
                 tc_col   = _rgba(td["color"]) if td.get("color") else tc
+                y0 = spine_y + tick_dir * toff
+                y1 = spine_y + tick_dir * (toff + int(length))
                 v = math.floor((-half_range - interval) / interval) * interval
                 while v <= half_range + interval + interval * 0.001:
                     x = int(cx_pil + v * ppu)
                     if int(vx) <= x <= int(vx + vw):
-                        draw.line([(x, spine_y), (x, spine_y + tick_dir * int(length))],
-                                  fill=tc_col, width=tw)
+                        draw.line([(x, y0), (x, y1)], fill=tc_col, width=tw)
                     v += interval
 
         # Labels
