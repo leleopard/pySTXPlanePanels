@@ -115,6 +115,9 @@ class AttitudeIndicator(_VecBase):
         self._ladder_font  = str(ladder_font_name)
         self._ladder_bold  = bool(ladder_bold)
         self._ladder_italic = bool(ladder_italic)
+        # Reusable Text objects — grown lazily on first draw, never recreated.
+        self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
+        self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -234,6 +237,7 @@ class AttitudeIndicator(_VecBase):
         hw_1 = half_vw * self._ladder_hw_1
 
         n_steps = round(_LADDER_RANGE / self._ladder_step)
+        lbl_idx = 0
         for i in range(-n_steps, n_steps + 1):
             if i == 0:
                 continue  # horizon is drawn separately
@@ -252,22 +256,38 @@ class AttitudeIndicator(_VecBase):
             arcade.draw_line(x1, y1, x2, y2, self._ldr_color, lw)
 
             if labeled:
-                label = str(abs(round(p)))
+                label_text = str(abs(round(p)))
                 gap   = 6
                 lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
                 lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
                 rot  = -self._bank  # labels stay level in the AI reference frame
-                fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
-                if self._ladder_font:
-                    fkw["font_name"] = self._ladder_font
-                arcade.draw_text(label, lx_r, ly_r, self._ldr_color,
-                                 self._font_size,
-                                 anchor_x="left", anchor_y="center",
-                                 rotation=rot, **fkw)
-                arcade.draw_text(label, lx_l, ly_l, self._ldr_color,
-                                 self._font_size,
-                                 anchor_x="right", anchor_y="center",
-                                 rotation=rot, **fkw)
+
+                if lbl_idx >= len(self._lbl_pool_r):
+                    fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
+                    if self._ladder_font:
+                        fkw["font_name"] = self._ladder_font
+                    self._lbl_pool_r.append(arcade.Text(
+                        "", 0.0, 0.0, color=self._ldr_color,
+                        font_size=self._font_size, anchor_x="left", anchor_y="center",
+                        **fkw,
+                    ))
+                    self._lbl_pool_l.append(arcade.Text(
+                        "", 0.0, 0.0, color=self._ldr_color,
+                        font_size=self._font_size, anchor_x="right", anchor_y="center",
+                        **fkw,
+                    ))
+
+                tr = self._lbl_pool_r[lbl_idx]
+                tr.text = label_text
+                tr.x = lx_r;  tr.y = ly_r;  tr.rotation = rot
+                tr.draw()
+
+                tl = self._lbl_pool_l[lbl_idx]
+                tl.text = label_text
+                tl.x = lx_l;  tl.y = ly_l;  tl.rotation = rot
+                tl.draw()
+
+                lbl_idx += 1
 
     def _draw_bank_arc(self, cx, cy, arc_r) -> None:
         # Arc spans ±60° from vertical (upper portion of circle).
