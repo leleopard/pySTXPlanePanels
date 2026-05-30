@@ -12,6 +12,7 @@ Interaction:
   - Ctrl + mouse-wheel        → zoom in/out (point under cursor stays fixed)
 """
 
+import copy
 import io
 import math
 from pathlib import Path
@@ -20,6 +21,8 @@ from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter
+
+from gauge_designer.ui_utils import is_y_down
 
 
 def _rgba(raw) -> tuple:
@@ -119,6 +122,7 @@ class InstrumentCanvas(QWidget):
         self._drag_name: str | None = None
         self._drag_start: tuple[float, float] | None = None
         self._drag_orig: list[int] | None = None
+        self._drag_orig_comp: dict | None = None  # deep copy of original comp for non-position types
 
         self._surface = _CanvasSurface(self)
 
@@ -172,6 +176,7 @@ class InstrumentCanvas(QWidget):
         self._hidden = set()
         self._atlas_cache.clear()
         self._drag_name = None
+        self._drag_orig_comp = None
         self._surface.set_pixmap(QPixmap())
 
     # ── Zoom ─────────────────────────────────────────────────────────────
@@ -224,8 +229,19 @@ class InstrumentCanvas(QWidget):
         self._drag_name = name
         self._drag_start = (cx, cy)
         comp = self._find_comp(name)
-        pos = comp.get("position", [0, 0]) if comp else [0, 0]
-        self._drag_orig = [int(pos[0]), int(pos[1])]
+        self._drag_orig_comp = copy.deepcopy(comp) if comp else None
+        # Reference anchor in y-up coords for each type
+        ctype = comp.get("type", "") if comp else ""
+        if ctype == "Line":
+            ref = comp.get("start", [0, 0])
+        elif ctype == "Arc":
+            ref = comp.get("center", [0, 0])
+        elif ctype == "Polygon":
+            pts = comp.get("points", [])
+            ref = pts[0] if pts else [0, 0]
+        else:
+            ref = comp.get("position", [0, 0]) if comp else [0, 0]
+        self._drag_orig = [int(ref[0]), int(ref[1])]
         self._surface.setCursor(Qt.SizeAllCursor)
         self.component_selected.emit(name)
 
@@ -234,17 +250,33 @@ class InstrumentCanvas(QWidget):
         canvas_x = p.x() / self._zoom
         canvas_y = p.y() / self._zoom
         _w, ih = self._data.get("size", [310, 310]) if self._data else [310, 310]
-        self._coord_label.setText(f"X {int(round(canvas_x))}  Y {ih - int(round(canvas_y))}")
+        # Show coordinate in the user's selected convention
+        y_coord = int(round(canvas_y)) if is_y_down() else ih - int(round(canvas_y))
+        self._coord_label.setText(f"X {int(round(canvas_x))}  Y {y_coord}")
 
         if not (event.buttons() & Qt.LeftButton) or not self._drag_name:
             return
         dx = canvas_x - self._drag_start[0]
         dy = canvas_y - self._drag_start[1]
-        new_x = int(round(self._drag_orig[0] + dx))
-        new_y = int(round(self._drag_orig[1] - dy))  # y-down → y-up
+        dx_yaml = dx
+        dy_yaml = -dy  # canvas y-down → y-up
         comp = self._find_comp(self._drag_name)
-        if comp is not None:
-            comp["position"] = [new_x, new_y]
+        orig = self._drag_orig_comp
+        if comp is not None and orig is not None:
+            ctype = comp.get("type", "")
+            if ctype == "Line":
+                os_ = orig.get("start", [0, 0]); oe = orig.get("end", [0, 0])
+                comp["start"] = [int(round(os_[0] + dx_yaml)), int(round(os_[1] + dy_yaml))]
+                comp["end"]   = [int(round(oe[0]  + dx_yaml)), int(round(oe[1]  + dy_yaml))]
+            elif ctype == "Polygon":
+                comp["points"] = [[int(round(p[0] + dx_yaml)), int(round(p[1] + dy_yaml))]
+                                  for p in orig.get("points", [])]
+            elif ctype == "Arc":
+                oc = orig.get("center", [0, 0])
+                comp["center"] = [int(round(oc[0] + dx_yaml)), int(round(oc[1] + dy_yaml))]
+            else:
+                op = orig.get("position", [0, 0])
+                comp["position"] = [int(round(op[0] + dx_yaml)), int(round(op[1] + dy_yaml))]
             self._render()
 
     def _on_leave(self):
@@ -256,11 +288,21 @@ class InstrumentCanvas(QWidget):
         self._surface.setCursor(Qt.CrossCursor)
         comp = self._find_comp(self._drag_name)
         if comp is not None:
-            x, y = comp.get("position", [0, 0])
-            self.component_moved.emit(self._drag_name, int(x), int(y))
+            ctype = comp.get("type", "")
+            if ctype == "Line":
+                ref = comp.get("start", [0, 0])
+            elif ctype == "Arc":
+                ref = comp.get("center", [0, 0])
+            elif ctype == "Polygon":
+                pts = comp.get("points", [[0, 0]])
+                ref = pts[0] if pts else [0, 0]
+            else:
+                ref = comp.get("position", [0, 0])
+            self.component_moved.emit(self._drag_name, int(ref[0]), int(ref[1]))
         self._drag_name = None
         self._drag_start = None
         self._drag_orig = None
+        self._drag_orig_comp = None
 
     # ── Hit testing ───────────────────────────────────────────────────────
 
