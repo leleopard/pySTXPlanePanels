@@ -595,20 +595,31 @@ class InstrumentCanvas(QWidget):
                 if label_side == "left":
                     lx = spine_x - int(label_offset)
                     pil_anchor = "rm"   # right edge at lx, middle at y
+                    lx_clip_min, lx_clip_max = 0, spine_x
                 else:
                     lx = spine_x + int(label_offset)
                     pil_anchor = "lm"   # left edge at lx, middle at y
+                    lx_clip_min = spine_x
+                    lx_clip_max = int(vx + vw) if tick_side == "left" else canvas_w
+                label_ov = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+                ldraw = ImageDraw.Draw(label_ov)
                 half_range = vh / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
                 while v <= v_max + label_interval * 0.001:
                     y_pil = int(cy_pil - v * ppu)
-                    if int(py_top) <= y_pil <= int(py_top + vh):
+                    if int(py_top) - font_size <= y_pil <= int(py_top + vh) + font_size:
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
-                        draw.text((lx, y_pil), text, fill=label_color,
-                                  font=font, anchor=pil_anchor)
+                        ldraw.text((lx, y_pil), text, fill=label_color,
+                                   font=font, anchor=pil_anchor)
                     v += label_interval
+                clip_mask = Image.new("L", composite.size, 0)
+                ImageDraw.Draw(clip_mask).rectangle(
+                    [lx_clip_min, int(py_top), lx_clip_max, int(py_top + vh)], fill=255
+                )
+                _transparent = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+                composite.alpha_composite(Image.composite(label_ov, _transparent, clip_mask))
             else:
                 label_side = labels.get("side") or tick_side
                 spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
@@ -618,17 +629,25 @@ class InstrumentCanvas(QWidget):
                 else:
                     ly_base = spine_y + int(label_offset)
                     pil_anchor = "mt"   # centre x, top edge at ly_base
+                label_ov = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+                ldraw = ImageDraw.Draw(label_ov)
                 half_range = vw / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
                 while v <= v_max + label_interval * 0.001:
                     x_pil = int(cx_pil + v * ppu)
-                    if int(vx) <= x_pil <= int(vx + vw):
+                    if int(vx) - font_size <= x_pil <= int(vx + vw) + font_size:
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
-                        draw.text((x_pil, ly_base), text, fill=label_color,
-                                  font=font, anchor=pil_anchor)
+                        ldraw.text((x_pil, ly_base), text, fill=label_color,
+                                   font=font, anchor=pil_anchor)
                     v += label_interval
+                clip_mask = Image.new("L", composite.size, 0)
+                ImageDraw.Draw(clip_mask).rectangle(
+                    [int(vx), 0, int(vx + vw), canvas_h], fill=255
+                )
+                _transparent = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+                composite.alpha_composite(Image.composite(label_ov, _transparent, clip_mask))
 
         # Viewport border
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
