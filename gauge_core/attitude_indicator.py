@@ -56,6 +56,34 @@ _BANK_TICKS   = [10, 20, 30, 45, 60]  # drawn on both sides (± each)
 _LADDER_RANGE = 90   # draw ladder from -90° to +90°
 _SSAA         = 3    # supersample factor — render 3× larger, blit down with bilinear
 
+# Minimal shader: draw a resolve texture onto a viewport-sized quad.
+# Uses arcade's WindowBlock UBO (binding 0) so projection is always current.
+_BLIT_VS = """
+#version 330
+uniform WindowBlock {
+    mat4 projection;
+    mat4 view;
+} window;
+uniform vec4 u_vp;   // (vx, vy, vw, vh) in world space
+in vec2 in_uv;       // static quad UVs: (0,0)–(1,1)
+out vec2 v_uv;
+void main() {
+    vec2 world = u_vp.xy + in_uv * u_vp.zw;
+    gl_Position = window.projection * window.view * vec4(world, 0.0, 1.0);
+    v_uv = in_uv;
+}
+"""
+
+_BLIT_FS = """
+#version 330
+uniform sampler2D tex;
+in vec2 v_uv;
+out vec4 frag_color;
+void main() {
+    frag_color = texture(tex, v_uv);
+}
+"""
+
 
 def _rot(x: float, y: float, cos_b: float, sin_b: float,
          cx: float, cy: float) -> tuple[float, float]:
@@ -126,6 +154,13 @@ class AttitudeIndicator(_VecBase):
         self._ssaa_fbo: Any | None = None
         self._ssaa_tex: Any | None = None
         self._ssaa_dim: tuple[int, int] = (0, 0)
+        # 1× resolve FBO: receives GL_LINEAR blit from SSAA FBO (both non-MSAA
+        # so GL_LINEAR is valid), then drawn to ctx.screen via shader quad.
+        self._res_fbo:  Any | None = None
+        self._res_tex:  Any | None = None
+        self._res_dim:  tuple[int, int] = (0, 0)
+        self._blit_prog: Any | None = None  # textured-quad program
+        self._blit_vao:  Any | None = None  # static (0,0)–(1,1) UV quad
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -202,9 +237,11 @@ class AttitudeIndicator(_VecBase):
 
         ctx = arcade.get_window().ctx
 
-        # ── Lazy-create / resize SSAA FBO ────────────────────────────────────
+        # ── Lazy-create / resize SSAA FBO (3×) and resolve FBO (1×) ─────────────
         ssaa_w = int(vw * _SSAA)
         ssaa_h = int(vh * _SSAA)
+        out_w  = int(vw)
+        out_h  = int(vh)
         if self._ssaa_fbo is None or self._ssaa_dim != (ssaa_w, ssaa_h):
             if self._ssaa_tex is not None:
                 self._ssaa_fbo.release()
@@ -212,6 +249,28 @@ class AttitudeIndicator(_VecBase):
             self._ssaa_tex = ctx.texture((ssaa_w, ssaa_h), components=4)
             self._ssaa_fbo = ctx.framebuffer(color_attachments=[self._ssaa_tex])
             self._ssaa_dim = (ssaa_w, ssaa_h)
+        if self._res_fbo is None or self._res_dim != (out_w, out_h):
+            if self._res_tex is not None:
+                self._res_fbo.release()
+                self._res_tex.release()
+            self._res_tex = ctx.texture((out_w, out_h), components=4)
+            self._res_fbo = ctx.framebuffer(color_attachments=[self._res_tex])
+            self._res_dim = (out_w, out_h)
+
+        # ── Lazy-create blit shader + static UV quad (shared forever) ─────────
+        if self._blit_prog is None:
+            self._blit_prog = ctx.program(vertex_shader=_BLIT_VS,
+                                          fragment_shader=_BLIT_FS)
+            self._blit_prog["tex"] = 0  # sampler → texture unit 0
+        if self._blit_vao is None:
+            import array as _arr
+            from arcade.gl import BufferDescription
+            buf = ctx.buffer(data=_arr.array("f",
+                             [0.0, 0.0,  1.0, 0.0,  0.0, 1.0,  1.0, 1.0]).tobytes())
+            self._blit_vao = ctx.geometry(
+                [BufferDescription(buf, "2f", ["in_uv"])],
+                mode=ctx.TRIANGLE_STRIP,
+            )
 
         # ── Phase 1: all geometry → SSAA FBO ─────────────────────────────────
         from pyglet.math import Mat4
@@ -233,23 +292,30 @@ class AttitudeIndicator(_VecBase):
         self._draw_roll_pointer(cx, cy, arc_r)
         self._draw_reference(cx, cy)
 
-        # ── Blit SSAA FBO → screen (bilinear downsample = supersampled AA) ───
-        ctx.screen.use()
-        ctx.projection_matrix = saved_proj  # direct restore; camera.use() early-exits
-
+        # ── Blit SSAA (3×) → resolve FBO (1×) via GL_LINEAR ──────────────────
+        # Both FBOs are non-MSAA: GL_LINEAR is valid here.
+        # Direct blit to ctx.screen (MSAA) with GL_LINEAR is NOT valid per spec
+        # (drivers silently fall back to GL_NEAREST, giving zero AA benefit).
         from pyglet.gl import (
             glBindFramebuffer, glBlitFramebuffer,
-            GL_READ_FRAMEBUFFER,
+            GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER,
             GL_COLOR_BUFFER_BIT, GL_LINEAR,
         )
         glBindFramebuffer(GL_READ_FRAMEBUFFER, self._ssaa_fbo.glo)
-        # GL_DRAW_FRAMEBUFFER is already ctx.screen (set above).
-        glBlitFramebuffer(
-            0, 0, ssaa_w, ssaa_h,
-            int(vx), int(vy), int(vx + vw), int(vy + vh),
-            GL_COLOR_BUFFER_BIT, GL_LINEAR,
-        )
-        ctx.screen.use(force=True)  # force re-sync: resets GL_READ_FRAMEBUFFER via GL_FRAMEBUFFER
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self._res_fbo.glo)
+        glBlitFramebuffer(0, 0, ssaa_w, ssaa_h, 0, 0, out_w, out_h,
+                          GL_COLOR_BUFFER_BIT, GL_LINEAR)
+
+        # ── Draw resolve texture → ctx.screen via shader quad ─────────────────
+        # Using a shader quad (not glBlitFramebuffer) so the draw goes through
+        # the normal pipeline and the MSAA screen samples it correctly.
+        ctx.screen.use()
+        ctx.projection_matrix = saved_proj  # direct restore; camera.use() early-exits
+        self._blit_prog["u_vp"] = (vx, vy, float(vw), float(vh))
+        self._res_tex.use(0)
+        ctx.disable(ctx.BLEND)
+        self._blit_vao.render(self._blit_prog)
+        ctx.enable(ctx.BLEND)
 
         # ── Phase 2: text labels at native resolution ─────────────────────────
         # arcade.Text uses pyglet's own projection — must render at screen res.
