@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QPushButton, QCheckBox, QDialog, QColorDialog, QFontDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QFileDialog, QListWidget, QListWidgetItem, QStackedWidget, QFrame,
-    QGroupBox,
+    QGroupBox, QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
