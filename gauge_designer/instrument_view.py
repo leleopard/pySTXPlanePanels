@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QStyleOptionViewItem, QSpinBox, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
 )
-from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings
+from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings, QTimer
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
@@ -238,7 +238,8 @@ class _InstrumentTree(QTreeWidget):
 class InstrumentView(QWidget):
     changed = Signal()
     open_requested = Signal(str)   # emitted when user activates a file in the tree
-    test_running = Signal(bool)    # True when test starts, False when it stops
+    test_running = Signal(bool)    # True when mock test starts, False when it stops
+    live_running = Signal(bool)    # True when live X-Plane run starts, False when it stops
     instrument_moved = Signal(str, str)  # old_abs_path, new_abs_path (file or dir)
 
     def __init__(self, parent=None):
@@ -250,6 +251,10 @@ class InstrumentView(QWidget):
         self._loaded_path: str | None = None
         self._test_proc: subprocess.Popen | None = None
         self._harness_win = None
+        self._live_proc: subprocess.Popen | None = None
+        self._live_timer = QTimer(self)
+        self._live_timer.setInterval(500)
+        self._live_timer.timeout.connect(self._poll_live)
 
         # cache standard icons once (requires a live QWidget)
         self._dir_icon = None
@@ -475,6 +480,7 @@ class InstrumentView(QWidget):
         self._editor_content.setVisible(False)
         self._loaded_path = None
         self.stop_test()
+        self.stop_live()
         self._tree.setCurrentItem(None)
 
     def get_name(self) -> str:
@@ -875,3 +881,26 @@ class InstrumentView(QWidget):
             self._test_proc.terminate()
             self._test_proc = None
         self.test_running.emit(False)
+
+    def run_live(self):
+        """Launch the runtime connected to X-Plane (no mock, no test harness)."""
+        if not self._loaded_path or self._live_proc is not None:
+            return
+        self._live_proc = subprocess.Popen(
+            [sys.executable, "-m", "gauge_core.runner", self._loaded_path]
+        )
+        self._live_timer.start()
+        self.live_running.emit(True)
+
+    def stop_live(self):
+        self._live_timer.stop()
+        if self._live_proc is not None:
+            self._live_proc.terminate()
+            self._live_proc = None
+        self.live_running.emit(False)
+
+    def _poll_live(self):
+        if self._live_proc and self._live_proc.poll() is not None:
+            self._live_proc = None
+            self._live_timer.stop()
+            self.live_running.emit(False)

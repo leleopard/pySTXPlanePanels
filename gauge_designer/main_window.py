@@ -93,6 +93,8 @@ class MainWindow(QMainWindow):
         self._preview = PreviewBar(self)
         self._gauge_view.test_running.connect(self._on_test_running)
         self._preview.running_changed.connect(self._on_test_running)
+        self._gauge_view.live_running.connect(self._on_live_running)
+        self._preview.live_running_changed.connect(self._on_live_running)
         self._gauge_view.instrument_moved.connect(self._on_instrument_moved)
 
         self._tabs = QTabWidget()
@@ -254,10 +256,20 @@ class MainWindow(QMainWindow):
         self._play_btn.setIconSize(QSize(36, 36))
         self._play_btn.setFixedSize(48, 48)
         self._play_btn.setStyleSheet(_btn_style)
-        self._play_btn.setToolTip("Launch test / preview")
+        self._play_btn.setToolTip("Launch test / preview (mock, no X-Plane)")
         self._play_btn.setEnabled(False)
         self._play_btn.clicked.connect(self._on_play_clicked)
         tb.addWidget(self._play_btn)
+
+        self._run_btn = QPushButton()
+        self._run_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY, size=36))
+        self._run_btn.setIconSize(QSize(36, 36))
+        self._run_btn.setFixedSize(48, 48)
+        self._run_btn.setStyleSheet(_btn_style)
+        self._run_btn.setToolTip("Launch live — connect to X-Plane")
+        self._run_btn.setEnabled(False)
+        self._run_btn.clicked.connect(self._on_run_clicked)
+        tb.addWidget(self._run_btn)
 
     def _update_save_btn(self, dirty: bool):
         from gauge_designer.ui_utils import _HEADER_COLOR
@@ -278,12 +290,28 @@ class MainWindow(QMainWindow):
             (idx == _TAB_GAUGE and self._gauge_path is not None)
             or (idx == _TAB_PANEL and self._panel_path is not None)
         )
-        running = (idx == _TAB_GAUGE and self._gauge_view._test_proc is not None) \
-                  or (idx == _TAB_PANEL and self._preview.is_running)
-        enabled = has_file and not running
+        busy = (idx == _TAB_GAUGE and (self._gauge_view._test_proc is not None
+                                       or self._gauge_view._live_proc is not None)) \
+               or (idx == _TAB_PANEL and (self._preview.is_running or self._preview.is_live))
+        enabled = has_file and not busy
         self._play_btn.setEnabled(enabled)
         color = _HEADER_COLOR if enabled else self._ICON_GREY
         self._play_btn.setIcon(make_svg_icon("bug-play", color, size=36))
+
+    def _update_run_btn(self):
+        from gauge_designer.ui_utils import _HEADER_COLOR
+        idx = self._tabs.currentIndex()
+        has_file = (
+            (idx == _TAB_GAUGE and self._gauge_path is not None)
+            or (idx == _TAB_PANEL and self._panel_path is not None)
+        )
+        busy = (idx == _TAB_GAUGE and (self._gauge_view._test_proc is not None
+                                       or self._gauge_view._live_proc is not None)) \
+               or (idx == _TAB_PANEL and (self._preview.is_running or self._preview.is_live))
+        enabled = has_file and not busy
+        self._run_btn.setEnabled(enabled)
+        color = _HEADER_COLOR if enabled else self._ICON_GREY
+        self._run_btn.setIcon(make_svg_icon("play-circle-outline", color, size=36))
 
     def _update_save_all_btn(self):
         from gauge_designer.ui_utils import _HEADER_COLOR
@@ -324,8 +352,19 @@ class MainWindow(QMainWindow):
         else:
             self._preview.launch()
 
+    def _on_run_clicked(self):
+        if self._tabs.currentIndex() == _TAB_GAUGE:
+            self._gauge_view.run_live()
+        else:
+            self._preview.launch_live()
+
     def _on_test_running(self, running: bool):
         self._update_play_btn()
+        self._update_run_btn()
+
+    def _on_live_running(self, running: bool):
+        self._update_play_btn()
+        self._update_run_btn()
 
     def _on_instrument_moved(self, old_abs: str, new_abs: str):
         """Rewrite instrument file references in all panel YAMLs when a file/folder moves."""
@@ -383,6 +422,7 @@ class MainWindow(QMainWindow):
         self._update_save_all_btn()
         self._update_script_btn()
         self._update_play_btn()
+        self._update_run_btn()
         self._update_title()
 
     # ── Recent files ──────────────────────────────────────────────────────
@@ -472,6 +512,7 @@ class MainWindow(QMainWindow):
         self._update_save_btn(False)
         self._update_save_all_btn()
         self._update_play_btn()
+        self._update_run_btn()
         self._update_title()
         n = len(data.get("components", []))
         self.statusBar().showMessage(
@@ -505,6 +546,7 @@ class MainWindow(QMainWindow):
         self._update_save_all_btn()
         self._update_script_btn()
         self._update_play_btn()
+        self._update_run_btn()
         self._update_title()
         n = len(data.get("instruments", []))
         self.statusBar().showMessage(
@@ -647,6 +689,8 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._gauge_view.stop_test()
+        self._gauge_view.stop_live()
+        self._preview.stop_live()
         self._settings.setValue("windowGeometry", self.saveGeometry())
         self._gauge_view.save_state(self._settings)
         self._panel_view.save_state(self._settings)
