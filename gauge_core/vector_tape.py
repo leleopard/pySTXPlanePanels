@@ -262,28 +262,16 @@ class VectorTape:
             self._draw_ticks_x(vx, vy, vw, vh, val)
         ctx.scissor = None
 
-        win = arcade.get_window()
-        label_side = self._label_side if self._label_side is not None else self._tick_side
+        # Use the same viewport scissor for labels as for ticks so that labels
+        # are clipped to the tape viewport on all four sides.  Labels that are
+        # positioned at the edge of the viewport (e.g. drum-digit tapes where
+        # text starts at the spine and extends inward) are correctly confined,
+        # and labels that sit inside the viewport near one edge are clipped when
+        # they scroll off the top or bottom.
+        ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
         if self._axis == "y":
-            # Clip labels vertically to the viewport and horizontally to the
-            # side where labels actually appear, preventing them from bleeding
-            # across the tape into adjacent instruments.
-            spine_x = int(vx) if self._tick_side == "left" else int(vx + vw)
-            if label_side == "left":
-                ctx.scissor = (0, int(vy), spine_x, int(vh))
-            else:
-                right = int(vx + vw) if self._tick_side == "left" else win.width
-                ctx.scissor = (spine_x, int(vy), right - spine_x, int(vh))
             self._draw_labels_y(vx, vy, vw, vh, val)
         else:
-            # Clip labels horizontally to the viewport; they may extend above/below.
-            spine_y = int(vy + vh) if self._tick_side == "top" else int(vy)
-            if label_side == "top":
-                top = int(vy + vh) if self._tick_side == "bottom" else win.height
-                ctx.scissor = (int(vx), spine_y, int(vw), top - spine_y)
-            else:
-                bot = int(vy) if self._tick_side == "top" else 0
-                ctx.scissor = (int(vx), bot, int(vw), spine_y - bot)
             self._draw_labels_x(vx, vy, vw, vh, val)
         ctx.scissor = None
 
