@@ -860,23 +860,29 @@ class InstrumentCanvas(QWidget):
         cd.rectangle([0, int(cy_c), clip_w - 1, clip_h - 1], fill=gnd_c)
 
         # Pitch ladder
-        major_hw = vw * 0.40 / 2.0
-        minor_hw = vw * 0.22 / 2.0
+        half_vw = vw / 2.0
         ladder_step = float(comp.get("ladder_step", 5.0))
+        hw_4 = half_vw * float(comp.get("ladder_hw_4", 0.40))
+        hw_2 = half_vw * float(comp.get("ladder_hw_2", 0.31))
+        hw_1 = half_vw * float(comp.get("ladder_hw_1", 0.22))
         n_steps = round(90.0 / ladder_step)
         for i in range(-n_steps, n_steps + 1):
-            p_deg = i * ladder_step
-            if abs(p_deg) < 0.001:
+            if i == 0:
                 continue
+            p_deg = i * ladder_step
             ly = int(cy_c - p_deg * ppu)  # positive pitch → above centre (PIL y-down)
             if ly < 0 or ly >= clip_h:
                 continue
-            is_major = abs(p_deg) % 10 < 0.01
-            hw = major_hw if is_major else minor_hw
-            lw = hor_w if is_major else ldr_w
+            abs_i = abs(i)
+            if abs_i % 4 == 0:
+                hw, lw, labeled = hw_4, hor_w, True
+            elif abs_i % 2 == 0:
+                hw, lw, labeled = hw_2, ldr_w, False
+            else:
+                hw, lw, labeled = hw_1, ldr_w, False
             x0, x1 = int(cx_c - hw), int(cx_c + hw)
             cd.line([(x0, ly), (x1, ly)], fill=ldr_c, width=lw)
-            if is_major:
+            if labeled:
                 label = str(abs(round(p_deg)))
                 gap = 6
                 try:

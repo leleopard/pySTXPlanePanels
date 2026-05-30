@@ -53,8 +53,6 @@ from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
 
 
 _BANK_TICKS   = [10, 20, 30, 45, 60]  # drawn on both sides (± each)
-_LADDER_MAJOR = 10   # degrees — long lines with labels
-_LADDER_MINOR =  5   # degrees — short lines, no labels
 _LADDER_RANGE = 90   # draw ladder from -90° to +90°
 
 
@@ -85,6 +83,9 @@ class AttitudeIndicator(_VecBase):
         roll_pointer_color: tuple = (255, 255, 255, 255),
         roll_pointer_size: float = 12.0,
         ladder_step: float = 5.0,
+        ladder_hw_4: float = 0.40,
+        ladder_hw_2: float = 0.31,
+        ladder_hw_1: float = 0.22,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -105,6 +106,9 @@ class AttitudeIndicator(_VecBase):
         self._ptr_color   = roll_pointer_color
         self._ptr_size    = float(roll_pointer_size)
         self._ladder_step = float(ladder_step)
+        self._ladder_hw_4 = float(ladder_hw_4)
+        self._ladder_hw_2 = float(ladder_hw_2)
+        self._ladder_hw_1 = float(ladder_hw_1)
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -218,25 +222,30 @@ class AttitudeIndicator(_VecBase):
         arcade.draw_line(x1, y1, x2, y2, self._hor_color, self._hor_width)
 
     def _draw_ladder(self, cx, cy, pitch_y, cos_b, sin_b, vw) -> None:
-        half_vw  = vw / 2.0
-        major_hw = half_vw * 0.40
-        minor_hw = half_vw * 0.22
+        half_vw = vw / 2.0
+        hw_4 = half_vw * self._ladder_hw_4
+        hw_2 = half_vw * self._ladder_hw_2
+        hw_1 = half_vw * self._ladder_hw_1
 
         n_steps = round(_LADDER_RANGE / self._ladder_step)
         for i in range(-n_steps, n_steps + 1):
-            p = i * self._ladder_step
-            if abs(p) < 0.001:
+            if i == 0:
                 continue  # horizon is drawn separately
-            y_ai     = pitch_y + p * self._ppu
-            is_major = abs(p) % _LADDER_MAJOR < 0.01
-            hw       = major_hw if is_major else minor_hw
-            lw       = self._hor_width if is_major else self._ldr_width
+            p = i * self._ladder_step
+            y_ai  = pitch_y + p * self._ppu
+            abs_i = abs(i)
+            if abs_i % 4 == 0:
+                hw, lw, labeled = hw_4, self._hor_width, True
+            elif abs_i % 2 == 0:
+                hw, lw, labeled = hw_2, self._ldr_width, False
+            else:
+                hw, lw, labeled = hw_1, self._ldr_width, False
 
             x1, y1 = _rot(-hw, y_ai, cos_b, sin_b, cx, cy)
             x2, y2 = _rot( hw, y_ai, cos_b, sin_b, cx, cy)
             arcade.draw_line(x1, y1, x2, y2, self._ldr_color, lw)
 
-            if is_major:
+            if labeled:
                 label = str(abs(round(p)))
                 gap   = 6
                 lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
@@ -328,6 +337,9 @@ def _ai_factory(
         roll_pointer_color=_as_color(comp.get("roll_pointer_color")),
         roll_pointer_size=float(comp.get("roll_pointer_size", 12.0)),
         ladder_step=float(comp.get("ladder_step", 5.0)),
+        ladder_hw_4=float(comp.get("ladder_hw_4", 0.40)),
+        ladder_hw_2=float(comp.get("ladder_hw_2", 0.31)),
+        ladder_hw_1=float(comp.get("ladder_hw_1", 0.22)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],
