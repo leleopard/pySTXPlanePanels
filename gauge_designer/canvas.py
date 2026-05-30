@@ -510,11 +510,11 @@ class InstrumentCanvas(QWidget):
         vx, vy_bottom, vw, vh = (float(v) for v in vp)
         py_top = canvas_h - vy_bottom - vh  # PIL y-down
 
-        # Tape background — use explicit bg_color if set, else a faint hint
-        bg = [int(vx), int(py_top), int(vx + vw), int(py_top + vh)]
+        # Tape background — only drawn when bg_color is explicitly set (matches runtime)
         bg_raw = comp.get("bg_color")
-        bg_fill = _rgba(bg_raw) if bg_raw is not None else (15, 15, 35, 220)
-        draw.rectangle(bg, fill=bg_fill)
+        if bg_raw is not None:
+            bg = [int(vx), int(py_top), int(vx + vw), int(py_top + vh)]
+            draw.rectangle(bg, fill=_rgba(bg_raw))
 
         axis = comp.get("scroll_axis", "y")
         tick_side = comp.get("tick_side", "left")
