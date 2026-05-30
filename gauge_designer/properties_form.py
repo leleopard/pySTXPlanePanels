@@ -1069,13 +1069,13 @@ class PropertiesForm(QWidget):
 
         self._vec_cap_width = QDoubleSpinBox()
         self._vec_cap_width.setRange(1.0, 200.0); self._vec_cap_width.setDecimals(1)
-        self._vec_cap_width.setValue(10.0); self._vec_cap_width.setFixedWidth(62)
+        self._vec_cap_width.setValue(10.0); self._vec_cap_width.setFixedWidth(80)
         self._vec_cap_width.setEnabled(False)
         self._vec_cap_width.valueChanged.connect(self._emit)
 
         self._vec_cap_height = QDoubleSpinBox()
         self._vec_cap_height.setRange(1.0, 200.0); self._vec_cap_height.setDecimals(1)
-        self._vec_cap_height.setValue(5.0); self._vec_cap_height.setFixedWidth(62)
+        self._vec_cap_height.setValue(5.0); self._vec_cap_height.setFixedWidth(80)
         self._vec_cap_height.setEnabled(False)
         self._vec_cap_height.valueChanged.connect(self._emit)
 
