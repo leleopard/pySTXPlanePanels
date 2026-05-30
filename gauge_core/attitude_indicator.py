@@ -215,6 +215,10 @@ class AttitudeIndicator(_VecBase):
 
         # ── Phase 1: all geometry → SSAA FBO ─────────────────────────────────
         from pyglet.math import Mat4
+        # Save projection before clobbering it — DefaultProjector.use() has an
+        # early-exit that skips restoring projection_matrix when the viewport
+        # hasn't changed, so we must restore explicitly.
+        saved_proj = ctx.projection_matrix
         self._ssaa_fbo.use()
         self._ssaa_fbo.viewport = (0, 0, ssaa_w, ssaa_h)
         self._ssaa_fbo.clear(color=(0, 0, 0, 0))
@@ -230,9 +234,8 @@ class AttitudeIndicator(_VecBase):
         self._draw_reference(cx, cy)
 
         # ── Blit SSAA FBO → screen (bilinear downsample = supersampled AA) ───
-        # Restore arcade's screen target + camera projection before the blit.
         ctx.screen.use()
-        ctx.current_camera.use()
+        ctx.projection_matrix = saved_proj  # direct restore; camera.use() early-exits
 
         from pyglet.gl import (
             glBindFramebuffer, glBlitFramebuffer,
@@ -246,7 +249,7 @@ class AttitudeIndicator(_VecBase):
             int(vx), int(vy), int(vx + vw), int(vy + vh),
             GL_COLOR_BUFFER_BIT, GL_LINEAR,
         )
-        ctx.screen.use()  # re-sync moderngl after raw GL framebuffer calls
+        ctx.screen.use(force=True)  # force re-sync: resets GL_READ_FRAMEBUFFER via GL_FRAMEBUFFER
 
         # ── Phase 2: text labels at native resolution ─────────────────────────
         # arcade.Text uses pyglet's own projection — must render at screen res.
