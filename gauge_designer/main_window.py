@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         self._play_btn = QPushButton()
-        self._play_btn.setIcon(make_svg_icon("play-circle-outline", self._ICON_GREY, size=36))
+        self._play_btn.setIcon(make_svg_icon("bug-play", self._ICON_GREY, size=36))
         self._play_btn.setIconSize(QSize(36, 36))
         self._play_btn.setFixedSize(48, 48)
         self._play_btn.setStyleSheet(_btn_style)
@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
         enabled = has_file and not running
         self._play_btn.setEnabled(enabled)
         color = _HEADER_COLOR if enabled else self._ICON_GREY
-        self._play_btn.setIcon(make_svg_icon("play-circle-outline", color, size=36))
+        self._play_btn.setIcon(make_svg_icon("bug-play", color, size=36))
 
     def _update_save_all_btn(self):
         from gauge_designer.ui_utils import _HEADER_COLOR
