@@ -176,6 +176,7 @@ class VectorTape:
                 "color": _col(b["color"]),
                 "width": float(b.get("width", 8.0)),
                 "side": b.get("side"),  # None → follow tick_side
+                "dash": float(b["dash"]) if b.get("dash") else 0.0,
             })
 
         self._current_value: float = 0.0
