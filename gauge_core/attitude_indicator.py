@@ -86,6 +86,9 @@ class AttitudeIndicator(_VecBase):
         ladder_hw_4: float = 0.40,
         ladder_hw_2: float = 0.31,
         ladder_hw_1: float = 0.22,
+        ladder_font_name: str = "",
+        ladder_bold: bool = False,
+        ladder_italic: bool = False,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -109,6 +112,9 @@ class AttitudeIndicator(_VecBase):
         self._ladder_hw_4 = float(ladder_hw_4)
         self._ladder_hw_2 = float(ladder_hw_2)
         self._ladder_hw_1 = float(ladder_hw_1)
+        self._ladder_font  = str(ladder_font_name)
+        self._ladder_bold  = bool(ladder_bold)
+        self._ladder_italic = bool(ladder_italic)
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -250,15 +256,18 @@ class AttitudeIndicator(_VecBase):
                 gap   = 6
                 lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
                 lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
-                rot = -self._bank  # labels stay level in the AI reference frame
+                rot  = -self._bank  # labels stay level in the AI reference frame
+                fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
+                if self._ladder_font:
+                    fkw["font_name"] = self._ladder_font
                 arcade.draw_text(label, lx_r, ly_r, self._ldr_color,
                                  self._font_size,
                                  anchor_x="left", anchor_y="center",
-                                 rotation=rot)
+                                 rotation=rot, **fkw)
                 arcade.draw_text(label, lx_l, ly_l, self._ldr_color,
                                  self._font_size,
                                  anchor_x="right", anchor_y="center",
-                                 rotation=rot)
+                                 rotation=rot, **fkw)
 
     def _draw_bank_arc(self, cx, cy, arc_r) -> None:
         # Arc spans ±60° from vertical (upper portion of circle).
@@ -340,6 +349,9 @@ def _ai_factory(
         ladder_hw_4=float(comp.get("ladder_hw_4", 0.40)),
         ladder_hw_2=float(comp.get("ladder_hw_2", 0.31)),
         ladder_hw_1=float(comp.get("ladder_hw_1", 0.22)),
+        ladder_font_name=str(comp.get("ladder_font_name", "")),
+        ladder_bold=bool(comp.get("ladder_bold", False)),
+        ladder_italic=bool(comp.get("ladder_italic", False)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],

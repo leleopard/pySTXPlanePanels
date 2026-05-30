@@ -845,7 +845,7 @@ class InstrumentCanvas(QWidget):
         arc_r = arc_r_raw if arc_r_raw > 0 else 0.45 * min(vw, vh)
         ptr_s = float(comp.get("roll_pointer_size", 12.0))
         font_sz = max(8, int(comp.get("label_font_size", 14)))
-        font  = _pil_font(None, font_sz)
+        font  = _pil_font(comp.get("ladder_font_name") or None, font_sz)
 
         clip_w = max(1, int(vw))
         clip_h = max(1, int(vh))

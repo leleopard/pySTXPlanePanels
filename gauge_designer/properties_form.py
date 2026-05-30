@@ -1311,6 +1311,30 @@ class PropertiesForm(QWidget):
         self._ai_font_size.valueChanged.connect(self._emit)
         self._ai_sec.row("Label font size", self._ai_font_size)
 
+        self._ai_ladder_font = QLineEdit()
+        self._ai_ladder_font.setPlaceholderText("Arial  (blank = default)")
+        self._ai_ladder_font.editingFinished.connect(self._emit)
+        _ai_font_btn = QPushButton("…"); _ai_font_btn.setFixedWidth(28)
+        _ai_font_btn.setToolTip("Choose font")
+        _ai_font_btn.clicked.connect(self._pick_ai_ladder_font)
+        _ai_font_row = QWidget()
+        _ai_font_hl = QHBoxLayout(_ai_font_row)
+        _ai_font_hl.setContentsMargins(0, 0, 0, 0); _ai_font_hl.setSpacing(4)
+        _ai_font_hl.addWidget(self._ai_ladder_font); _ai_font_hl.addWidget(_ai_font_btn)
+        self._ai_sec.row("Label font", _ai_font_row)
+
+        _ai_style_row = QWidget()
+        _ai_style_hl = QHBoxLayout(_ai_style_row)
+        _ai_style_hl.setContentsMargins(0, 0, 0, 0); _ai_style_hl.setSpacing(12)
+        self._ai_ladder_bold = QCheckBox("Bold")
+        self._ai_ladder_bold.toggled.connect(self._emit)
+        self._ai_ladder_italic = QCheckBox("Italic")
+        self._ai_ladder_italic.toggled.connect(self._emit)
+        _ai_style_hl.addWidget(self._ai_ladder_bold)
+        _ai_style_hl.addWidget(self._ai_ladder_italic)
+        _ai_style_hl.addStretch()
+        self._ai_sec.row("Label style", _ai_style_row)
+
         # Bank arc
         self._ai_arc_color = _ColorButton()
         self._ai_arc_color.color_changed.connect(self._emit)
@@ -1488,6 +1512,7 @@ class PropertiesForm(QWidget):
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
+            "ladder_font_name", "ladder_bold", "ladder_italic",
             # shared across all
             "viewport", "visibility",
         }
@@ -1732,6 +1757,9 @@ class PropertiesForm(QWidget):
         self._ai_ldr_color.set_rgba(comp.get("ladder_color"))
         self._ai_ldr_width.setValue(float(comp.get("ladder_width", 2.0)))
         self._ai_font_size.setValue(int(comp.get("label_font_size", 14)))
+        self._ai_ladder_font.setText(str(comp.get("ladder_font_name", "")))
+        self._ai_ladder_bold.setChecked(bool(comp.get("ladder_bold", False)))
+        self._ai_ladder_italic.setChecked(bool(comp.get("ladder_italic", False)))
         self._ai_arc_color.set_rgba(comp.get("bank_arc_color"))
         self._ai_arc_width.setValue(float(comp.get("bank_arc_width", 2.0)))
         self._ai_arc_r.setValue(float(comp.get("bank_arc_radius", 0.0)))
@@ -1864,6 +1892,13 @@ class PropertiesForm(QWidget):
             fs = self._ai_font_size.value()
             if fs != 14:
                 data["label_font_size"] = fs
+            fn = self._ai_ladder_font.text().strip()
+            if fn:
+                data["ladder_font_name"] = fn
+            if self._ai_ladder_bold.isChecked():
+                data["ladder_bold"] = True
+            if self._ai_ladder_italic.isChecked():
+                data["ladder_italic"] = True
             data["bank_arc_color"] = list(self._ai_arc_color.get_rgba())
             aw = self._ai_arc_width.value()
             if aw != 2.0:
@@ -2128,6 +2163,8 @@ class PropertiesForm(QWidget):
         self._ai_hor_color.set_rgba(None); self._ai_hor_width.setValue(3.0)
         self._ai_ldr_color.set_rgba(None); self._ai_ldr_width.setValue(2.0)
         self._ai_font_size.setValue(14)
+        self._ai_ladder_font.clear()
+        self._ai_ladder_bold.setChecked(False); self._ai_ladder_italic.setChecked(False)
         self._ai_arc_color.set_rgba(None); self._ai_arc_width.setValue(2.0)
         self._ai_arc_r.setValue(0.0)
         self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
@@ -2271,6 +2308,21 @@ class PropertiesForm(QWidget):
             self._vt_label_font_size.setValue(float(font.pointSize()))
             self._vt_label_bold.setChecked(font.bold())
             self._vt_label_italic.setChecked(font.italic())
+            self._emit()
+
+    def _pick_ai_ladder_font(self) -> None:
+        from PySide6.QtGui import QFont
+        current_name = self._ai_ladder_font.text().strip() or "Arial"
+        current_size = self._ai_font_size.value()
+        initial = QFont(current_name, current_size)
+        initial.setBold(self._ai_ladder_bold.isChecked())
+        initial.setItalic(self._ai_ladder_italic.isChecked())
+        ok, font = QFontDialog.getFont(initial, self, "Choose ladder font")
+        if ok:
+            self._ai_ladder_font.setText(font.family())
+            self._ai_font_size.setValue(font.pointSize())
+            self._ai_ladder_bold.setChecked(font.bold())
+            self._ai_ladder_italic.setChecked(font.italic())
             self._emit()
 
     def _pick_txt_font(self) -> None:
