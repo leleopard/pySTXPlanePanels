@@ -479,6 +479,7 @@ def _vector_tape_factory(
             "color": b["color"],
             "width": float(b.get("width", 8.0)),
             "side": b.get("side"),
+            "dash": float(b["dash"]) if b.get("dash") else 0.0,
         }
         for b in bands_raw
     ]
