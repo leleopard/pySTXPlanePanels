@@ -385,7 +385,7 @@ class AttitudeIndicator(_VecBase):
                     gap   = 6
                     lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
                     lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
-                    rot  = self._bank  # labels stay level in the AI reference frame
+                    rot  = -self._bank  # arcade Text.rotation is CW positive; bank is CCW positive
 
                     if lbl_idx >= len(self._lbl_pool_r):
                         fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
