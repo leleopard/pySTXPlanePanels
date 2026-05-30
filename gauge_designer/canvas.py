@@ -589,17 +589,18 @@ class InstrumentCanvas(QWidget):
         color = _rgba(comp.get("color"))
         width = max(1, int(round(float(comp.get("width", 1.0)))))
         cap = comp.get("cap", "none")
-        # Shaft endpoint: shorten by cap depth for triangle so total length is preserved
+        _cap_w = float(comp.get("cap_width", 10.0))
+        _cap_h = float(comp.get("cap_height", _cap_w / 2.0))
+        # Shaft endpoint: shorten by cap height for triangle so total length is preserved
         if cap == "triangle":
-            cap_h = float(comp.get("cap_width", 10.0)) / 2.0
-            shaft_len = length - sign * cap_h
+            shaft_len = length - sign * _cap_h
             sx_p = ox_p + shaft_len * math.cos(dir_rad)
             sy_p = oy_p - shaft_len * math.sin(dir_rad)
         else:
             sx_p, sy_p = ex_p, ey_p
         draw.line([(ox_p, oy_p), (int(round(sx_p)), int(round(sy_p)))], fill=color, width=width)
         if cap != "none":
-            half = float(comp.get("cap_width", 10.0)) / 2.0
+            half_w = _cap_w / 2.0
             cap_filled = comp.get("cap_filled", True)
             # PIL y-down: backward unit vector accounts for sign of length
             bx_p = -sign * math.cos(dir_rad)
@@ -608,8 +609,10 @@ class InstrumentCanvas(QWidget):
             px_p = -math.sin(dir_rad)
             py_p = -math.cos(dir_rad)           # PIL y-down
             if cap == "triangle":
-                p1 = (ex_p + bx_p * half + px_p * half, ey_p + by_p * half + py_p * half)
-                p2 = (ex_p + bx_p * half - px_p * half, ey_p + by_p * half - py_p * half)
+                p1 = (ex_p + bx_p * _cap_h + px_p * half_w,
+                      ey_p + by_p * _cap_h + py_p * half_w)
+                p2 = (ex_p + bx_p * _cap_h - px_p * half_w,
+                      ey_p + by_p * _cap_h - py_p * half_w)
                 pts = [
                     (int(round(ex_p)), int(round(ey_p))),
                     (int(round(p1[0])), int(round(p1[1]))),

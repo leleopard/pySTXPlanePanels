@@ -336,6 +336,7 @@ class Vector(_VecBase):
         static_length: float | None = None,
         cap: str = "none",
         cap_width: float = 10.0,
+        cap_height: float = 5.0,
         cap_filled: bool = True,
     ) -> None:
         self.name = name
@@ -346,6 +347,7 @@ class Vector(_VecBase):
         self._len = float(static_length) if static_length is not None else 50.0
         self._cap = str(cap) if cap else "none"
         self._cap_width = float(cap_width)
+        self._cap_height = float(cap_height)
         self._cap_filled = bool(cap_filled)
         self._dir_dataref: Any | None = None
         self._dir_table: list = []
@@ -382,6 +384,7 @@ class Vector(_VecBase):
         self._len *= scale
         self._width *= scale
         self._cap_width *= scale
+        self._cap_height *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._px += dx; self._py += dy
@@ -407,11 +410,10 @@ class Vector(_VecBase):
         # Absolute tip position
         ex = self._px + self._len * math.cos(angle_rad)
         ey = self._py + self._len * math.sin(angle_rad)
-        # Shaft endpoint: shorten by cap depth for triangle so total length is preserved
+        # Shaft endpoint: shorten by cap height for triangle so total length is preserved
         if self._cap == "triangle":
-            cap_h = self._cap_width / 2.0
-            sx = self._px + (self._len - sign * cap_h) * math.cos(angle_rad)
-            sy = self._py + (self._len - sign * cap_h) * math.sin(angle_rad)
+            sx = self._px + (self._len - sign * self._cap_height) * math.cos(angle_rad)
+            sy = self._py + (self._len - sign * self._cap_height) * math.sin(angle_rad)
         else:
             sx, sy = ex, ey
         arcade.draw_line(self._px, self._py, sx, sy, self._color, self._width)
@@ -421,10 +423,12 @@ class Vector(_VecBase):
             uy = sign * math.sin(angle_rad)
             bx = -ux;  by = -uy                  # backward: tip → origin
             perp_x = -uy; perp_y = ux            # perpendicular (90° CCW from forward)
-            half = self._cap_width / 2.0
+            half_w = self._cap_width / 2.0
             if self._cap == "triangle":
-                p1 = (ex + bx * half + perp_x * half, ey + by * half + perp_y * half)
-                p2 = (ex + bx * half - perp_x * half, ey + by * half - perp_y * half)
+                p1 = (ex + bx * self._cap_height + perp_x * half_w,
+                      ey + by * self._cap_height + perp_y * half_w)
+                p2 = (ex + bx * self._cap_height - perp_x * half_w,
+                      ey + by * self._cap_height - perp_y * half_w)
                 pts = [(ex, ey), p1, p2]
                 if self._cap_filled:
                     arcade.draw_polygon_filled(pts, self._color)
@@ -521,6 +525,7 @@ def _vector_factory(comp: dict, base_dir: Path, container_size=None) -> Vector:
         static_length=static_len,
         cap=str(comp.get("cap", "none")),
         cap_width=float(comp.get("cap_width", 10.0)),
+        cap_height=float(comp.get("cap_height", comp.get("cap_width", 10.0) / 2.0)),
         cap_filled=bool(comp.get("cap_filled", True)),
     )
     if isinstance(dir_cfg, dict):
