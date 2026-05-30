@@ -589,25 +589,23 @@ class InstrumentCanvas(QWidget):
             font_size    = max(8, int(float(labels.get("font_size", 18))))
             font         = _pil_font(labels.get("font"), font_size)
 
+            # Sub-image exactly the size of the viewport — matches the OpenGL
+            # scissor rectangle used at runtime, clipping in both axes.
+            clip_w = max(1, int(vw))
+            clip_h = max(1, int(vh))
+            clip_img = Image.new("RGBA", (clip_w, clip_h), (0, 0, 0, 0))
+            ldraw = ImageDraw.Draw(clip_img)
+
             if axis == "y":
                 label_side = labels.get("side") or tick_side
                 spine_x = int(vx) if tick_side == "left" else int(vx + vw)
                 if label_side == "left":
                     lx = spine_x - int(label_offset)
-                    pil_anchor = "rm"   # right edge at lx, middle at y
-                    clip_x0 = 0
-                    clip_x1 = spine_x
+                    pil_anchor = "rm"
                 else:
                     lx = spine_x + int(label_offset)
-                    pil_anchor = "lm"   # left edge at lx, middle at y
-                    clip_x0 = spine_x
-                    clip_x1 = int(vx + vw) if tick_side == "left" else canvas_w
-                # Draw into a small sub-image the size of the clip region; PIL
-                # clips at its own boundaries so no masking needed.
-                clip_w = max(1, clip_x1 - clip_x0)
-                clip_h = max(1, int(vh))
-                clip_img = Image.new("RGBA", (clip_w, clip_h), (0, 0, 0, 0))
-                ldraw = ImageDraw.Draw(clip_img)
+                    pil_anchor = "lm"
+                lx_clip = lx - int(vx)  # x in clip_img coords
                 half_range = vh / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
@@ -617,25 +615,23 @@ class InstrumentCanvas(QWidget):
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
                         try:
-                            ldraw.text((lx - clip_x0, y_local), text, fill=label_color,
+                            ldraw.text((lx_clip, y_local), text, fill=label_color,
                                        font=font, anchor=pil_anchor)
                         except TypeError:
-                            ldraw.text((lx - clip_x0, y_local), text, fill=label_color,
+                            ldraw.text((lx_clip, y_local), text, fill=label_color,
                                        font=font)
                     v += label_interval
-                composite.paste(clip_img, (clip_x0, int(py_top)), mask=clip_img)
+                composite.paste(clip_img, (int(vx), int(py_top)), mask=clip_img)
             else:
                 label_side = labels.get("side") or tick_side
                 spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
                 if label_side == "top":
                     ly_base = spine_y - int(label_offset)
-                    pil_anchor = "mb"   # centre x, bottom edge at ly_base
+                    pil_anchor = "mb"
                 else:
                     ly_base = spine_y + int(label_offset)
-                    pil_anchor = "mt"   # centre x, top edge at ly_base
-                clip_w = max(1, int(vw))
-                clip_img = Image.new("RGBA", (clip_w, canvas_h), (0, 0, 0, 0))
-                ldraw = ImageDraw.Draw(clip_img)
+                    pil_anchor = "mt"
+                ly_clip = ly_base - int(py_top)  # y in clip_img coords
                 half_range = vw / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
                 v_max = half_range + label_interval
@@ -645,13 +641,13 @@ class InstrumentCanvas(QWidget):
                         display = v % wrap if wrap else v
                         text = label_fmt.format(display)
                         try:
-                            ldraw.text((x_local, ly_base), text, fill=label_color,
+                            ldraw.text((x_local, ly_clip), text, fill=label_color,
                                        font=font, anchor=pil_anchor)
                         except TypeError:
-                            ldraw.text((x_local, ly_base), text, fill=label_color,
+                            ldraw.text((x_local, ly_clip), text, fill=label_color,
                                        font=font)
                     v += label_interval
-                composite.paste(clip_img, (int(vx), 0), mask=clip_img)
+                composite.paste(clip_img, (int(vx), int(py_top)), mask=clip_img)
 
         # Viewport border
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
