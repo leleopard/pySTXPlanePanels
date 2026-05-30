@@ -618,8 +618,8 @@ class InstrumentCanvas(QWidget):
                 ImageDraw.Draw(clip_mask).rectangle(
                     [lx_clip_min, int(py_top), lx_clip_max, int(py_top + vh)], fill=255
                 )
-                _transparent = Image.new("RGBA", composite.size, (0, 0, 0, 0))
-                composite.alpha_composite(Image.composite(label_ov, _transparent, clip_mask))
+                _blank = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+                composite.alpha_composite(Image.composite(_blank, label_ov, clip_mask))
             else:
                 label_side = labels.get("side") or tick_side
                 spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
@@ -646,8 +646,8 @@ class InstrumentCanvas(QWidget):
                 ImageDraw.Draw(clip_mask).rectangle(
                     [int(vx), 0, int(vx + vw), canvas_h], fill=255
                 )
-                _transparent = Image.new("RGBA", composite.size, (0, 0, 0, 0))
-                composite.alpha_composite(Image.composite(label_ov, _transparent, clip_mask))
+                _blank = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+                composite.alpha_composite(Image.composite(_blank, label_ov, clip_mask))
 
         # Viewport border
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
