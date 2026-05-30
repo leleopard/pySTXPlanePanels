@@ -336,6 +336,7 @@ class Vector(_VecBase):
         static_length: float | None = None,
         cap: str = "none",
         cap_width: float = 10.0,
+        cap_filled: bool = True,
     ) -> None:
         self.name = name
         self._px, self._py = float(position[0]), float(position[1])
@@ -345,6 +346,7 @@ class Vector(_VecBase):
         self._len = float(static_length) if static_length is not None else 50.0
         self._cap = str(cap) if cap else "none"
         self._cap_width = float(cap_width)
+        self._cap_filled = bool(cap_filled)
         self._dir_dataref: Any | None = None
         self._dir_table: list = []
         self._dir_convert: Callable | None = None
@@ -415,7 +417,11 @@ class Vector(_VecBase):
             if self._cap == "triangle":
                 p1 = (ex + bx * half + px_v * half, ey + by * half + py_v * half)
                 p2 = (ex + bx * half - px_v * half, ey + by * half - py_v * half)
-                arcade.draw_polygon_filled([(ex, ey), p1, p2], self._color)
+                pts = [(ex, ey), p1, p2]
+                if self._cap_filled:
+                    arcade.draw_polygon_filled(pts, self._color)
+                else:
+                    arcade.draw_polygon_outline(pts, self._color, self._width)
             elif self._cap == "bar":
                 arcade.draw_line(
                     ex + px_v * half, ey + py_v * half,
@@ -507,6 +513,7 @@ def _vector_factory(comp: dict, base_dir: Path, container_size=None) -> Vector:
         static_length=static_len,
         cap=str(comp.get("cap", "none")),
         cap_width=float(comp.get("cap_width", 10.0)),
+        cap_filled=bool(comp.get("cap_filled", True)),
     )
     if isinstance(dir_cfg, dict):
         vec.set_direction_dataref(

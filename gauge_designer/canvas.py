@@ -596,14 +596,19 @@ class InstrumentCanvas(QWidget):
             by_p =   math.sin(dir_rad)   # sign-flipped from Arcade (PIL y-down)
             px_p =  -math.sin(dir_rad)
             py_p =  -math.cos(dir_rad)   # sign-flipped from Arcade
+            cap_filled = comp.get("cap_filled", True)
             if cap == "triangle":
                 p1 = (ex_p + bx_p * half + px_p * half, ey_p + by_p * half + py_p * half)
                 p2 = (ex_p + bx_p * half - px_p * half, ey_p + by_p * half - py_p * half)
-                draw.polygon([
+                pts = [
                     (int(round(ex_p)), int(round(ey_p))),
                     (int(round(p1[0])), int(round(p1[1]))),
                     (int(round(p2[0])), int(round(p2[1]))),
-                ], fill=color)
+                ]
+                if cap_filled:
+                    draw.polygon(pts, fill=color)
+                else:
+                    draw.polygon(pts, outline=color)
             elif cap == "bar":
                 draw.line([
                     (int(round(ex_p + px_p * half)), int(round(ey_p + py_p * half))),

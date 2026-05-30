@@ -1072,7 +1072,13 @@ class PropertiesForm(QWidget):
         self._vec_cap_width.setValue(10.0)
         self._vec_cap_width.setEnabled(False)
         self._vec_cap_width.valueChanged.connect(self._emit)
-        self._vec_sec.row("Cap width px", self._vec_cap_width)
+
+        self._vec_cap_filled = QCheckBox("Filled")
+        self._vec_cap_filled.setChecked(True)
+        self._vec_cap_filled.setEnabled(False)
+        self._vec_cap_filled.toggled.connect(self._emit)
+
+        self._vec_sec.row_pair("Cap width px", self._vec_cap_width, self._vec_cap_filled)
 
         self._vbox.addWidget(self._vec_sec)
 
@@ -1326,7 +1332,7 @@ class PropertiesForm(QWidget):
             "text", "dataref", "text_format", "convert_function",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # Vector
-            "direction", "length", "cap", "cap_width",
+            "direction", "length", "cap", "cap_width", "cap_filled",
             # shared across all
             "viewport", "visibility",
         }
@@ -1438,6 +1444,8 @@ class PropertiesForm(QWidget):
         self._vec_cap.setCurrentIndex(_cap_idx if _cap_idx >= 0 else 0)
         self._vec_cap_width.setValue(float(comp.get("cap_width", 10.0)))
         self._vec_cap_width.setEnabled(_cap != "none")
+        self._vec_cap_filled.setChecked(bool(comp.get("cap_filled", True)))
+        self._vec_cap_filled.setEnabled(_cap == "triangle")
 
         # VectorTape
         self._vt_axis.setCurrentIndex(0 if str(comp.get("scroll_axis", "y")) == "y" else 1)
@@ -1635,6 +1643,8 @@ class PropertiesForm(QWidget):
             if _cap != "none":
                 data["cap"] = _cap
                 data["cap_width"] = self._vec_cap_width.value()
+                if not self._vec_cap_filled.isChecked():
+                    data["cap_filled"] = False
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
@@ -1860,6 +1870,7 @@ class PropertiesForm(QWidget):
         self._vec_color.set_rgba(None); self._vec_width.setValue(1.0)
         self._vec_cap.setCurrentIndex(0); self._vec_cap_width.setValue(10.0)
         self._vec_cap_width.setEnabled(False)
+        self._vec_cap_filled.setChecked(True); self._vec_cap_filled.setEnabled(False)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
@@ -2017,6 +2028,7 @@ class PropertiesForm(QWidget):
 
     def _on_vec_cap_changed(self, text: str) -> None:
         self._vec_cap_width.setEnabled(text != "none")
+        self._vec_cap_filled.setEnabled(text == "triangle")
 
     def _on_txt_mode_changed(self, idx: int) -> None:
         self._txt_stack.setCurrentIndex(idx)
