@@ -403,20 +403,28 @@ class Vector(_VecBase):
         if not self._visible or self._len == 0:
             return
         angle_rad = math.radians(self._dir)
+        sign = 1.0 if self._len >= 0 else -1.0
+        # Absolute tip position
         ex = self._px + self._len * math.cos(angle_rad)
         ey = self._py + self._len * math.sin(angle_rad)
-        arcade.draw_line(self._px, self._py, ex, ey, self._color, self._width)
+        # Shaft endpoint: shorten by cap depth for triangle so total length is preserved
+        if self._cap == "triangle":
+            cap_h = self._cap_width / 2.0
+            sx = self._px + (self._len - sign * cap_h) * math.cos(angle_rad)
+            sy = self._py + (self._len - sign * cap_h) * math.sin(angle_rad)
+        else:
+            sx, sy = ex, ey
+        arcade.draw_line(self._px, self._py, sx, sy, self._color, self._width)
         if self._cap != "none":
-            # Backward unit vector (tip → origin direction)
-            bx = -math.cos(angle_rad)
-            by = -math.sin(angle_rad)
-            # Perpendicular unit vector (90° CCW from forward)
-            px_v = -math.sin(angle_rad)
-            py_v =  math.cos(angle_rad)
+            # Unit vectors relative to direction of travel (accounts for negative length)
+            ux = sign * math.cos(angle_rad)
+            uy = sign * math.sin(angle_rad)
+            bx = -ux;  by = -uy                  # backward: tip → origin
+            perp_x = -uy; perp_y = ux            # perpendicular (90° CCW from forward)
             half = self._cap_width / 2.0
             if self._cap == "triangle":
-                p1 = (ex + bx * half + px_v * half, ey + by * half + py_v * half)
-                p2 = (ex + bx * half - px_v * half, ey + by * half - py_v * half)
+                p1 = (ex + bx * half + perp_x * half, ey + by * half + perp_y * half)
+                p2 = (ex + bx * half - perp_x * half, ey + by * half - perp_y * half)
                 pts = [(ex, ey), p1, p2]
                 if self._cap_filled:
                     arcade.draw_polygon_filled(pts, self._color)
@@ -424,8 +432,8 @@ class Vector(_VecBase):
                     arcade.draw_polygon_outline(pts, self._color, self._width)
             elif self._cap == "bar":
                 arcade.draw_line(
-                    ex + px_v * half, ey + py_v * half,
-                    ex - px_v * half, ey - py_v * half,
+                    ex + perp_x * half, ey + perp_y * half,
+                    ex - perp_x * half, ey - perp_y * half,
                     self._color, self._width,
                 )
 

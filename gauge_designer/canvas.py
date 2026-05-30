@@ -582,21 +582,31 @@ class InstrumentCanvas(QWidget):
         if length == 0:
             return
         dir_rad = math.radians(dir_deg)
+        sign = 1.0 if length >= 0 else -1.0
+        # Absolute tip position in PIL space (y-axis inverted vs Arcade)
         ex_p = ox_p + length * math.cos(dir_rad)
-        ey_p = oy_p - length * math.sin(dir_rad)  # negate: PIL y is inverted vs Arcade
+        ey_p = oy_p - length * math.sin(dir_rad)
         color = _rgba(comp.get("color"))
         width = max(1, int(round(float(comp.get("width", 1.0)))))
-        draw.line([(ox_p, oy_p), (int(round(ex_p)), int(round(ey_p)))], fill=color, width=width)
         cap = comp.get("cap", "none")
+        # Shaft endpoint: shorten by cap depth for triangle so total length is preserved
+        if cap == "triangle":
+            cap_h = float(comp.get("cap_width", 10.0)) / 2.0
+            shaft_len = length - sign * cap_h
+            sx_p = ox_p + shaft_len * math.cos(dir_rad)
+            sy_p = oy_p - shaft_len * math.sin(dir_rad)
+        else:
+            sx_p, sy_p = ex_p, ey_p
+        draw.line([(ox_p, oy_p), (int(round(sx_p)), int(round(sy_p)))], fill=color, width=width)
         if cap != "none":
-            cap_width = float(comp.get("cap_width", 10.0))
-            half = cap_width / 2.0
-            # PIL y-down: backward and perpendicular unit vectors relative to dir_rad
-            bx_p =  -math.cos(dir_rad)
-            by_p =   math.sin(dir_rad)   # sign-flipped from Arcade (PIL y-down)
-            px_p =  -math.sin(dir_rad)
-            py_p =  -math.cos(dir_rad)   # sign-flipped from Arcade
+            half = float(comp.get("cap_width", 10.0)) / 2.0
             cap_filled = comp.get("cap_filled", True)
+            # PIL y-down: backward unit vector accounts for sign of length
+            bx_p = -sign * math.cos(dir_rad)
+            by_p =  sign * math.sin(dir_rad)   # PIL y-down: flipped vs Arcade
+            # Perpendicular unit vector (symmetric cap — sign cancels)
+            px_p = -math.sin(dir_rad)
+            py_p = -math.cos(dir_rad)           # PIL y-down
             if cap == "triangle":
                 p1 = (ex_p + bx_p * half + px_p * half, ey_p + by_p * half + py_p * half)
                 p2 = (ex_p + bx_p * half - px_p * half, ey_p + by_p * half - py_p * half)
