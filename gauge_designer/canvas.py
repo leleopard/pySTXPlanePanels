@@ -587,6 +587,28 @@ class InstrumentCanvas(QWidget):
         color = _rgba(comp.get("color"))
         width = max(1, int(round(float(comp.get("width", 1.0)))))
         draw.line([(ox_p, oy_p), (int(round(ex_p)), int(round(ey_p)))], fill=color, width=width)
+        cap = comp.get("cap", "none")
+        if cap != "none":
+            cap_width = float(comp.get("cap_width", 10.0))
+            half = cap_width / 2.0
+            # PIL y-down: backward and perpendicular unit vectors relative to dir_rad
+            bx_p =  -math.cos(dir_rad)
+            by_p =   math.sin(dir_rad)   # sign-flipped from Arcade (PIL y-down)
+            px_p =  -math.sin(dir_rad)
+            py_p =  -math.cos(dir_rad)   # sign-flipped from Arcade
+            if cap == "triangle":
+                p1 = (ex_p + bx_p * half + px_p * half, ey_p + by_p * half + py_p * half)
+                p2 = (ex_p + bx_p * half - px_p * half, ey_p + by_p * half - py_p * half)
+                draw.polygon([
+                    (int(round(ex_p)), int(round(ey_p))),
+                    (int(round(p1[0])), int(round(p1[1]))),
+                    (int(round(p2[0])), int(round(p2[1]))),
+                ], fill=color)
+            elif cap == "bar":
+                draw.line([
+                    (int(round(ex_p + px_p * half)), int(round(ey_p + py_p * half))),
+                    (int(round(ex_p - px_p * half)), int(round(ey_p - py_p * half))),
+                ], fill=color, width=width)
 
     def _render_vectortape(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_w: int, canvas_h: int) -> None:

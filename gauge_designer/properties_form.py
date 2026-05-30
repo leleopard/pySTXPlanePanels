@@ -1061,6 +1061,19 @@ class PropertiesForm(QWidget):
         self._vec_width.valueChanged.connect(self._emit)
         self._vec_sec.row("Width px", self._vec_width)
 
+        self._vec_cap = _NoScrollComboBox()
+        self._vec_cap.addItems(["none", "triangle", "bar"])
+        self._vec_cap.currentTextChanged.connect(self._on_vec_cap_changed)
+        self._vec_cap.currentTextChanged.connect(self._emit)
+        self._vec_sec.row("Cap", self._vec_cap)
+
+        self._vec_cap_width = QDoubleSpinBox()
+        self._vec_cap_width.setRange(1.0, 200.0); self._vec_cap_width.setDecimals(1)
+        self._vec_cap_width.setValue(10.0)
+        self._vec_cap_width.setEnabled(False)
+        self._vec_cap_width.valueChanged.connect(self._emit)
+        self._vec_sec.row("Cap width px", self._vec_cap_width)
+
         self._vbox.addWidget(self._vec_sec)
 
     def _mk_vectortape_sec(self):
@@ -1313,7 +1326,7 @@ class PropertiesForm(QWidget):
             "text", "dataref", "text_format", "convert_function",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # Vector
-            "direction", "length",
+            "direction", "length", "cap", "cap_width",
             # shared across all
             "viewport", "visibility",
         }
@@ -1420,6 +1433,11 @@ class PropertiesForm(QWidget):
         self._vec_len.load(comp.get("length", 50.0))
         self._vec_color.set_rgba(comp.get("color"))
         self._vec_width.setValue(float(comp.get("width", 1.0)))
+        _cap = comp.get("cap", "none")
+        _cap_idx = self._vec_cap.findText(_cap)
+        self._vec_cap.setCurrentIndex(_cap_idx if _cap_idx >= 0 else 0)
+        self._vec_cap_width.setValue(float(comp.get("cap_width", 10.0)))
+        self._vec_cap_width.setEnabled(_cap != "none")
 
         # VectorTape
         self._vt_axis.setCurrentIndex(0 if str(comp.get("scroll_axis", "y")) == "y" else 1)
@@ -1613,6 +1631,10 @@ class PropertiesForm(QWidget):
             w = self._vec_width.value()
             if w != 1.0:
                 data["width"] = w
+            _cap = self._vec_cap.currentText()
+            if _cap != "none":
+                data["cap"] = _cap
+                data["cap_width"] = self._vec_cap_width.value()
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
@@ -1836,6 +1858,8 @@ class PropertiesForm(QWidget):
         self._vec_dir.load(0.0)
         self._vec_len.load(50.0)
         self._vec_color.set_rgba(None); self._vec_width.setValue(1.0)
+        self._vec_cap.setCurrentIndex(0); self._vec_cap_width.setValue(10.0)
+        self._vec_cap_width.setEnabled(False)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
@@ -1990,6 +2014,9 @@ class PropertiesForm(QWidget):
             self._txt_bold.setChecked(font.bold())
             self._txt_italic.setChecked(font.italic())
             self._emit()
+
+    def _on_vec_cap_changed(self, text: str) -> None:
+        self._vec_cap_width.setEnabled(text != "none")
 
     def _on_txt_mode_changed(self, idx: int) -> None:
         self._txt_stack.setCurrentIndex(idx)

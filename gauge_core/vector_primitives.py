@@ -334,6 +334,8 @@ class Vector(_VecBase):
         width: float = 1.0,
         static_direction: float | None = None,
         static_length: float | None = None,
+        cap: str = "none",
+        cap_width: float = 10.0,
     ) -> None:
         self.name = name
         self._px, self._py = float(position[0]), float(position[1])
@@ -341,6 +343,8 @@ class Vector(_VecBase):
         self._width = float(width)
         self._dir = float(static_direction) if static_direction is not None else 0.0
         self._len = float(static_length) if static_length is not None else 50.0
+        self._cap = str(cap) if cap else "none"
+        self._cap_width = float(cap_width)
         self._dir_dataref: Any | None = None
         self._dir_table: list = []
         self._dir_convert: Callable | None = None
@@ -375,6 +379,7 @@ class Vector(_VecBase):
         self._px *= scale; self._py *= scale
         self._len *= scale
         self._width *= scale
+        self._cap_width *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._px += dx; self._py += dy
@@ -399,6 +404,24 @@ class Vector(_VecBase):
         ex = self._px + self._len * math.cos(angle_rad)
         ey = self._py + self._len * math.sin(angle_rad)
         arcade.draw_line(self._px, self._py, ex, ey, self._color, self._width)
+        if self._cap != "none":
+            # Backward unit vector (tip → origin direction)
+            bx = -math.cos(angle_rad)
+            by = -math.sin(angle_rad)
+            # Perpendicular unit vector (90° CCW from forward)
+            px_v = -math.sin(angle_rad)
+            py_v =  math.cos(angle_rad)
+            half = self._cap_width / 2.0
+            if self._cap == "triangle":
+                p1 = (ex + bx * half + px_v * half, ey + by * half + py_v * half)
+                p2 = (ex + bx * half - px_v * half, ey + by * half - py_v * half)
+                arcade.draw_polygon_filled([(ex, ey), p1, p2], self._color)
+            elif self._cap == "bar":
+                arcade.draw_line(
+                    ex + px_v * half, ey + py_v * half,
+                    ex - px_v * half, ey - py_v * half,
+                    self._color, self._width,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +505,8 @@ def _vector_factory(comp: dict, base_dir: Path, container_size=None) -> Vector:
         width=float(comp.get("width", 1.0)),
         static_direction=static_dir,
         static_length=static_len,
+        cap=str(comp.get("cap", "none")),
+        cap_width=float(comp.get("cap_width", 10.0)),
     )
     if isinstance(dir_cfg, dict):
         vec.set_direction_dataref(
