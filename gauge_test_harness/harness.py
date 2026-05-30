@@ -163,6 +163,14 @@ def _collect_from_instrument(
                               f"{label_base}  (band range[{i}])",
                               convert_fn=endpoint.get("convert_function"))
 
+        # Vector component: direction and length can be dataref-driven
+        for field in ("direction", "length"):
+            val = comp.get(field)
+            if isinstance(val, dict) and "dataref" in val:
+                _register(val["dataref"], val.get("table", []),
+                          f"{label_base}  ({field})",
+                          convert_fn=val.get("convert_function"))
+
 
 def _find_panels_project_root(yaml_path: Path) -> Path:
     """Walk up to the 'panels' ancestor and return its parent (project root)."""

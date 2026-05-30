@@ -355,6 +355,20 @@ class InstrumentCanvas(QWidget):
                         if (min(xs) - pad <= cx <= max(xs) + pad and
                                 min(ys) - pad <= cy <= max(ys) + pad):
                             result.append(comp.get("name"))
+                elif ctype == "Vector":
+                    pos = comp.get("position", [0, 0])
+                    ox_p = int(pos[0]); oy_p = h - int(pos[1])
+                    dir_cfg = comp.get("direction", 0.0)
+                    dir_deg = float(dir_cfg) if not isinstance(dir_cfg, dict) else 0.0
+                    len_cfg = comp.get("length", 50.0)
+                    length = float(len_cfg) if not isinstance(len_cfg, dict) else 50.0
+                    dir_rad = math.radians(dir_deg)
+                    ex_p = int(round(ox_p + length * math.cos(dir_rad)))
+                    ey_p = int(round(oy_p - length * math.sin(dir_rad)))
+                    pad = 8
+                    if (min(ox_p, ex_p) - pad <= cx <= max(ox_p, ex_p) + pad and
+                            min(oy_p, ey_p) - pad <= cy <= max(oy_p, ey_p) + pad):
+                        result.append(comp.get("name"))
                 elif ctype == "VectorTape":
                     rect = self._viewport_rect_pil(comp, h)
                     if rect is not None:
@@ -432,6 +446,8 @@ class InstrumentCanvas(QWidget):
                     self._render_filledrect(comp, draw, h)
                 elif ctype == "Polygon":
                     self._render_polygon(comp, draw, h)
+                elif ctype == "Vector":
+                    self._render_vector(comp, draw, h)
                 elif ctype == "VectorTape":
                     self._render_vectortape(comp, composite, draw, w, h)
             except Exception:
@@ -481,6 +497,18 @@ class InstrumentCanvas(QWidget):
                     pts = [(int(p[0]), h - int(p[1])) for p in comp.get("points", [])]
                     if len(pts) >= 2:
                         draw.polygon(pts, outline=SEL)
+                elif ctype == "Vector":
+                    pos = comp.get("position", [0, 0])
+                    ox_p = int(pos[0]); oy_p = h - int(pos[1])
+                    dir_cfg = comp.get("direction", 0.0)
+                    dir_deg = float(dir_cfg) if not isinstance(dir_cfg, dict) else 0.0
+                    len_cfg = comp.get("length", 50.0)
+                    length = float(len_cfg) if not isinstance(len_cfg, dict) else 50.0
+                    dir_rad = math.radians(dir_deg)
+                    ex_p = int(round(ox_p + length * math.cos(dir_rad)))
+                    ey_p = int(round(oy_p - length * math.sin(dir_rad)))
+                    lw = max(3, int(float(comp.get("width", 1.0))) + 2)
+                    draw.line([(ox_p, oy_p), (ex_p, ey_p)], fill=SEL, width=lw)
                 else:
                     self._draw_crosshair(draw, comp.get("position", [w//2, h//2]), h, SEL)
                 break
@@ -543,6 +571,22 @@ class InstrumentCanvas(QWidget):
         else:
             width = max(1, int(round(float(comp.get("width", 1.0)))))
             draw.line(pts + [pts[0]], fill=color, width=width)
+
+    def _render_vector(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        pos = comp.get("position", [0, 0])
+        ox_p = int(pos[0]); oy_p = canvas_h - int(pos[1])
+        dir_cfg = comp.get("direction", 0.0)
+        dir_deg = float(dir_cfg) if not isinstance(dir_cfg, dict) else 0.0
+        len_cfg = comp.get("length", 50.0)
+        length = float(len_cfg) if not isinstance(len_cfg, dict) else 50.0
+        if length == 0:
+            return
+        dir_rad = math.radians(dir_deg)
+        ex_p = ox_p + length * math.cos(dir_rad)
+        ey_p = oy_p - length * math.sin(dir_rad)  # negate: PIL y is inverted vs Arcade
+        color = _rgba(comp.get("color"))
+        width = max(1, int(round(float(comp.get("width", 1.0)))))
+        draw.line([(ox_p, oy_p), (int(round(ex_p)), int(round(ey_p)))], fill=color, width=width)
 
     def _render_vectortape(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_w: int, canvas_h: int) -> None:

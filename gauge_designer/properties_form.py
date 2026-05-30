@@ -98,7 +98,7 @@ def _build_func_lists() -> tuple[list[str], list[str]]:
 _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
-               "Line", "Arc", "FilledRect", "Polygon", "VectorTape"]
+               "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector"]
 
 
 def _coerce_num(text: str):
@@ -595,6 +595,7 @@ class PropertiesForm(QWidget):
         self._mk_arc_sec()
         self._mk_filledrect_sec()
         self._mk_polygon_sec()
+        self._mk_vector_sec()
         self._mk_vectortape_sec()
         self._mk_rotation()
         self._mk_translation()
@@ -1036,6 +1037,32 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._poly_sec)
 
+    def _mk_vector_sec(self):
+        self._vec_sec = _Section("Vector")
+        self._vec_sec.setVisible(False)
+
+        # Direction: static angle or dataref-driven (reuse _BandEndpointWidget)
+        self._vec_dir = _BandEndpointWidget("Direction °")
+        self._vec_dir.changed.connect(self._emit)
+        self._vec_sec.row_widget(self._vec_dir)
+
+        # Length: static pixels or dataref-driven
+        self._vec_len = _BandEndpointWidget("Length px  ")
+        self._vec_len.changed.connect(self._emit)
+        self._vec_sec.row_widget(self._vec_len)
+
+        self._vec_color = _ColorButton()
+        self._vec_color.color_changed.connect(self._emit)
+        self._vec_sec.row("Color", self._vec_color)
+
+        self._vec_width = QDoubleSpinBox()
+        self._vec_width.setRange(0.5, 50.0); self._vec_width.setDecimals(1)
+        self._vec_width.setValue(1.0)
+        self._vec_width.valueChanged.connect(self._emit)
+        self._vec_sec.row("Width px", self._vec_width)
+
+        self._vbox.addWidget(self._vec_sec)
+
     def _mk_vectortape_sec(self):
         self._vt_sec = _Section("Vector Tape")
         self._vt_sec.setVisible(False)
@@ -1285,6 +1312,8 @@ class PropertiesForm(QWidget):
             # Text
             "text", "dataref", "text_format", "convert_function",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
+            # Vector
+            "direction", "length",
             # shared across all
             "viewport", "visibility",
         }
@@ -1385,6 +1414,12 @@ class PropertiesForm(QWidget):
         self._poly_outline_width.setEnabled(has_poly_outline)
         self._poly_outline_width.setVisible(filled)
         self._poly_outline_width.setValue(float(comp.get("outline_width", 1.0)))
+
+        # Vector
+        self._vec_dir.load(comp.get("direction", 0.0))
+        self._vec_len.load(comp.get("length", 50.0))
+        self._vec_color.set_rgba(comp.get("color"))
+        self._vec_width.setValue(float(comp.get("width", 1.0)))
 
         # VectorTape
         self._vt_axis.setCurrentIndex(0 if str(comp.get("scroll_axis", "y")) == "y" else 1)
@@ -1570,6 +1605,14 @@ class PropertiesForm(QWidget):
             elif self._poly_outline_chk.isChecked():
                 data["outline_color"] = list(self._poly_outline_color.get_rgba())
                 data["outline_width"] = self._poly_outline_width.value()
+
+        elif ct == "Vector":
+            data["direction"] = self._vec_dir.get_data()
+            data["length"]    = self._vec_len.get_data()
+            data["color"]     = list(self._vec_color.get_rgba())
+            w = self._vec_width.value()
+            if w != 1.0:
+                data["width"] = w
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
@@ -1790,6 +1833,9 @@ class PropertiesForm(QWidget):
         self._poly_filled.setChecked(True); self._poly_width.setValue(1.0)
         self._poly_outline_chk.setChecked(False)
         self._poly_outline_color.set_rgba(None); self._poly_outline_width.setValue(1.0)
+        self._vec_dir.load(0.0)
+        self._vec_len.load(50.0)
+        self._vec_color.set_rgba(None); self._vec_width.setValue(1.0)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
@@ -1844,6 +1890,7 @@ class PropertiesForm(QWidget):
         is_poly = ct == "Polygon"
         is_vt   = ct == "VectorTape"
         is_text = ct == "Text"
+        is_vec  = ct == "Vector"
 
         # Position: hide for types that define geometry without a single centre point
         self._pos_sec.setVisible(not is_line and not is_arc and not is_poly)
@@ -1861,6 +1908,7 @@ class PropertiesForm(QWidget):
         self._arc_sec.setVisible(is_arc)
         self._frt_sec.setVisible(is_frt)
         self._poly_sec.setVisible(is_poly)
+        self._vec_sec.setVisible(is_vec)
         self._vt_sec.setVisible(is_vt)
 
         # Rotation and Translation: ImagePanel only

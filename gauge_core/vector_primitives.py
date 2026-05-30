@@ -1,4 +1,4 @@
-"""Vector primitive components — Line, Arc, FilledRect, Polygon.
+"""Vector primitive components — Line, Arc, FilledRect, Polygon, Vector.
 
 These are statically-positioned shapes rendered via Arcade's draw_* API each
 frame.  They are suitable for dial artwork, bezel decorations, and as the
@@ -45,11 +45,13 @@ Colors are [r, g, b] or [r, g, b, a] in 0-255 range.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Callable
 
 import arcade
 
+from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component
 
 
@@ -287,6 +289,119 @@ class Polygon(_VecBase):
 
 
 # ---------------------------------------------------------------------------
+# Vector
+# ---------------------------------------------------------------------------
+
+class Vector(_VecBase):
+    """Arrow defined by a position, direction (degrees), and length (pixels).
+
+    Direction follows the standard Arcade convention: 0° = right/east,
+    counterclockwise positive.  Both direction and length can be driven by
+    datarefs via a lookup table, independently of each other.
+
+    YAML schema
+    -----------
+    Static::
+
+        - type: Vector
+          name: wind_arrow
+          position: [300, 300]
+          direction: 90.0        # static degrees (0=right, CCW)
+          length: 60.0           # static pixels
+          color: [255, 200, 0, 255]
+          width: 2.0
+
+    Dataref-driven::
+
+        - type: Vector
+          name: speed_trend
+          position: [110, 307]
+          direction:
+            dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+            table: [[0, 90], [300, 90]]
+          length:
+            dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+            table: [[0, 5], [300, 120]]
+          color: [0, 255, 100, 255]
+          width: 3.0
+    """
+
+    def __init__(
+        self,
+        name: str,
+        position: tuple[float, float],
+        color: tuple[int, int, int, int],
+        width: float = 1.0,
+        static_direction: float | None = None,
+        static_length: float | None = None,
+    ) -> None:
+        self.name = name
+        self._px, self._py = float(position[0]), float(position[1])
+        self._color = color
+        self._width = float(width)
+        self._dir = float(static_direction) if static_direction is not None else 0.0
+        self._len = float(static_length) if static_length is not None else 50.0
+        self._dir_dataref: Any | None = None
+        self._dir_table: list = []
+        self._dir_convert: Callable | None = None
+        self._len_dataref: Any | None = None
+        self._len_table: list = []
+        self._len_convert: Callable | None = None
+        self._init_visibility()
+
+    def set_direction_dataref(
+        self,
+        dataref: Any,
+        table: list,
+        convert_fn: str | None = None,
+    ) -> None:
+        self._dir_dataref = dataref
+        self._dir_table = table
+        if convert_fn:
+            self._dir_convert = get_convert(convert_fn)
+
+    def set_length_dataref(
+        self,
+        dataref: Any,
+        table: list,
+        convert_fn: str | None = None,
+    ) -> None:
+        self._len_dataref = dataref
+        self._len_table = table
+        if convert_fn:
+            self._len_convert = get_convert(convert_fn)
+
+    def apply_scale(self, scale: float) -> None:
+        self._px *= scale; self._py *= scale
+        self._len *= scale
+        self._width *= scale
+
+    def apply_offset(self, dx: float, dy: float) -> None:
+        self._px += dx; self._py += dy
+
+    def update(self, get_data: Callable[[Any], float]) -> None:
+        self._update_visibility(get_data)
+        if self._dir_dataref is not None:
+            raw = float(get_data(self._dir_dataref))
+            if self._dir_convert is not None:
+                raw = float(self._dir_convert(raw, get_data))
+            self._dir = lookup_piecewise(self._dir_table, raw) if self._dir_table else raw
+        if self._len_dataref is not None:
+            raw = float(get_data(self._len_dataref))
+            if self._len_convert is not None:
+                raw = float(self._len_convert(raw, get_data))
+            self._len = lookup_piecewise(self._len_table, raw) if self._len_table else raw
+
+    def draw(self) -> None:
+        if not self._visible or self._len == 0:
+            return
+        angle_rad = math.radians(self._dir)
+        ex = self._px + self._len * math.cos(angle_rad)
+        ey = self._py + self._len * math.sin(angle_rad)
+        arcade.draw_line(self._px, self._py, ex, ey, self._color, self._width)
+
+
+# ---------------------------------------------------------------------------
 # Factories + registration
 # ---------------------------------------------------------------------------
 
@@ -355,7 +470,39 @@ def _polygon_factory(comp: dict, base_dir: Path, container_size=None) -> Polygon
     return poly
 
 
+def _vector_factory(comp: dict, base_dir: Path, container_size=None) -> Vector:
+    dir_cfg = comp.get("direction", 0.0)
+    len_cfg = comp.get("length", 50.0)
+    static_dir = None if isinstance(dir_cfg, dict) else float(dir_cfg)
+    static_len = None if isinstance(len_cfg, dict) else float(len_cfg)
+    vec = Vector(
+        name=comp["name"],
+        position=tuple(comp.get("position", [0, 0])),
+        color=_as_color(comp.get("color")),
+        width=float(comp.get("width", 1.0)),
+        static_direction=static_dir,
+        static_length=static_len,
+    )
+    if isinstance(dir_cfg, dict):
+        vec.set_direction_dataref(
+            _as_dataref(dir_cfg["dataref"]),
+            dir_cfg.get("table", []),
+            dir_cfg.get("convert_function"),
+        )
+    if isinstance(len_cfg, dict):
+        vec.set_length_dataref(
+            _as_dataref(len_cfg["dataref"]),
+            len_cfg.get("table", []),
+            len_cfg.get("convert_function"),
+        )
+    if "visibility" in comp:
+        vis = comp["visibility"]
+        vec.set_visibility(vis["dataref"], vis["predicate"])
+    return vec
+
+
 register_component("Line", _line_factory)
 register_component("Arc", _arc_factory)
 register_component("FilledRect", _filledrect_factory)
 register_component("Polygon", _polygon_factory)
+register_component("Vector", _vector_factory)
