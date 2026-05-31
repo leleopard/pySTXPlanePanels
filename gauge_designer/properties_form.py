@@ -1375,6 +1375,11 @@ class PropertiesForm(QWidget):
         self._ai_ptr_size.valueChanged.connect(self._emit)
         self._ai_sec.row("Pointer size px", self._ai_ptr_size)
 
+        self._ai_show_ref = QCheckBox("Show centre reference bug")
+        self._ai_show_ref.setChecked(True)
+        self._ai_show_ref.stateChanged.connect(self._emit)
+        self._ai_sec.row("Reference", self._ai_show_ref)
+
         self._vbox.addWidget(self._ai_sec)
 
     def _mk_circulargauge_sec(self):
@@ -1594,7 +1599,7 @@ class PropertiesForm(QWidget):
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
-            "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing",
+            "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             # CircularGauge
             "arc_color", "arc_width", "needle_length", "needle_width",
             "needle_color", "needle_angle",
@@ -1851,6 +1856,7 @@ class PropertiesForm(QWidget):
         self._ai_arc_r.setValue(float(comp.get("bank_arc_radius", 0.0)))
         self._ai_ptr_color.set_rgba(comp.get("roll_pointer_color"))
         self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
+        self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
 
         # CircularGauge
         cg_ctr = comp.get("center", [0, 0])
@@ -2033,6 +2039,8 @@ class PropertiesForm(QWidget):
             ps = self._ai_ptr_size.value()
             if ps != 12.0:
                 data["roll_pointer_size"] = ps
+            if not self._ai_show_ref.isChecked():
+                data["show_reference"] = False
             ls = self._ai_ladder_step.value()
             if ls != 5.0:
                 data["ladder_step"] = ls

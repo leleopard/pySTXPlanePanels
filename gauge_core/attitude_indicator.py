@@ -90,6 +90,7 @@ class AttitudeIndicator(_VecBase):
         ladder_bold: bool = False,
         ladder_italic: bool = False,
         smoothing: float = 0.0,
+        show_reference: bool = True,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -118,6 +119,7 @@ class AttitudeIndicator(_VecBase):
         self._ladder_italic = bool(ladder_italic)
         # Clamp to [0, 0.99]: 0 = no smoothing, higher = heavier EMA low-pass.
         self._smooth = max(0.0, min(0.99, float(smoothing)))
+        self._show_reference = bool(show_reference)
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -205,7 +207,8 @@ class AttitudeIndicator(_VecBase):
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
         self._draw_bank_arc(cx, cy, arc_r)
         self._draw_roll_pointer(cx, cy, arc_r)
-        self._draw_reference(cx, cy)
+        if self._show_reference:
+            self._draw_reference(cx, cy)
 
         ctx.scissor = None  # restore — no scissor for other components
 
@@ -382,6 +385,7 @@ def _ai_factory(
         ladder_bold=bool(comp.get("ladder_bold", False)),
         ladder_italic=bool(comp.get("ladder_italic", False)),
         smoothing=float(comp.get("smoothing", 0.0)),
+        show_reference=bool(comp.get("show_reference", True)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],
