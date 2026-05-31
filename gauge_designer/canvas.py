@@ -950,13 +950,14 @@ class InstrumentCanvas(QWidget):
         ], fill=ptr_c)
 
         # Aircraft reference (fixed wing stubs + centre dot)
-        stub = 30; gap = 6
-        cd.line([(int(cx_c) - stub - gap, int(cy_c)),
-                 (int(cx_c) - gap, int(cy_c))], fill=ptr_c, width=3)
-        cd.line([(int(cx_c) + gap, int(cy_c)),
-                 (int(cx_c) + stub + gap, int(cy_c))], fill=ptr_c, width=3)
-        cd.ellipse([int(cx_c) - 4, int(cy_c) - 4,
-                    int(cx_c) + 4, int(cy_c) + 4], fill=ptr_c)
+        if comp.get("show_reference", True):
+            stub = 30; gap = 6
+            cd.line([(int(cx_c) - stub - gap, int(cy_c)),
+                     (int(cx_c) - gap, int(cy_c))], fill=ptr_c, width=3)
+            cd.line([(int(cx_c) + gap, int(cy_c)),
+                     (int(cx_c) + stub + gap, int(cy_c))], fill=ptr_c, width=3)
+            cd.ellipse([int(cx_c) - 4, int(cy_c) - 4,
+                        int(cx_c) + 4, int(cy_c) + 4], fill=ptr_c)
 
         composite.paste(ci, (int(vx), int(py_top)), mask=ci)
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
