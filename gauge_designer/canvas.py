@@ -595,6 +595,12 @@ class InstrumentCanvas(QWidget):
         if oc is not None:
             ow = max(1, int(round(float(comp.get("outline_width", 1.0)))))
             draw.rectangle(bbox, outline=_rgba(oc), width=ow)
+        # Origin crosshair
+        r = 5
+        xhair = (255, 220, 0, 255)
+        draw.line([(cx_p - r, cy_p), (cx_p + r, cy_p)], fill=xhair, width=2)
+        draw.line([(cx_p, cy_p - r), (cx_p, cy_p + r)], fill=xhair, width=2)
+        draw.ellipse([cx_p - 3, cy_p - 3, cx_p + 3, cy_p + 3], outline=xhair, width=1)
 
     def _render_polygon(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pts_raw = comp.get("points", [])
