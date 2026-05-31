@@ -177,7 +177,8 @@ class _TableEditor(QWidget):
 class _PointsTableEditor(QWidget):
     """X/Y points table whose cells are QSpinBox widgets (no accidental wheel edits,
     direct numeric input without needing to parse text)."""
-    changed = Signal()
+    changed        = Signal()
+    point_selected = Signal(int)   # row index of selected point, or -1
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -186,6 +187,7 @@ class _PointsTableEditor(QWidget):
         self._tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._tbl.setFixedHeight(130)
+        self._tbl.itemSelectionChanged.connect(self._on_selection_changed)
 
         add = QPushButton("+"); add.setFixedWidth(26); add.clicked.connect(self._add)
         rm  = QPushButton("−"); rm.setFixedWidth(26);  rm.clicked.connect(self._rm)
@@ -235,6 +237,10 @@ class _PointsTableEditor(QWidget):
         if r >= 0:
             self._tbl.removeRow(r)
             self.changed.emit()
+
+    def _on_selection_changed(self):
+        rows = self._tbl.selectedIndexes()
+        self.point_selected.emit(rows[0].row() if rows else -1)
 
 
 # ── Band endpoint editor ─────────────────────────────────────────────────────
@@ -637,7 +643,8 @@ def _pair_box(w1: QWidget, w2: QWidget, sep: str = "×") -> QWidget:
 # ── Main form ─────────────────────────────────────────────────────────────────
 
 class PropertiesForm(QWidget):
-    changed = Signal()
+    changed        = Signal()
+    point_selected = Signal(int)   # polygon point row, or -1
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1064,6 +1071,7 @@ class PropertiesForm(QWidget):
 
         self._poly_pts = _PointsTableEditor()
         self._poly_pts.changed.connect(self._emit)
+        self._poly_pts.point_selected.connect(self.point_selected)
         self._poly_sec.row("Points", self._poly_pts)
 
         self._poly_color = _ColorButton()

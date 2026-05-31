@@ -130,6 +130,7 @@ class InstrumentCanvas(QWidget):
         self._data: dict = {}
         self._yaml_dir: str = ""
         self._selected_name: str | None = None
+        self._selected_point_idx: int = -1
         self._atlas_cache: dict[str, Image.Image] = {}
         self._hidden: set[str] = set()
         self._zoom: float = 1.0
@@ -166,8 +167,13 @@ class InstrumentCanvas(QWidget):
         self._hidden = set()   # reset so no stale names from previous instrument bleed through
         self._render()
 
+    def set_selected_point(self, idx: int):
+        self._selected_point_idx = idx
+        self._render()
+
     def set_selected(self, name: str | None):
         if self._selected_name != name:
+            self._selected_point_idx = -1   # reset when switching component
             self._selected_name = name
             self._render()
 
@@ -191,6 +197,7 @@ class InstrumentCanvas(QWidget):
     def clear(self):
         self._data = {}
         self._selected_name = None
+        self._selected_point_idx = -1
         self._hidden = set()
         self._atlas_cache.clear()
         self._drag_name = None
@@ -604,6 +611,16 @@ class InstrumentCanvas(QWidget):
         else:
             width = max(1, int(round(float(comp.get("width", 1.0)))))
             draw.line(pts + [pts[0]], fill=color, width=width)
+
+        # Crosshair on the selected point
+        if (comp.get("name") == self._selected_name
+                and 0 <= self._selected_point_idx < len(pts)):
+            px, py = pts[self._selected_point_idx]
+            r = 5
+            xhair = (255, 220, 0, 255)
+            draw.line([(px - r, py), (px + r, py)], fill=xhair, width=2)
+            draw.line([(px, py - r), (px, py + r)], fill=xhair, width=2)
+            draw.ellipse([px - 3, py - 3, px + 3, py + 3], outline=xhair, width=1)
 
     def _render_vector(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0])
