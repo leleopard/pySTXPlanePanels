@@ -64,10 +64,14 @@ class PanelWindow(arcade.Window):
         on_shutdown: Callable[[], None] | None = None,
     ) -> None:
         w, h = panel.size
-        super().__init__(w, h, panel.name, antialiasing=True, samples=8)
-        # MSAA (samples=8) above handles line antialiasing.
-        # GL_LINE_SMOOTH is a core-profile no-op (removed from GL 3.3 core);
-        # manual glBlendFunc calls fight Arcade's own blend state management.
+        super().__init__(w, h, panel.name, antialiasing=True, samples=4)
+        # GL_SAMPLES confirmed 0 on this machine — MSAA is not available.
+        # GL_LINE_SMOOTH gives per-primitive sub-pixel AA on most Windows drivers
+        # even in core 3.3 mode (exposed via compatibility extension).
+        # We do NOT touch glBlendFunc — Arcade manages blend state for draw calls.
+        from pyglet.gl import glEnable, glHint, GL_LINE_SMOOTH, GL_LINE_SMOOTH_HINT, GL_NICEST
+        glEnable(GL_LINE_SMOOTH)
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
         if panel.background_color is not None:
             self.background_color = panel.background_color
         else:

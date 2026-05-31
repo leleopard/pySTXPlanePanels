@@ -54,15 +54,12 @@ from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
 
 _BANK_TICKS   = [10, 20, 30, 45, 60]  # drawn on both sides (± each)
 _LADDER_RANGE = 90   # draw ladder from -90° to +90°
+_SSAA         = 3    # supersample factor
 
-# SSAA approach commented out — Arcade opens its window with MSAA (4×) by
-# default; lines drawn directly to ctx.screen get hardware MSAA for free
-# (same as the radar_sweep example). The SSAA FBO path bypassed MSAA because
-# offscreen FBOs are non-MSAA, so GL_LINEAR blit gave no real AA benefit.
-#
-# _SSAA    = 3    # supersample factor
-# _BLIT_VS = "..."  # vertex shader for resolve-quad blit
-# _BLIT_FS = "..."  # fragment shader for resolve-quad blit
+# GL_SAMPLES confirmed 0 on this machine — hardware MSAA is unavailable.
+# We use SSAA: render at _SSAA× into an offscreen non-MSAA FBO, then blit
+# to screen with GL_LINEAR. Both src and dst are non-MSAA, so GL_LINEAR is
+# valid per spec and gives genuine supersampling AA.
 
 
 def _rot(x: float, y: float, cos_b: float, sin_b: float,
@@ -130,16 +127,10 @@ class AttitudeIndicator(_VecBase):
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
-        # SSAA FBO pipeline commented out — drawing directly to ctx.screen so
-        # Arcade's default MSAA (4×) applies, same as the radar_sweep example.
-        # self._ssaa_fbo: Any | None = None
-        # self._ssaa_tex: Any | None = None
-        # self._ssaa_dim: tuple[int, int] = (0, 0)
-        # self._res_fbo:  Any | None = None
-        # self._res_tex:  Any | None = None
-        # self._res_dim:  tuple[int, int] = (0, 0)
-        # self._blit_prog: Any | None = None
-        # self._blit_vao:  Any | None = None
+        # SSAA offscreen FBO — lazy-created on first draw, recreated if size changes.
+        self._ssaa_fbo: Any | None = None
+        self._ssaa_tex: Any | None = None
+        self._ssaa_dim: tuple[int, int] = (0, 0)
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -208,26 +199,52 @@ class AttitudeIndicator(_VecBase):
         sin_b = math.sin(bank_rad)
         pitch_y = -self._pitch * self._ppu
 
-        # Draw only the pitch ladder — plain arcade.draw_line() calls to
-        # ctx.screen so Arcade's default MSAA (4×) applies natively.
-        # All other components (background, horizon, arc, pointer, reference)
-        # are skipped while diagnosing line antialiasing.
+        ctx = arcade.get_window().ctx
+        ssaa_w = int(vw * _SSAA)
+        ssaa_h = int(vh * _SSAA)
+
+        # Lazy-create / resize SSAA FBO.
+        if self._ssaa_fbo is None or self._ssaa_dim != (ssaa_w, ssaa_h):
+            if self._ssaa_tex is not None:
+                self._ssaa_fbo.release()
+                self._ssaa_tex.release()
+            self._ssaa_tex = ctx.texture((ssaa_w, ssaa_h), components=4)
+            self._ssaa_fbo = ctx.framebuffer(color_attachments=[self._ssaa_tex])
+            self._ssaa_dim = (ssaa_w, ssaa_h)
+
+        # ── Phase 1: render ladder at 3× into SSAA FBO ───────────────────────
+        from pyglet.math import Mat4
+        saved_proj = ctx.projection_matrix
+        self._ssaa_fbo.use()
+        self._ssaa_fbo.viewport = (0, 0, ssaa_w, ssaa_h)
+        self._ssaa_fbo.clear(color=(0, 0, 0, 255))
+        ctx.projection_matrix = Mat4.orthogonal_projection(
+            vx, vx + vw, vy, vy + vh, -100.0, 100.0
+        )
+
+        # Only the ladder while diagnosing AA; other components follow later.
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw,
                           lines=True, labels=False)
 
-        # SSAA FBO pipeline — was: render to 3× offscreen FBO, blit-down with
-        # GL_LINEAR, composite via shader quad.  Commented out because offscreen
-        # FBOs are non-MSAA so the blit gave no real AA benefit.
-        #
-        # self._ssaa_fbo.use(); ...render...; glBlitFramebuffer(...GL_LINEAR...)
-        # self._blit_vao.render(self._blit_prog)
-        #
-        # Other components also commented out for the AA investigation:
-        # self._draw_background(...)
-        # self._draw_horizon(...)
-        # self._draw_bank_arc(...)
-        # self._draw_roll_pointer(...)
-        # self._draw_reference(...)
+        # ── Phase 2: GL_LINEAR blit 3× FBO → screen viewport ─────────────────
+        # src and dst are both non-MSAA (GL_SAMPLES=0 on this machine), so
+        # GL_LINEAR is valid and gives genuine supersampling antialiasing.
+        from pyglet.gl import (
+            glBindFramebuffer, glBlitFramebuffer,
+            GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER,
+            GL_COLOR_BUFFER_BIT, GL_LINEAR,
+        )
+        ctx.screen.use()
+        ctx.projection_matrix = saved_proj
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, self._ssaa_fbo.glo)
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, ctx.screen.glo)
+        glBlitFramebuffer(
+            0, 0, ssaa_w, ssaa_h,
+            int(vx), int(vy), int(vx + vw), int(vy + vh),
+            GL_COLOR_BUFFER_BIT, GL_LINEAR,
+        )
+        # Restore read binding so subsequent Arcade draw calls aren't confused.
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, ctx.screen.glo)
 
     # ── sub-draw helpers ─────────────────────────────────────────────────────
 
