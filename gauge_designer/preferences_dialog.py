@@ -3,8 +3,8 @@
 import sys
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QRadioButton, QDialogButtonBox,
-    QGroupBox, QLabel, QLineEdit, QPushButton,
+    QDialog, QVBoxLayout, QHBoxLayout, QDialogButtonBox,
+    QGroupBox, QLabel, QLineEdit, QPushButton, QRadioButton,
 )
 from PySide6.QtCore import QSettings
 
@@ -18,6 +18,7 @@ class PreferencesDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
+        # ── Coordinate System ─────────────────────────────────────────────
         group = QGroupBox("Coordinate System")
         gl = QVBoxLayout(group)
 
@@ -44,6 +45,7 @@ class PreferencesDialog(QDialog):
         gl.addWidget(self._rb_y_down)
         layout.addWidget(group)
 
+        # ── Python Interpreter ────────────────────────────────────────────
         py_group = QGroupBox("Python Interpreter (for generated launch scripts)")
         py_layout = QVBoxLayout(py_group)
 

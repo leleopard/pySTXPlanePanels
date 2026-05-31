@@ -864,8 +864,9 @@ class InstrumentView(QWidget):
         if not self._loaded_path:
             return
         from gauge_test_harness.harness import TestHarnessWindow
+        from gauge_designer.ui_utils import get_ssaa_args
         self._test_proc = subprocess.Popen(
-            [sys.executable, "-m", "gauge_core", self._loaded_path, "--mock"]
+            [sys.executable, "-m", "gauge_core", self._loaded_path, "--mock"] + get_ssaa_args()
         )
         self._harness_win = TestHarnessWindow(self._loaded_path)
         self._harness_win.closed.connect(self._on_harness_closed)
@@ -893,8 +894,9 @@ class InstrumentView(QWidget):
         """Launch the runtime connected to X-Plane (no mock, no test harness)."""
         if not self._loaded_path or self._live_proc is not None:
             return
+        from gauge_designer.ui_utils import get_ssaa_args
         self._live_proc = subprocess.Popen(
-            [sys.executable, "-m", "gauge_core.runner", self._loaded_path]
+            [sys.executable, "-m", "gauge_core.runner", self._loaded_path] + get_ssaa_args()
         )
         self._live_timer.start()
         self.live_running.emit(True)

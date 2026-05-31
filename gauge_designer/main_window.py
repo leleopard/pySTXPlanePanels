@@ -160,12 +160,20 @@ class MainWindow(QMainWindow):
         xplane_act.triggered.connect(self._open_xplane_settings)
         edit_menu.addAction(xplane_act)
 
+        aa_act = QAction("&Antialiasing…", self)
+        aa_act.triggered.connect(self._open_antialiasing)
+        edit_menu.addAction(aa_act)
+
         edit_menu.addSeparator()
 
         prefs_act = QAction("&Preferences…", self)
         prefs_act.setShortcut("Ctrl+,")
         prefs_act.triggered.connect(self._open_preferences)
         edit_menu.addAction(prefs_act)
+
+    def _open_antialiasing(self):
+        from gauge_designer.antialiasing_dialog import AntialiasingDialog
+        AntialiasingDialog(self).exec()
 
     def _open_xplane_settings(self):
         from gauge_designer.xplane_settings_dialog import XPlaneSettingsDialog

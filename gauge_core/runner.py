@@ -62,16 +62,13 @@ class PanelWindow(arcade.Window):
         is_test_mode: bool,
         udp_alive: Callable[[], bool] | None = None,
         on_shutdown: Callable[[], None] | None = None,
+        ssaa: int = 4,
     ) -> None:
         w, h = panel.size
-        super().__init__(w, h, panel.name, antialiasing=True, samples=4)
-        # GL_SAMPLES confirmed 0 on this machine — MSAA is not available.
-        # GL_LINE_SMOOTH gives per-primitive sub-pixel AA on most Windows drivers
-        # even in core 3.3 mode (exposed via compatibility extension).
-        # We do NOT touch glBlendFunc — Arcade manages blend state for draw calls.
-        from pyglet.gl import glEnable, glHint, GL_LINE_SMOOTH, GL_LINE_SMOOTH_HINT, GL_NICEST
-        glEnable(GL_LINE_SMOOTH)
-        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
+        # Always non-MSAA: hardware MSAA is unreliable for python.exe without
+        # driver overrides.  AA is provided by the SSAA FBO chain instead.
+        super().__init__(w, h, panel.name, antialiasing=False)
+
         if panel.background_color is not None:
             self.background_color = panel.background_color
         else:
@@ -83,25 +80,18 @@ class PanelWindow(arcade.Window):
         self._udp_alive = udp_alive
         self._on_shutdown = on_shutdown
 
-        # Test-mode value (read by TestDataSource if attached).
         self.test_value = 0.0
         self.test_increment = 1.0
-
-        # FPS tracking (updated into the window title; matches original).
         self._frame_count = 0
         self._last_fps_time = time.time()
 
-        # No-data overlay.
         self._no_data_text = arcade.Text(
             text=self.NO_DATA_MESSAGE,
             x=20,
             y=h - 30,
-            color=(255, 165, 0, 230),  # orange-ish
+            color=(255, 165, 0, 230),
             font_size=14,
         )
-
-        # Test-mode overlay: shows current test value and step so the user
-        # can see what value is being fed to all datarefs.
         self._test_overlay = arcade.Text(
             text="",
             x=6,
@@ -109,6 +99,20 @@ class PanelWindow(arcade.Window):
             color=(0, 230, 0, 220),
             font_size=12,
         ) if is_test_mode else None
+
+        # SSAA FBO chain: ssaa× → ssaa//2× → … → 2× → screen.
+        # Each step is a perfect 2:1 GL_LINEAR downsample (N² samples/pixel).
+        bc = self.background_color
+        self._bg_float = (bc.r / 255.0, bc.g / 255.0, bc.b / 255.0, bc.a / 255.0)
+        self._ssaa_chain: list[tuple] = []   # [(fbo, w, h), …] largest first
+        if ssaa >= 2:
+            ctx = self.ctx
+            factor = ssaa
+            while factor >= 2:
+                tex = ctx.texture((w * factor, h * factor), components=4)
+                fbo = ctx.framebuffer(color_attachments=[tex])
+                self._ssaa_chain.append((fbo, w * factor, h * factor))
+                factor //= 2
 
     def on_close(self) -> None:
         if self._on_shutdown is not None:
@@ -118,14 +122,15 @@ class PanelWindow(arcade.Window):
     # -- frame loop -------------------------------------------------------
 
     def on_draw(self) -> None:
-        self.clear()
+        if self._ssaa_chain:
+            self._on_draw_ssaa()
+        else:
+            self.clear()
+            self._render_scene()
+        self._tick_fps()
 
-        # Each instrument can declare an instrument-wide visibility
-        # predicate; if it evaluates False the instrument's components
-        # are skipped entirely (used by radios when unpowered). Skipped
-        # in test mode so every gauge is visible regardless of the
-        # numpad-driven test value — power-toggle behaviour is best
-        # verified against a live X-Plane.
+    def _render_scene(self) -> None:
+        """Draw all instruments and overlays into the active framebuffer."""
         for inst in self.panel.instruments:
             if (
                 not self._is_test_mode
@@ -138,11 +143,9 @@ class PanelWindow(arcade.Window):
             for comp in inst.components:
                 comp.draw()
 
-        # No-data overlay (only when bound to UDP and X-Plane is silent).
         if not self._is_test_mode and self._udp_alive is not None and not self._udp_alive():
             self._no_data_text.draw()
 
-        # Test-mode overlay: live value + step.
         if self._test_overlay is not None:
             self._test_overlay.text = (
                 f"TEST  value: {self.test_value:.2f}    step: {self.test_increment:.1f}"
@@ -150,7 +153,43 @@ class PanelWindow(arcade.Window):
             )
             self._test_overlay.draw()
 
-        # FPS counter via window title.
+    def _on_draw_ssaa(self) -> None:
+        """Render scene into the SSAA FBO chain then blit down to screen."""
+        from pyglet.math import Mat4
+        from pyglet.gl import (
+            glBindFramebuffer, glBlitFramebuffer,
+            GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER,
+            GL_COLOR_BUFFER_BIT, GL_LINEAR,
+        )
+        w, h = self.panel.size
+        ctx = self.ctx
+
+        top_fbo, fw, fh = self._ssaa_chain[0]
+        saved_proj = ctx.projection_matrix
+        top_fbo.use()
+        top_fbo.viewport = (0, 0, fw, fh)
+        top_fbo.clear(color=self._bg_float)
+        ctx.projection_matrix = Mat4.orthogonal_projection(0, w, 0, h, -100.0, 100.0)
+
+        self._render_scene()
+
+        # Cascade through intermediate FBOs (each a perfect 2:1 downsample).
+        for i in range(len(self._ssaa_chain) - 1):
+            src_fbo, sw, sh = self._ssaa_chain[i]
+            dst_fbo, dw, dh = self._ssaa_chain[i + 1]
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo.glo)
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_fbo.glo)
+            glBlitFramebuffer(0, 0, sw, sh, 0, 0, dw, dh, GL_COLOR_BUFFER_BIT, GL_LINEAR)
+
+        last_fbo, lw, lh = self._ssaa_chain[-1]
+        ctx.screen.use()
+        ctx.projection_matrix = saved_proj
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, last_fbo.glo)
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, ctx.screen.glo)
+        glBlitFramebuffer(0, 0, lw, lh, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_LINEAR)
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, ctx.screen.glo)
+
+    def _tick_fps(self) -> None:
         self._frame_count += 1
         now = time.time()
         elapsed = now - self._last_fps_time
@@ -257,6 +296,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--listen", default=None, help="host:port this app listens on")
     p.add_argument("--xp", default=None, help="host:port of X-Plane")
     p.add_argument("--xp-name", default=None, help="Computer name X-Plane expects")
+    p.add_argument(
+        "--ssaa", type=int, default=4, choices=[0, 2, 4, 8],
+        help="Supersampling AA factor: 0=off, 2=4spp, 4=16spp (default), 8=64spp",
+    )
     args = p.parse_args(argv)
 
     # Merge: config file supplies base values; CLI args override.
@@ -284,12 +327,14 @@ def main(argv: list[str] | None = None) -> int:
 
     udp: UDPDataSource | None = None
     mock: MockDataSource | None = None
+
     if args.test:
         data_source = TestDataSource()
         window = PanelWindow(
             panel=panel,
             get_data=data_source,
             is_test_mode=True,
+            ssaa=args.ssaa,
         )
         data_source.window = window
     elif args.mock:
@@ -299,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
             panel=panel,
             get_data=mock,
             is_test_mode=True,
+            ssaa=args.ssaa,
         )
     else:
         udp = UDPDataSource(
@@ -312,8 +358,9 @@ def main(argv: list[str] | None = None) -> int:
             is_test_mode=False,
             udp_alive=udp.alive,
             on_shutdown=udp.quit,
+            ssaa=args.ssaa,
         )
-
+    
     try:
         arcade.run()
     finally:
