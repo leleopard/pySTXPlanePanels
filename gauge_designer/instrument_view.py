@@ -381,7 +381,6 @@ class InstrumentView(QWidget):
         prop_layout.addWidget(header_label("Properties"))
         self._form = PropertiesForm()
         self._form.changed.connect(self._on_form_changed)
-        self._form.point_selected.connect(self._canvas.set_selected_point)
         self._form.setVisible(False)
         prop_layout.addWidget(self._form, 1)  # stretch=1: takes all space when visible
         prop_layout.addStretch(0)             # stretch=0: fills gap when form is hidden
@@ -394,6 +393,7 @@ class InstrumentView(QWidget):
         self._canvas = InstrumentCanvas()
         canvas_layout.addWidget(self._canvas)
 
+        self._form.point_selected.connect(self._canvas.set_selected_point)
         self.changed.connect(self._canvas.refresh)
         self._canvas.component_selected.connect(self._on_canvas_selected)
         self._canvas.component_moved.connect(self._on_canvas_moved)
