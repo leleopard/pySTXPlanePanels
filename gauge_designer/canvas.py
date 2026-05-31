@@ -585,6 +585,13 @@ class InstrumentCanvas(QWidget):
         # Flipping y negates all angles, so swap and negate: pil_start=-ea, pil_end=-sa.
         draw.arc(bbox, -ea, -sa, fill=color, width=width)
 
+    @staticmethod
+    def _crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
+        """1px yellow crosshair, 20px long (10px each arm)."""
+        c = (255, 220, 0, 255)
+        draw.line([(cx - 10, cy), (cx + 10, cy)], fill=c, width=1)
+        draw.line([(cx, cy - 10), (cx, cy + 10)], fill=c, width=1)
+
     def _render_filledrect(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
         cx_p, cy_p = int(pos[0]), canvas_h - int(pos[1])
@@ -595,12 +602,7 @@ class InstrumentCanvas(QWidget):
         if oc is not None:
             ow = max(1, int(round(float(comp.get("outline_width", 1.0)))))
             draw.rectangle(bbox, outline=_rgba(oc), width=ow)
-        # Origin crosshair
-        r = 5
-        xhair = (255, 220, 0, 255)
-        draw.line([(cx_p - r, cy_p), (cx_p + r, cy_p)], fill=xhair, width=2)
-        draw.line([(cx_p, cy_p - r), (cx_p, cy_p + r)], fill=xhair, width=2)
-        draw.ellipse([cx_p - 3, cy_p - 3, cx_p + 3, cy_p + 3], outline=xhair, width=1)
+        self._crosshair(draw, cx_p, cy_p)
 
     def _render_polygon(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pts_raw = comp.get("points", [])
@@ -622,11 +624,7 @@ class InstrumentCanvas(QWidget):
         if (comp.get("name") == self._selected_name
                 and 0 <= self._selected_point_idx < len(pts)):
             px, py = pts[self._selected_point_idx]
-            r = 5
-            xhair = (255, 220, 0, 255)
-            draw.line([(px - r, py), (px + r, py)], fill=xhair, width=2)
-            draw.line([(px, py - r), (px, py + r)], fill=xhair, width=2)
-            draw.ellipse([px - 3, py - 3, px + 3, py + 3], outline=xhair, width=1)
+            self._crosshair(draw, px, py)
 
     def _render_vector(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0])
