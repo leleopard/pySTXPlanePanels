@@ -65,18 +65,9 @@ class PanelWindow(arcade.Window):
     ) -> None:
         w, h = panel.size
         super().__init__(w, h, panel.name, antialiasing=True, samples=8)
-        # GL_LINE_SMOOTH + NICEST hint give per-primitive sub-pixel antialiasing
-        # for draw_line / draw_arc on drivers that expose the compatibility
-        # extension; MSAA (samples=8) covers the rest.
-        from pyglet.gl import (
-            glEnable, glHint, glBlendFunc,
-            GL_LINE_SMOOTH, GL_LINE_SMOOTH_HINT, GL_NICEST,
-            GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-        )
-        glEnable(GL_LINE_SMOOTH)
-        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        # MSAA (samples=8) above handles line antialiasing.
+        # GL_LINE_SMOOTH is a core-profile no-op (removed from GL 3.3 core);
+        # manual glBlendFunc calls fight Arcade's own blend state management.
         if panel.background_color is not None:
             self.background_color = panel.background_color
         else:

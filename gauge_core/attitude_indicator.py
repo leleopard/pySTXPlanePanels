@@ -54,35 +54,15 @@ from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
 
 _BANK_TICKS   = [10, 20, 30, 45, 60]  # drawn on both sides (± each)
 _LADDER_RANGE = 90   # draw ladder from -90° to +90°
-_SSAA         = 3    # supersample factor — render 3× larger, blit down with bilinear
 
-# Minimal shader: draw a resolve texture onto a viewport-sized quad.
-# Uses arcade's WindowBlock UBO (binding 0) so projection is always current.
-_BLIT_VS = """
-#version 330
-uniform WindowBlock {
-    mat4 projection;
-    mat4 view;
-} window;
-uniform vec4 u_vp;   // (vx, vy, vw, vh) in world space
-in vec2 in_uv;       // static quad UVs: (0,0)–(1,1)
-out vec2 v_uv;
-void main() {
-    vec2 world = u_vp.xy + in_uv * u_vp.zw;
-    gl_Position = window.projection * window.view * vec4(world, 0.0, 1.0);
-    v_uv = in_uv;
-}
-"""
-
-_BLIT_FS = """
-#version 330
-uniform sampler2D tex;
-in vec2 v_uv;
-out vec4 frag_color;
-void main() {
-    frag_color = texture(tex, v_uv);
-}
-"""
+# SSAA approach commented out — Arcade opens its window with MSAA (4×) by
+# default; lines drawn directly to ctx.screen get hardware MSAA for free
+# (same as the radar_sweep example). The SSAA FBO path bypassed MSAA because
+# offscreen FBOs are non-MSAA, so GL_LINEAR blit gave no real AA benefit.
+#
+# _SSAA    = 3    # supersample factor
+# _BLIT_VS = "..."  # vertex shader for resolve-quad blit
+# _BLIT_FS = "..."  # fragment shader for resolve-quad blit
 
 
 def _rot(x: float, y: float, cos_b: float, sin_b: float,
@@ -150,17 +130,16 @@ class AttitudeIndicator(_VecBase):
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
-        # SSAA offscreen FBO — lazy-created on first draw, recreated if size changes.
-        self._ssaa_fbo: Any | None = None
-        self._ssaa_tex: Any | None = None
-        self._ssaa_dim: tuple[int, int] = (0, 0)
-        # 1× resolve FBO: receives GL_LINEAR blit from SSAA FBO (both non-MSAA
-        # so GL_LINEAR is valid), then drawn to ctx.screen via shader quad.
-        self._res_fbo:  Any | None = None
-        self._res_tex:  Any | None = None
-        self._res_dim:  tuple[int, int] = (0, 0)
-        self._blit_prog: Any | None = None  # textured-quad program
-        self._blit_vao:  Any | None = None  # static (0,0)–(1,1) UV quad
+        # SSAA FBO pipeline commented out — drawing directly to ctx.screen so
+        # Arcade's default MSAA (4×) applies, same as the radar_sweep example.
+        # self._ssaa_fbo: Any | None = None
+        # self._ssaa_tex: Any | None = None
+        # self._ssaa_dim: tuple[int, int] = (0, 0)
+        # self._res_fbo:  Any | None = None
+        # self._res_tex:  Any | None = None
+        # self._res_dim:  tuple[int, int] = (0, 0)
+        # self._blit_prog: Any | None = None
+        # self._blit_vao:  Any | None = None
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
@@ -224,106 +203,31 @@ class AttitudeIndicator(_VecBase):
         cx = vx + vw / 2.0
         cy = vy + vh / 2.0
 
-        # Positive bank = right bank = CCW rotation of AI background.
         bank_rad = math.radians(self._bank)
         cos_b = math.cos(bank_rad)
         sin_b = math.sin(bank_rad)
-
-        # y-offset in AI space where the natural horizon (pitch=0 line) sits.
-        # Positive pitch → nose up → horizon sinks below centre → negative y offset.
         pitch_y = -self._pitch * self._ppu
 
-        arc_r = self._arc_r if self._arc_r > 0 else 0.45 * min(vw, vh)
+        # Draw only the pitch ladder — plain arcade.draw_line() calls to
+        # ctx.screen so Arcade's default MSAA (4×) applies natively.
+        # All other components (background, horizon, arc, pointer, reference)
+        # are skipped while diagnosing line antialiasing.
+        self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw,
+                          lines=True, labels=False)
 
-        ctx = arcade.get_window().ctx
-
-        # ── Lazy-create / resize SSAA FBO (3×) and resolve FBO (1×) ─────────────
-        ssaa_w = int(vw * _SSAA)
-        ssaa_h = int(vh * _SSAA)
-        out_w  = int(vw)
-        out_h  = int(vh)
-        if self._ssaa_fbo is None or self._ssaa_dim != (ssaa_w, ssaa_h):
-            if self._ssaa_tex is not None:
-                self._ssaa_fbo.release()
-                self._ssaa_tex.release()
-            self._ssaa_tex = ctx.texture((ssaa_w, ssaa_h), components=4)
-            self._ssaa_fbo = ctx.framebuffer(color_attachments=[self._ssaa_tex])
-            self._ssaa_dim = (ssaa_w, ssaa_h)
-        if self._res_fbo is None or self._res_dim != (out_w, out_h):
-            if self._res_tex is not None:
-                self._res_fbo.release()
-                self._res_tex.release()
-            self._res_tex = ctx.texture((out_w, out_h), components=4)
-            self._res_fbo = ctx.framebuffer(color_attachments=[self._res_tex])
-            self._res_dim = (out_w, out_h)
-
-        # ── Lazy-create blit shader + static UV quad (shared forever) ─────────
-        if self._blit_prog is None:
-            self._blit_prog = ctx.program(vertex_shader=_BLIT_VS,
-                                          fragment_shader=_BLIT_FS)
-            self._blit_prog["tex"] = 0  # sampler → texture unit 0
-        if self._blit_vao is None:
-            import array as _arr
-            from arcade.gl import BufferDescription
-            buf = ctx.buffer(data=_arr.array("f",
-                             [0.0, 0.0,  1.0, 0.0,  0.0, 1.0,  1.0, 1.0]).tobytes())
-            self._blit_vao = ctx.geometry(
-                [BufferDescription(buf, "2f", ["in_uv"])],
-                mode=ctx.TRIANGLE_STRIP,
-            )
-
-        # ── Phase 1: all geometry → SSAA FBO ─────────────────────────────────
-        from pyglet.math import Mat4
-        # Save projection before clobbering it — DefaultProjector.use() has an
-        # early-exit that skips restoring projection_matrix when the viewport
-        # hasn't changed, so we must restore explicitly.
-        saved_proj = ctx.projection_matrix
-        self._ssaa_fbo.use()
-        self._ssaa_fbo.viewport = (0, 0, ssaa_w, ssaa_h)
-        self._ssaa_fbo.clear(color=(0, 0, 0, 0))
-        ctx.projection_matrix = Mat4.orthogonal_projection(
-            vx, vx + vw, vy, vy + vh, -100.0, 100.0
-        )
-
-        self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
-        self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, labels=False)
-        self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
-        self._draw_bank_arc(cx, cy, arc_r)
-        self._draw_roll_pointer(cx, cy, arc_r)
-        self._draw_reference(cx, cy)
-
-        # ── Blit SSAA (3×) → resolve FBO (1×) via GL_LINEAR ──────────────────
-        # Both FBOs are non-MSAA: GL_LINEAR is valid here.
-        # Direct blit to ctx.screen (MSAA) with GL_LINEAR is NOT valid per spec
-        # (drivers silently fall back to GL_NEAREST, giving zero AA benefit).
-        from pyglet.gl import (
-            glBindFramebuffer, glBlitFramebuffer,
-            GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER,
-            GL_COLOR_BUFFER_BIT, GL_LINEAR,
-        )
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, self._ssaa_fbo.glo)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self._res_fbo.glo)
-        glBlitFramebuffer(0, 0, ssaa_w, ssaa_h, 0, 0, out_w, out_h,
-                          GL_COLOR_BUFFER_BIT, GL_LINEAR)
-
-        # ── Draw resolve texture → ctx.screen via shader quad ─────────────────
-        # Using a shader quad (not glBlitFramebuffer) so the draw goes through
-        # the normal pipeline and the MSAA screen samples it correctly.
-        ctx.screen.use()
-        ctx.projection_matrix = saved_proj  # direct restore; camera.use() early-exits
-        self._blit_prog["u_vp"] = (vx, vy, float(vw), float(vh))
-        self._res_tex.use(0)
-        ctx.disable(ctx.BLEND)
-        self._blit_vao.render(self._blit_prog)
-        ctx.enable(ctx.BLEND)
-
-        # ── Phase 2: text labels at native resolution ─────────────────────────
-        # arcade.Text uses pyglet's own projection — must render at screen res.
-        ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
-        try:
-            self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=False)
-        finally:
-            ctx.scissor = None
+        # SSAA FBO pipeline — was: render to 3× offscreen FBO, blit-down with
+        # GL_LINEAR, composite via shader quad.  Commented out because offscreen
+        # FBOs are non-MSAA so the blit gave no real AA benefit.
+        #
+        # self._ssaa_fbo.use(); ...render...; glBlitFramebuffer(...GL_LINEAR...)
+        # self._blit_vao.render(self._blit_prog)
+        #
+        # Other components also commented out for the AA investigation:
+        # self._draw_background(...)
+        # self._draw_horizon(...)
+        # self._draw_bank_arc(...)
+        # self._draw_roll_pointer(...)
+        # self._draw_reference(...)
 
     # ── sub-draw helpers ─────────────────────────────────────────────────────
 
