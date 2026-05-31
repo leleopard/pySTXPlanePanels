@@ -99,7 +99,7 @@ _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
                "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector",
-               "AttitudeIndicator"]
+               "AttitudeIndicator", "CircularGauge"]
 
 
 def _coerce_num(text: str):
@@ -599,6 +599,7 @@ class PropertiesForm(QWidget):
         self._mk_vector_sec()
         self._mk_vectortape_sec()
         self._mk_ai_sec()
+        self._mk_circulargauge_sec()
         self._mk_rotation()
         self._mk_translation()
         self._mk_animation()
@@ -1376,6 +1377,76 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._ai_sec)
 
+    def _mk_circulargauge_sec(self):
+        self._cg_sec = _Section("Circular Gauge")
+        self._cg_sec.setVisible(False)
+
+        self._cg_cx = _sb(); self._cg_cy = _sb()
+        for w in (self._cg_cx, self._cg_cy):
+            w.valueChanged.connect(self._emit)
+        y_label = "Center X  /  Y top" if is_y_down() else "Center X  /  Y"
+        self._cg_sec.row_pair(y_label, self._cg_cx, self._cg_cy)
+
+        self._cg_radius = QDoubleSpinBox()
+        self._cg_radius.setRange(0.0, 4096.0); self._cg_radius.setDecimals(1)
+        self._cg_radius.setValue(100.0)
+        self._cg_radius.valueChanged.connect(self._emit)
+        self._cg_sec.row("Radius px", self._cg_radius)
+
+        self._cg_arc_start = QDoubleSpinBox()
+        self._cg_arc_start.setRange(-360.0, 360.0); self._cg_arc_start.setDecimals(1)
+        self._cg_arc_start.setValue(-220.0)
+        self._cg_arc_start.valueChanged.connect(self._emit)
+        self._cg_sec.row("Arc start °", self._cg_arc_start)
+
+        self._cg_arc_end = QDoubleSpinBox()
+        self._cg_arc_end.setRange(-360.0, 360.0); self._cg_arc_end.setDecimals(1)
+        self._cg_arc_end.setValue(40.0)
+        self._cg_arc_end.valueChanged.connect(self._emit)
+        self._cg_sec.row("Arc end °", self._cg_arc_end)
+
+        _cg_angle_hint = QLabel("Angles: 0° = right, CCW positive.")
+        _cg_angle_hint.setStyleSheet("color: #999; font-size: 10px;")
+        self._cg_sec.row_widget(_cg_angle_hint)
+
+        self._cg_arc_color = _ColorButton()
+        self._cg_arc_color.color_changed.connect(self._emit)
+        self._cg_sec.row("Arc color", self._cg_arc_color)
+
+        self._cg_arc_width = QDoubleSpinBox()
+        self._cg_arc_width.setRange(0.5, 50.0); self._cg_arc_width.setDecimals(1)
+        self._cg_arc_width.setValue(2.0)
+        self._cg_arc_width.valueChanged.connect(self._emit)
+        self._cg_sec.row("Arc width px", self._cg_arc_width)
+
+        self._cg_segments = QSpinBox()
+        self._cg_segments.setRange(8, 256); self._cg_segments.setValue(64)
+        self._cg_segments.valueChanged.connect(self._emit)
+        self._cg_sec.row("Arc segments", self._cg_segments)
+
+        self._cg_needle_len = QDoubleSpinBox()
+        self._cg_needle_len.setRange(0.0, 4096.0); self._cg_needle_len.setDecimals(1)
+        self._cg_needle_len.setValue(80.0)
+        self._cg_needle_len.valueChanged.connect(self._emit)
+        self._cg_sec.row("Needle length px", self._cg_needle_len)
+
+        self._cg_needle_width = QDoubleSpinBox()
+        self._cg_needle_width.setRange(0.5, 50.0); self._cg_needle_width.setDecimals(1)
+        self._cg_needle_width.setValue(2.0)
+        self._cg_needle_width.valueChanged.connect(self._emit)
+        self._cg_sec.row("Needle width px", self._cg_needle_width)
+
+        self._cg_needle_color = _ColorButton()
+        self._cg_needle_color.color_changed.connect(self._emit)
+        self._cg_sec.row("Needle color", self._cg_needle_color)
+
+        # Static angle or dataref-driven — reuses _BandEndpointWidget
+        self._cg_needle_angle = _BandEndpointWidget("Needle angle °")
+        self._cg_needle_angle.changed.connect(self._emit)
+        self._cg_sec.row_widget(self._cg_needle_angle)
+
+        self._vbox.addWidget(self._cg_sec)
+
     def _mk_rotation(self):
         self._rot_sec = _Section("Rotation", optional=True)
         self._rot_sec.toggled.connect(self._emit)
@@ -1524,6 +1595,9 @@ class PropertiesForm(QWidget):
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing",
+            # CircularGauge
+            "arc_color", "arc_width", "needle_length", "needle_width",
+            "needle_color", "needle_angle",
             # shared across all
             "viewport", "visibility",
         }
@@ -1778,6 +1852,21 @@ class PropertiesForm(QWidget):
         self._ai_ptr_color.set_rgba(comp.get("roll_pointer_color"))
         self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
 
+        # CircularGauge
+        cg_ctr = comp.get("center", [0, 0])
+        self._cg_cx.setValue(int(cg_ctr[0]))
+        self._cg_cy.setValue(flip_y(int(cg_ctr[1]), self._ref_height))
+        self._cg_radius.setValue(float(comp.get("radius", 100.0)))
+        self._cg_arc_start.setValue(float(comp.get("start_angle", -220.0)))
+        self._cg_arc_end.setValue(float(comp.get("end_angle", 40.0)))
+        self._cg_arc_color.set_rgba(comp.get("arc_color") or comp.get("color"))
+        self._cg_arc_width.setValue(float(comp.get("arc_width", 2.0)))
+        self._cg_segments.setValue(int(comp.get("num_segments", 64)))
+        self._cg_needle_len.setValue(float(comp.get("needle_length", 80.0)))
+        self._cg_needle_width.setValue(float(comp.get("needle_width", 2.0)))
+        self._cg_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
+        self._cg_needle_angle.load(comp.get("needle_angle", -220.0))
+
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
             vp = comp.get("viewport")
@@ -1816,7 +1905,7 @@ class PropertiesForm(QWidget):
         data["type"] = ct
 
         # Position only for types that use a single centre point
-        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator"):
+        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "CircularGauge"):
             data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
         if ct == "Line":
@@ -1875,6 +1964,25 @@ class PropertiesForm(QWidget):
                     data["cap_height"] = self._vec_cap_height.value()
                     if not self._vec_cap_filled.isChecked():
                         data["cap_filled"] = False
+
+        elif ct == "CircularGauge":
+            data["center"] = [self._cg_cx.value(), flip_y(self._cg_cy.value(), self._ref_height)]
+            data["radius"] = self._cg_radius.value()
+            data["start_angle"] = self._cg_arc_start.value()
+            data["end_angle"] = self._cg_arc_end.value()
+            data["arc_color"] = list(self._cg_arc_color.get_rgba())
+            aw = self._cg_arc_width.value()
+            if aw != 2.0:
+                data["arc_width"] = aw
+            s = self._cg_segments.value()
+            if s != 64:
+                data["num_segments"] = s
+            data["needle_length"] = self._cg_needle_len.value()
+            nw = self._cg_needle_width.value()
+            if nw != 2.0:
+                data["needle_width"] = nw
+            data["needle_color"] = list(self._cg_needle_color.get_rgba())
+            data["needle_angle"] = self._cg_needle_angle.get_data()
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -2164,6 +2272,15 @@ class PropertiesForm(QWidget):
         self._vec_cap_width.setValue(10.0); self._vec_cap_width.setEnabled(False)
         self._vec_cap_height.setValue(5.0); self._vec_cap_height.setEnabled(False)
         self._vec_cap_filled.setChecked(True); self._vec_cap_filled.setEnabled(False)
+        # CircularGauge
+        self._cg_cx.setValue(0); self._cg_cy.setValue(0)
+        self._cg_radius.setValue(100.0)
+        self._cg_arc_start.setValue(-220.0); self._cg_arc_end.setValue(40.0)
+        self._cg_arc_color.set_rgba(None); self._cg_arc_width.setValue(2.0)
+        self._cg_segments.setValue(64)
+        self._cg_needle_len.setValue(80.0); self._cg_needle_width.setValue(2.0)
+        self._cg_needle_color.set_rgba(None)
+        self._cg_needle_angle.load(-220.0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
@@ -2240,9 +2357,10 @@ class PropertiesForm(QWidget):
         is_text = ct == "Text"
         is_vec  = ct == "Vector"
         is_ai   = ct == "AttitudeIndicator"
+        is_cg   = ct == "CircularGauge"
 
         # Position: hide for types that define geometry without a single centre point
-        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai)
+        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai and not is_cg)
 
         # Texture section visible for image types; atlas detail only for ImagePanel
         self._tex_sec.setVisible(is_img)
@@ -2260,6 +2378,7 @@ class PropertiesForm(QWidget):
         self._vec_sec.setVisible(is_vec)
         self._vt_sec.setVisible(is_vt)
         self._ai_sec.setVisible(is_ai)
+        self._cg_sec.setVisible(is_cg)
 
         # Rotation and Translation: ImagePanel only
         self._rot_sec.setVisible(is_ip)

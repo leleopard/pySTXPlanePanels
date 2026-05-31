@@ -24,6 +24,7 @@ from gauge_core import scrolling_tape as _scrolling_tape  # noqa: F401
 from gauge_core import vector_primitives as _vector_primitives  # noqa: F401
 from gauge_core import vector_tape as _vector_tape  # noqa: F401
 from gauge_core import attitude_indicator as _attitude_indicator  # noqa: F401
+from gauge_core import circular_gauge as _circular_gauge  # noqa: F401
 from gauge_core.registry import get_component_factory, get_convert
 
 

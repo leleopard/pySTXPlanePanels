@@ -163,8 +163,9 @@ def _collect_from_instrument(
                               f"{label_base}  (band range[{i}])",
                               convert_fn=endpoint.get("convert_function"))
 
-        # Vector component: direction and length can be dataref-driven
-        for field in ("direction", "length"):
+        # Dict-valued fields that may contain a dataref+table
+        # (Vector direction/length, CircularGauge needle_angle, …)
+        for field in ("direction", "length", "needle_angle"):
             val = comp.get(field)
             if isinstance(val, dict) and "dataref" in val:
                 _register(val["dataref"], val.get("table", []),
