@@ -722,7 +722,10 @@ class InstrumentView(QWidget):
             comp["hidden"] = True
         item = self._list.item(row)
         if item:
-            item.setForeground(QColor(255, 255, 255) if visible else QColor(110, 110, 110))
+            if visible:
+                item.setForeground(QBrush())   # empty brush = reset to theme default
+            else:
+                item.setForeground(QColor(110, 110, 110))
         self._canvas.set_hidden(self._hidden.copy())
         self.changed.emit()
 
