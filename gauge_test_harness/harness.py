@@ -171,6 +171,15 @@ def _collect_from_instrument(
                           f"{label_base}  ({field})",
                           convert_fn=val.get("convert_function"))
 
+        # Flat *_dataref keys: AttitudeIndicator uses pitch_dataref / roll_dataref
+        # (plain strings at the component level, no nested table).
+        for key, val in comp.items():
+            if key.endswith("_dataref") and isinstance(val, str):
+                convert_key = key.replace("_dataref", "_convert_function")
+                _register(val, [],
+                          f"{label_base}  ({key})",
+                          convert_fn=comp.get(convert_key))
+
 
 def _find_panels_project_root(yaml_path: Path) -> Path:
     """Walk up to the 'panels' ancestor and return its parent (project root)."""
