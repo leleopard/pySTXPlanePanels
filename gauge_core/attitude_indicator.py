@@ -190,12 +190,24 @@ class AttitudeIndicator(_VecBase):
         pitch_y = -self._pitch * self._ppu
         arc_r = self._arc_r if self._arc_r > 0.0 else 0.45 * min(vw, vh)
 
+        # Clip to the viewport rectangle using the GL scissor test.
+        # Scale from logical coords to FBO pixels: in SSAA mode the active FBO
+        # is N× larger than the window, so the ratio handles both cases.
+        win = arcade.get_window()
+        ctx = win.ctx
+        fw, fh = ctx.fbo.size
+        sx = fw / win.width
+        sy = fh / win.height
+        ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
+
         self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
         self._draw_bank_arc(cx, cy, arc_r)
         self._draw_roll_pointer(cx, cy, arc_r)
         self._draw_reference(cx, cy)
+
+        ctx.scissor = None  # restore — no scissor for other components
 
     # ── sub-draw helpers ─────────────────────────────────────────────────────
 
