@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 from PySide6.QtWidgets import (
-    QWidget, QSplitter, QListWidget,
+    QWidget, QSplitter, QListWidget, QListWidgetItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
@@ -68,14 +68,12 @@ class _EyeDelegate(QStyledItemDelegate):
     EYE_W = 22
 
     def paint(self, painter, option, index):
-        vis = index.data(Qt.UserRole)
-        is_visible = vis if vis is not None else True
         text_opt = QStyleOptionViewItem(option)
         text_opt.rect = option.rect.adjusted(0, 0, -(self.EYE_W + 6), 0)
-        if not is_visible:
-            text_opt.palette.setColor(text_opt.palette.Text, QColor(110, 110, 110))
         super().paint(painter, text_opt, index)
-        _draw_eye(painter, self._eye_rect(option.rect), is_visible)
+        vis = index.data(Qt.UserRole)
+        _draw_eye(painter, self._eye_rect(option.rect),
+                  vis if vis is not None else True)
 
     def _eye_rect(self, item_rect: QRect) -> QRect:
         sz = self.EYE_W
@@ -448,8 +446,11 @@ class InstrumentView(QWidget):
             is_visible = not comp.get("hidden", False)
             if not is_visible:
                 self._hidden.add(comp.get("name", ""))
-            self._list.addItem(comp.get("name", "(unnamed)"))
-            self._list.item(self._list.count() - 1).setData(Qt.UserRole, is_visible)
+            item = QListWidgetItem(comp.get("name", "(unnamed)"))
+            item.setData(Qt.UserRole, is_visible)
+            if not is_visible:
+                item.setForeground(QColor(110, 110, 110))
+            self._list.addItem(item)
 
         w, h = instrument_data.get("size", [310, 310])
         self._gauge_w.blockSignals(True); self._gauge_h.blockSignals(True)
@@ -719,6 +720,9 @@ class InstrumentView(QWidget):
         else:
             self._hidden.add(name)
             comp["hidden"] = True
+        item = self._list.item(row)
+        if item:
+            item.setForeground(QColor(255, 255, 255) if visible else QColor(110, 110, 110))
         self._canvas.set_hidden(self._hidden.copy())
         self.changed.emit()
 
