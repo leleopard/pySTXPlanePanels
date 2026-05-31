@@ -8,10 +8,11 @@ import yaml
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QListWidget,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
-    QStyledItemDelegate, QStyleOptionViewItem, QSpinBox, QLineEdit, QFrame,
+    QStyledItemDelegate, QStyleOptionViewItem, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings, QTimer
+from gauge_designer.ui_utils import QSpinBox
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas

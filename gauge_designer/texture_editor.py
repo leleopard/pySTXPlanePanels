@@ -10,9 +10,10 @@ Displays the full texture with:
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QSpinBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QScrollArea, QWidget, QDialogButtonBox,
 )
+from gauge_designer.ui_utils import QSpinBox
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QPixmap, QColor, QPen
 

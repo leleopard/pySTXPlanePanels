@@ -3,7 +3,22 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtWidgets import QLabel, QSizePolicy
+from PySide6.QtWidgets import (
+    QLabel, QSizePolicy,
+    QSpinBox as _QSpinBox, QDoubleSpinBox as _QDoubleSpinBox,
+)
+
+
+class QSpinBox(_QSpinBox):
+    """QSpinBox that ignores mouse-wheel events to prevent accidental edits."""
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+class QDoubleSpinBox(_QDoubleSpinBox):
+    """QDoubleSpinBox that ignores mouse-wheel events to prevent accidental edits."""
+    def wheelEvent(self, event):
+        event.ignore()
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtCore import QByteArray, Qt, QSettings

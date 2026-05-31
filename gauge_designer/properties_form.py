@@ -18,10 +18,10 @@ from pathlib import Path
 import gauge_core.convert as _convert_reg  # noqa: F401 — registers convert functions
 import gauge_core.component as _component_reg  # noqa: F401
 from gauge_core.registry import known_converts
-from gauge_designer.ui_utils import flip_y, is_y_down
+from gauge_designer.ui_utils import flip_y, is_y_down, QSpinBox, QDoubleSpinBox
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
+    QLabel, QLineEdit, QComboBox,
     QPushButton, QCheckBox, QDialog, QColorDialog, QFontDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QFileDialog, QListWidget, QListWidgetItem, QStackedWidget, QFrame,

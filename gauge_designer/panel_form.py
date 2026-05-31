@@ -8,10 +8,10 @@ Three form types:
 
 from pathlib import Path
 
-from gauge_designer.ui_utils import is_y_down
+from gauge_designer.ui_utils import is_y_down, QSpinBox, QDoubleSpinBox
 from PySide6.QtWidgets import (
     QWidget, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QSpinBox, QDoubleSpinBox, QFileDialog,
+    QLabel, QLineEdit, QPushButton, QFileDialog,
 )
 from PySide6.QtCore import Signal
 

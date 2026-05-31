@@ -7,8 +7,9 @@ import yaml
 from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QSpinBox, QVBoxLayout,
+    QPushButton, QVBoxLayout,
 )
+from gauge_designer.ui_utils import QSpinBox
 
 
 def _load_config(config_path: Path) -> dict:
