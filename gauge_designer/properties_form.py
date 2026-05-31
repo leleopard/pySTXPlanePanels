@@ -172,6 +172,71 @@ class _TableEditor(QWidget):
             self.changed.emit()
 
 
+# ── Polygon points table (spinbox cells) ─────────────────────────────────────
+
+class _PointsTableEditor(QWidget):
+    """X/Y points table whose cells are QSpinBox widgets (no accidental wheel edits,
+    direct numeric input without needing to parse text)."""
+    changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._tbl = QTableWidget(0, 2)
+        self._tbl.setHorizontalHeaderLabels(["X", "Y"])
+        self._tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._tbl.setFixedHeight(130)
+
+        add = QPushButton("+"); add.setFixedWidth(26); add.clicked.connect(self._add)
+        rm  = QPushButton("−"); rm.setFixedWidth(26);  rm.clicked.connect(self._rm)
+        btns = QHBoxLayout()
+        btns.setContentsMargins(0, 0, 0, 0); btns.setSpacing(2)
+        btns.addWidget(add); btns.addWidget(rm); btns.addStretch()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(2)
+        layout.addWidget(self._tbl)
+        layout.addLayout(btns)
+
+    def _make_spin(self, value: int = 0) -> QSpinBox:
+        sb = QSpinBox()
+        sb.setRange(-9999, 9999)
+        sb.setValue(int(round(value)))
+        sb.valueChanged.connect(self.changed)
+        return sb
+
+    def load(self, data: list):
+        self._tbl.setRowCount(0)
+        for row in data:
+            if isinstance(row, (list, tuple)) and len(row) >= 2:
+                r = self._tbl.rowCount()
+                self._tbl.insertRow(r)
+                self._tbl.setCellWidget(r, 0, self._make_spin(row[0]))
+                self._tbl.setCellWidget(r, 1, self._make_spin(row[1]))
+
+    def get_data(self) -> list:
+        out = []
+        for r in range(self._tbl.rowCount()):
+            sx = self._tbl.cellWidget(r, 0)
+            sy = self._tbl.cellWidget(r, 1)
+            if sx and sy:
+                out.append([sx.value(), sy.value()])
+        return out
+
+    def _add(self):
+        r = self._tbl.rowCount()
+        self._tbl.insertRow(r)
+        self._tbl.setCellWidget(r, 0, self._make_spin(0))
+        self._tbl.setCellWidget(r, 1, self._make_spin(0))
+        self.changed.emit()
+
+    def _rm(self):
+        r = self._tbl.currentRow()
+        if r >= 0:
+            self._tbl.removeRow(r)
+            self.changed.emit()
+
+
 # ── Band endpoint editor ─────────────────────────────────────────────────────
 
 class _BandEndpointWidget(QWidget):
@@ -997,7 +1062,7 @@ class PropertiesForm(QWidget):
         self._poly_sec = _Section("Polygon")
         self._poly_sec.setVisible(False)
 
-        self._poly_pts = _TableEditor("X", "Y")
+        self._poly_pts = _PointsTableEditor()
         self._poly_pts.changed.connect(self._emit)
         self._poly_sec.row("Points", self._poly_pts)
 
