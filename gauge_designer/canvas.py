@@ -163,6 +163,7 @@ class InstrumentCanvas(QWidget):
         self._data = data
         self._yaml_dir = yaml_dir
         self._atlas_cache.clear()
+        self._hidden = set()   # reset so no stale names from previous instrument bleed through
         self._render()
 
     def set_selected(self, name: str | None):

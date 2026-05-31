@@ -68,12 +68,14 @@ class _EyeDelegate(QStyledItemDelegate):
     EYE_W = 22
 
     def paint(self, painter, option, index):
+        vis = index.data(Qt.UserRole)
+        is_visible = vis if vis is not None else True
         text_opt = QStyleOptionViewItem(option)
         text_opt.rect = option.rect.adjusted(0, 0, -(self.EYE_W + 6), 0)
+        if not is_visible:
+            text_opt.palette.setColor(text_opt.palette.Text, QColor(110, 110, 110))
         super().paint(painter, text_opt, index)
-        vis = index.data(Qt.UserRole)
-        _draw_eye(painter, self._eye_rect(option.rect),
-                  vis if vis is not None else True)
+        _draw_eye(painter, self._eye_rect(option.rect), is_visible)
 
     def _eye_rect(self, item_rect: QRect) -> QRect:
         sz = self.EYE_W
