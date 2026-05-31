@@ -3,11 +3,11 @@ size:
 - 1540
 - 920
 background_color:
-- 0
-- 0
-- 0
+- 0.349
+- 0.349
+- 0.349
 udp:
-  listen_port: 49008
+  listen_port: 49021
 instruments:
 - file: instruments/C172/c172_rpm.yaml
   position:
@@ -50,11 +50,11 @@ instruments:
     cell_height: 310
     name: VORADF Grid
     instruments:
-    - file: instruments/C172/c172_vor1.yaml
+    - file: instruments/C172/VOR_ADF/c172_vor1.yaml
       scale: 0.94
-    - file: instruments/C172/c172_vor2.yaml
+    - file: instruments/C172/VOR_ADF/c172_vor2.yaml
       scale: 0.94
-    - file: instruments/C172/c172_adf_indicator.yaml
+    - file: instruments/C172/VOR_ADF/c172_adf_indicator.yaml
       scale: 0.94
     - file: instruments/C172/c172_compass.yaml
       scale: 0.94
@@ -72,3 +72,7 @@ instruments:
     - file: instruments/C172/c172_amp_vac.yaml
     - file: instruments/C172/c172_fuel_quantity.yaml
     - file: instruments/C172/c172_fuel_flow.yaml
+- file: instruments/C172/VOR_ADF/wet_compass.yaml
+  position:
+  - 1268
+  - 33

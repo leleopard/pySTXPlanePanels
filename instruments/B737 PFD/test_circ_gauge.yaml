@@ -1,0 +1,29 @@
+name: test_circ_gauge
+size:
+- 600
+- 600
+components:
+- name: circ_gauge
+  type: CircularGauge
+  center:
+  - 300
+  - 300
+  radius: 100.0
+  start_angle: -220.0
+  end_angle: 40.0
+  arc_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  arc_width: 3.0
+  needle_length: 80.0
+  needle_width: 4.0
+  needle_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  needle_angle:
+    dataref: sim/cockpit2/gauges/indicators/AoA_pilot
+    table: []

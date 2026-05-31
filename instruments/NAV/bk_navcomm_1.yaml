@@ -1,72 +1,80 @@
-# Bendix-King KX165A NAV/COMM Radio — NAVCOMM #1 (com1 / nav1).
-#
-# Layout: 574-px-wide background image with four DS-Digital orange
-# frequency readouts (COM active/standby on the left, NAV
-# active/standby on the right), matching pyXPPanels' BK_NAVCOMM_KX165A.
-# The whole instrument hides when com1 is unpowered.
-#
-# Sister file `bk_navcomm_2.yaml` is the same widget against
-# com2/nav2 datarefs.
-
 name: BK NAVCOMM 1
-size: [574, 70]
-
+size:
+- 574
+- 70
 visibility:
   dataref: sim/cockpit2/radios/actuators/com1_power[0]
   predicate: true_if_over_zero
-
 components:
-  - name: background
-    type: ImagePanel
-    texture: assets/2048_Radio_Stack_text.png
-    cliprect: [574, 70]
-    origin: [0, 0]
-    position: [287, 35]
-
-  - name: com_active_freq
-    type: Text
-    text: ""
-    font_file: assets/fonts/DS-Digital-ItalicST.ttf
-    font_name: DS-Digital
-    font_size: 32
-    color: [211, 62, 33]
-    position: [9, 22]
-    text_format: "{:07.3f}"
-    convert_function: divideby100
-    dataref: sim/cockpit/radios/com1_freq_hz[0]
-
-  - name: com_standby_freq
-    type: Text
-    text: ""
-    font_file: assets/fonts/DS-Digital-ItalicST.ttf
-    font_name: DS-Digital
-    font_size: 32
-    color: [211, 62, 33]
-    position: [145, 22]
-    text_format: "{:07.3f}"
-    convert_function: divideby100
-    dataref: sim/cockpit/radios/com1_stdby_freq_hz[0]
-
-  - name: nav_active_freq
-    type: Text
-    text: ""
-    font_file: assets/fonts/DS-Digital-ItalicST.ttf
-    font_name: DS-Digital
-    font_size: 32
-    color: [211, 62, 33]
-    position: [288, 22]
-    text_format: "{:06.2f}"
-    convert_function: divideby100
-    dataref: sim/cockpit/radios/nav1_freq_hz[0]
-
-  - name: nav_standby_freq
-    type: Text
-    text: ""
-    font_file: assets/fonts/DS-Digital-ItalicST.ttf
-    font_name: DS-Digital
-    font_size: 32
-    color: [211, 62, 33]
-    position: [408, 22]
-    text_format: "{:06.2f}"
-    convert_function: divideby100
-    dataref: sim/cockpit/radios/nav1_stdby_freq_hz[0]
+- name: background
+  type: ImagePanel
+  texture: assets/2048_Radio_Stack_text.png
+  cliprect:
+  - 574
+  - 70
+  origin:
+  - 0
+  - 0
+  position:
+  - 287
+  - 35
+- name: com_active_freq
+  type: Text
+  position:
+  - 9
+  - 22
+  text: ''
+  font_file: assets/fonts/DS-Digital-ItalicST.ttf
+  font_name: DS-Digital
+  font_size: 32
+  text_format: '{:07.3f}'
+  convert_function: divideby100
+  dataref: sim/cockpit/radios/com1_freq_hz[0]
+- name: com_standby_freq
+  type: Text
+  text: ''
+  font_file: assets/fonts/DS-Digital-ItalicST.ttf
+  font_name: DS-Digital
+  font_size: 32
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 145
+  - 22
+  text_format: '{:07.3f}'
+  convert_function: divideby100
+  dataref: sim/cockpit/radios/com1_stdby_freq_hz[0]
+- name: nav_active_freq
+  type: Text
+  text: ''
+  font_file: assets/fonts/DS-Digital-ItalicST.ttf
+  font_name: DS-Digital
+  font_size: 32
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 288
+  - 22
+  text_format: '{:06.2f}'
+  convert_function: divideby100
+  dataref: sim/cockpit/radios/nav1_freq_hz[0]
+- name: nav_standby_freq
+  type: Text
+  text: ''
+  font_file: assets/fonts/DS-Digital-ItalicST.ttf
+  font_name: DS-Digital
+  font_size: 32
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 408
+  - 22
+  text_format: '{:06.2f}'
+  convert_function: divideby100
+  dataref: sim/cockpit/radios/nav1_stdby_freq_hz[0]

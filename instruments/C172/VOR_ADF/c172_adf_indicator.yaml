@@ -1,0 +1,67 @@
+name: C172 ADF Indicator
+size:
+- 310
+- 310
+components:
+- name: adf_needle
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 300
+  - 0
+  cliprect:
+  - 300
+  - 300
+  rotation:
+    dataref: sim/cockpit/radios/adf1_dir_degt
+    table:
+    - - -360
+      - -360.0
+    - - 360
+      - 360.0
+- name: compass_rose
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 300
+  - 1200
+  cliprect:
+  - 300
+  - 300
+  rotation:
+    dataref: sim/cockpit/radios/adf1_cardinal_dir
+    table:
+    - - -360
+      - 360.0
+    - - 360
+      - -360.0
+- name: plane
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 600
+  - 0
+  cliprect:
+  - 300
+  - 300
+  position:
+  - 155
+  - 155
+- name: bezel
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1200
+  - 1500
+  cliprect:
+  - 310
+  - 310
+  position:
+  - 155
+  - 155

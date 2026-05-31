@@ -56,9 +56,11 @@ components:
   - interval: 10
     length: 15
     width: 2
+    offset: 9
   - interval: 20
     length: 15
     width: 2
+    offset: 9
   labels:
     color:
     - 255
@@ -66,14 +68,63 @@ components:
     - 255
     format: '{:.0f}'
     interval: 20.0
-    font_size: 16.0
-    offset: 23.0
+    font_size: 18.0
+    offset: 32.0
+    font: ST_Boeing_PFD
     side: left
+  bands:
+  - range:
+    - 0.0
+    - 60.0
+    color:
+    - 233
+    - 18
+    - 16
+    - 255
+    width: 8.0
+    side: right
+    dash: 8.0
+  - range:
+    - 300.0
+    - 999.0
+    color:
+    - 233
+    - 18
+    - 16
+    - 255
+    width: 8.0
+    side: right
+    dash: 8.0
   viewport:
-  - 50
+  - 9
   - 114
-  - 32
+  - 83
   - 382
+- name: speed_acceleration
+  type: Vector
+  position:
+  - 71
+  - 307
+  direction: 90.0
+  length:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_acceleration_kts_sec_pilot
+    table:
+    - - -6
+      - -180
+    - - 0
+      - 0
+    - - 6
+      - 180
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  width: 2.0
+  cap: triangle
+  cap_width: 14.0
+  cap_height: 10.0
+  cap_filled: false
 - name: alt_tape_window
   type: Polygon
   points:
@@ -108,13 +159,13 @@ components:
   - 45
   - 307
   scroll_axis: y
-  pixels_per_unit: 20.0
+  pixels_per_unit: 24.0
   wrap: 10.0
   tick_side: left
   tick_color:
-  - 255
-  - 255
-  - 255
+  - 245
+  - 243
+  - 224
   - 255
   scroll:
     dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
@@ -126,9 +177,9 @@ components:
     convert_function: return_units_decimal
   labels:
     interval: 1.0
-    font_size: 19.0
+    font_size: 22.0
     offset: 0.0
-    font: Arial
+    font: ST_Boeing_PFD
     side: right
   viewport:
   - 44
@@ -141,7 +192,7 @@ components:
   - 28
   - 307
   scroll_axis: y
-  pixels_per_unit: 20.0
+  pixels_per_unit: 24.0
   tick_side: left
   tick_color:
   - 255
@@ -160,22 +211,22 @@ components:
     convert_function: return_tens_digit_int
   labels:
     interval: 1.0
-    font_size: 19.0
+    font_size: 22.0
     offset: 0.0
-    font: Arial
+    font: ST_Boeing_PFD
     side: right
   viewport:
   - 27
-  - 296
+  - 295
   - 17
-  - 22
+  - 23
 - name: hundreds_speed_tape
   type: VectorTape
   position:
   - 12
   - 307
   scroll_axis: y
-  pixels_per_unit: 20.0
+  pixels_per_unit: 24.0
   tick_side: left
   tick_color:
   - 255
@@ -194,12 +245,53 @@ components:
     convert_function: return_hundreds_digit_int
   labels:
     interval: 1.0
-    font_size: 19.0
+    font_size: 22.0
     offset: 0.0
-    font: Arial
+    font: ST_Boeing_PFD
     side: right
   viewport:
   - 10
-  - 296
+  - 295
   - 17
-  - 22
+  - 23
+- name: GS_static_text
+  type: Text
+  position:
+  - 9
+  - 53
+  text: GS
+  font_name: ST_Boeing_PFD
+  font_size: 18.0
+  color:
+  - 255
+  - 255
+  - 255
+  - 255
+- name: GS_text
+  type: Text
+  position:
+  - 39
+  - 53
+  dataref: sim/cockpit2/gauges/indicators/ground_speed_kt
+  text_format: '{:3.0f}'
+  font_name: ST_Boeing_PFD
+  font_size: 21.0
+  color:
+  - 255
+  - 255
+  - 255
+  - 255
+- name: AP_Airspeed
+  type: Text
+  position:
+  - 35
+  - 515
+  dataref: sim/cockpit2/autopilot/airspeed_dial_kts
+  text_format: '{:3.0f}'
+  font_name: ST_Boeing_PFD
+  font_size: 21.0
+  color:
+  - 242
+  - 161
+  - 239
+  - 255

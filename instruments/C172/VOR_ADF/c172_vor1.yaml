@@ -1,0 +1,159 @@
+name: C172 VOR 1
+size:
+- 310
+- 310
+components:
+- name: nav_flag
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 44
+  - 1939
+  cliprect:
+  - 40
+  - 74
+  position:
+  - 177
+  - 206
+  visibility:
+    dataref: sim/cockpit2/radios/nav1_flag_from_to_pilot
+    predicate: true_if_zero
+- name: gs_flag
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 44
+  - 2014
+  cliprect:
+  - 45
+  - 27
+  position:
+  - 110
+  - 178
+  visibility:
+    dataref: sim/cockpit2/radios/nav1_flag_from_to_pilot
+    predicate: true_if_zero
+- name: background
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 0
+  - 1200
+  cliprect:
+  - 300
+  - 300
+  position:
+  - 155
+  - 155
+- name: to_indicator
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 8
+  - 1979
+  cliprect:
+  - 37
+  - 31
+  position:
+  - 201
+  - 182
+  visibility:
+    dataref: sim/cockpit/radios/nav1_fromto
+    predicate: true_if_equals_1
+- name: from_indicator
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 8
+  - 2010
+  cliprect:
+  - 37
+  - 31
+  position:
+  - 201
+  - 128
+  visibility:
+    dataref: sim/cockpit/radios/nav1_fromto
+    predicate: true_if_equals_2
+- name: cdi_needle
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 0
+  - 1889
+  cliprect:
+  - 9
+  - 150
+  position:
+  - 155
+  - 157
+  translation:
+    dataref: sim/cockpit/radios/nav1_hdef_dot
+    table:
+    - - -2.5
+      - -65.0
+    - - 2.5
+      - 65.0
+    translation_angle: 90
+- name: gs_needle
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 0
+  - 2040
+  cliprect:
+  - 148
+  - 8
+  position:
+  - 155
+  - 155
+  translation:
+    dataref: sim/cockpit2/radios/nav1_vdef_dots
+    table:
+    - - -2.5
+      - 65.0
+    - - 2.5
+      - -65.0
+- name: compass_rose
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 300
+  - 1200
+  cliprect:
+  - 300
+  - 300
+  rotation:
+    dataref: sim/cockpit/radios/nav1_obs_degm
+    table:
+    - - -360
+      - 360.0
+    - - 360
+      - -360.0
+- name: dir_arrows
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 600
+  - 1200
+  cliprect:
+  - 300
+  - 300
+  position:
+  - 155
+  - 155
+- name: bezel
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1200
+  - 1500
+  cliprect:
+  - 310
+  - 310
+  position:
+  - 155
+  - 155

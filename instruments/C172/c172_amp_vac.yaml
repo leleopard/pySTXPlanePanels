@@ -17,6 +17,9 @@ components:
   - 100
 - name: amp_needle
   type: ImagePanel
+  position:
+  - 160
+  - 100
   texture: assets/c172_text_standard6.png
   origin:
   - 1800
@@ -24,9 +27,6 @@ components:
   cliprect:
   - 110
   - 18
-  position:
-  - 160
-  - 100
   rotation:
     dataref: sim/flightmodel2/electrical/battery_current[0]
     table:

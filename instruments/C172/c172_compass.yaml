@@ -1,50 +1,37 @@
-# C172 Magnetic Compass (simplified rotating-disc implementation).
-# The original wet compass uses a scrolling texture tape (UV translation)
-# which is not yet supported by the engine. This version uses the VOR
-# compass-rose sprite as a rotating disc driven by the magnetic heading,
-# giving a functional heading display with the same compass rose artwork.
-#
-# Draw order: background → compass card (rotating) → aircraft symbol → bezel
-#
-# Atlas origins (PIL):
-#   background   : [0,   1200]  cliprect [300, 300]  (VOR face)
-#   compass_rose : [300, 1200]  cliprect [300, 300]  (shared VOR/ADF compass)
-#   plane        : [600, 0]     cliprect [300, 300]  (ADF aircraft silhouette)
-#   bezel        : [1200,1500]  cliprect [310, 310]
-
 name: C172 Compass
-size: [310, 310]
-
+size:
+- 310
+- 310
 components:
-  - name: background
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [0, 1200]
-    cliprect: [300, 300]
-    position: [155, 155]
-
-  - name: compass_card
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [300, 1200]
-    cliprect: [300, 300]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag[0]
-      table:
-        - [-360, 360.0]
-        - [ 360, -360.0]
-
-  - name: plane
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [600, 0]
-    cliprect: [300, 300]
-    position: [155, 155]
-
-  - name: bezel
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [1200, 1500]
-    cliprect: [310, 310]
-    position: [155, 155]
+- name: background
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 300
+  - 300
+  cliprect:
+  - 300
+  - 300
+- name: compass_heading
+  type: ImagePanel
+  position:
+  - 155
+  - 155
+  texture: assets/gen_compass.png
+  origin:
+  - 2
+  - 0
+  cliprect:
+  - 120
+  - 66
+  translation:
+    dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag
+    table: []
+  viewport:
+  - 0
+  - 0
+  - 0
+  - 0

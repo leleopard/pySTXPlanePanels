@@ -17,6 +17,9 @@ components:
   - 100
 - name: right_needle
   type: ImagePanel
+  position:
+  - 157
+  - 104
   texture: assets/c172_text_standard6.png
   origin:
   - 1800
@@ -24,12 +27,9 @@ components:
   cliprect:
   - 110
   - 18
-  position:
-  - 157
-  - 104
   rotation:
     dataref: sim/cockpit2/fuel/fuel_quantity[1]
-    convert_function: convert_lbs_to_gallons
+    convert_function: convert_kgs_to_gallons_avgas
     table:
     - - -1.74
       - -66.0
@@ -39,6 +39,9 @@ components:
       - 65.0
 - name: left_needle
   type: ImagePanel
+  position:
+  - 45
+  - 105
   texture: assets/c172_text_standard6.png
   origin:
   - 1800
@@ -46,12 +49,9 @@ components:
   cliprect:
   - 110
   - 18
-  position:
-  - 45
-  - 105
   rotation:
     dataref: sim/cockpit2/fuel/fuel_quantity[0]
-    convert_function: convert_lbs_to_gallons
+    convert_function: convert_kgs_to_gallons_avgas
     table:
     - - -1.74
       - 62.0

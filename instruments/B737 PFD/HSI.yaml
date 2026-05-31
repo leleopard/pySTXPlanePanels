@@ -1,0 +1,111 @@
+name: artificial_horizon
+size:
+- 600
+- 600
+components:
+- name: bg
+  type: ImagePanel
+  position:
+  - 300
+  - 300
+  texture: Primary_Flight_Display_of_a_Boeing_737-800.png
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 854
+  - 763
+  resize_to_container: true
+  hidden: true
+- name: pitch_ladder
+  type: AttitudeIndicator
+  viewport:
+  - 119
+  - 173
+  - 294
+  - 276
+  pitch_dataref: sim/cockpit2/gauges/indicators/pitch_electric_deg_pilot
+  roll_dataref: sim/cockpit2/gauges/indicators/roll_electric_deg_pilot
+  pixels_per_degree: 6.0
+  sky_color:
+  - 10
+  - 136
+  - 194
+  - 255
+  ground_color:
+  - 147
+  - 69
+  - 21
+  - 255
+  horizon_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  horizon_width: 2.0
+  ladder_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  ladder_font_name: ST_Boeing_PFD
+  bank_arc_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  bank_arc_width: 0.5
+  roll_pointer_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  roll_pointer_size: 19.0
+  ladder_step: 2.5
+  ladder_hw_2: 0.2
+  ladder_hw_1: 0.1
+- name: plane_bug_centre
+  type: FilledRect
+  position:
+  - 265
+  - 311
+  size:
+  - 12
+  - 12
+  color:
+  - 0
+  - 0
+  - 0
+  - 0
+  outline_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  outline_width: 2.0
+- name: plane_bug_left
+  type: Polygon
+  points:
+  - - 209
+    - 317
+  - - 143
+    - 317
+  - - 143
+    - 305
+  - - 197
+    - 305
+  - - 197
+    - 288
+  - - 209
+    - 288
+  color:
+  - 0
+  - 0
+  - 0
+  - 255
+  outline_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  outline_width: 2.0

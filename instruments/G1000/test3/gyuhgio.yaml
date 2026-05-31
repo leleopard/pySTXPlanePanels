@@ -1,0 +1,17 @@
+name: gyuhgio
+size:
+- 310
+- 310
+components:
+- name: jkk;
+  type: ImagePanel
+  texture: ''
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 100
+  - 100
+  position:
+  - 155
+  - 155

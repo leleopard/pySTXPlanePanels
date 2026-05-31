@@ -1,30 +1,6 @@
-# pySTXPlanePanels — X-Plane UDP configuration
-#
-# Shared settings for all panels. This file is loaded automatically from
-# the current working directory. CLI flags override these values.
-#
-# Typical setup:
-#   - Same PC as X-Plane: leave all defaults.
-#   - Second PC on LAN: set xplane_host to the X-Plane machine's IP,
-#     and xplane_name to YOUR machine's hostname.
-#
-# Running multiple panels simultaneously:
-#   Each panel process must listen on a different port. Set listen_port
-#   inside each panel YAML under a `udp:` key (e.g. listen_port: 49009).
-#   This config's listen_port is used as the fallback for panels that
-#   don't declare their own. X-Plane sends RREF data back to whichever
-#   host:port subscribed, so multiple panels each get their own stream.
-
 udp:
-  # Fallback listen port (overridden per-panel by udp.listen_port in the panel YAML).
   listen_host: 127.0.0.1
   listen_port: 49008
-
-  # IP/port of the X-Plane instance to connect to.
   xplane_host: 192.168.1.77
   xplane_port: 49000
-
-  # The computer name sent to X-Plane when subscribing to datarefs.
-  # Defaults to the local machine hostname if not set; only needed when
-  # X-Plane and this app are on different machines.
   xplane_name: DESKTOP-733FBNB

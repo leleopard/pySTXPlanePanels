@@ -15,7 +15,7 @@ components:
   cliprect:
   - 200
   - 200
-- name: temp_needle
+- name: press_needle
   type: ImagePanel
   position:
   - 160
@@ -28,7 +28,7 @@ components:
   - 110
   - 18
   rotation:
-    dataref: sim/cockpit2/engine/indicators/oil_temp_deg_C[0]
+    dataref: sim/cockpit2/engine/indicators/oil_pressure_psi[0]
     table:
     - - -7.821
       - -60.5
@@ -36,8 +36,11 @@ components:
       - 36.0
     - - 121.364
       - 59.5
-- name: pressure_needle
+- name: temp_needle
   type: ImagePanel
+  position:
+  - 45
+  - 105
   texture: assets/c172_text_standard6.png
   origin:
   - 1800
@@ -45,11 +48,8 @@ components:
   cliprect:
   - 110
   - 18
-  position:
-  - 45
-  - 105
   rotation:
-    dataref: sim/cockpit2/engine/indicators/oil_pressure_psi[0]
+    dataref: sim/cockpit2/engine/indicators/oil_temperature_deg_C[0]
     table:
     - - 58.33
       - 62.0

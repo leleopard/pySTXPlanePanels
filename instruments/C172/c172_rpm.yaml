@@ -1,44 +1,65 @@
-# C172 RPM / Tachometer.
-# Single-needle 310×310 gauge (280×280 content + 310×310 bezel).
-# Atlas origins (PIL):
-#   background : x=1200, opengl y=1148 → PIL y=620
-#   needle     : x=1500, opengl y=1148 → PIL y=620
-#   bezel      : shared standard bezel at [1200, 1500]
-
 name: C172 RPM
-size: [310, 310]
-
+size:
+- 280
+- 280
 components:
-  - name: background
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [1200, 620]
-    cliprect: [280, 280]
-    position: [155, 155]
-
-  - name: needle
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [1500, 620]
-    cliprect: [280, 280]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/engine/indicators/engine_speed_rpm[0]
-      table:
-        - [0,    -124.5]
-        - [500,   -94.0]
-        - [1000,  -64.5]
-        - [1800,    0.0]
-        - [2000,   15.5]
-        - [2200,   32.0]
-        - [2500,   55.0]
-        - [2600,   62.0]
-        - [2700,   70.5]
-        - [3500,  125.5]
-
-  - name: bezel
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    origin: [1200, 1500]
-    cliprect: [310, 310]
-    position: [155, 155]
+- name: background
+  type: ImagePanel
+  position:
+  - 140
+  - 140
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1200
+  - 620
+  cliprect:
+  - 280
+  - 280
+- name: needle
+  type: ImagePanel
+  position:
+  - 140
+  - 140
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1500
+  - 620
+  cliprect:
+  - 280
+  - 280
+  rotation:
+    dataref: sim/cockpit2/engine/indicators/engine_speed_rpm[0]
+    table:
+    - - 0
+      - -124.5
+    - - 500
+      - -94.0
+    - - 1000
+      - -64.5
+    - - 1800
+      - 0.0
+    - - 2000
+      - 15.5
+    - - 2200
+      - 32.0
+    - - 2500
+      - 55.0
+    - - 2600
+      - 62.0
+    - - 2700
+      - 70.5
+    - - 3500
+      - 125.5
+- name: bezel
+  type: ImagePanel
+  position:
+  - 140
+  - 140
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 1200
+  - 1500
+  cliprect:
+  - 310
+  - 310
+  resize_to_container: true
