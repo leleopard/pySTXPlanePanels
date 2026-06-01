@@ -147,6 +147,7 @@ The original implementation mixed Arduino-input handling and a few Python-side s
 | DESIGN-10 | As a user, I can add a Grid Layout to the panel, configure its columns/rows/cell size, and drag instruments into/within the grid; tree order determines display order (first = top-left). | ✅ |
 | DESIGN-11 | As a user, the Panel layout canvas shows a visual change when I reorder instruments inside a grid — each instrument keeps a consistent color tied to its file path, so swapping two cells produces a clearly different view. | ✅ |
 | DESIGN-12 | As a user, no spinbox in the designer responds to the mouse wheel, so scrolling a form never accidentally changes a numeric value. All `QSpinBox` and `QDoubleSpinBox` instances are no-wheel subclasses imported from `gauge_designer.ui_utils`. | ✅ |
+| DESIGN-13 | As a user, I can undo and redo edits in the instrument editor (Ctrl+Z / Ctrl+Y), so I can recover from accidental changes without reloading the file. | 🔲 |
 
 ---
 
