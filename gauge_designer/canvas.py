@@ -608,7 +608,7 @@ class InstrumentCanvas(QWidget):
         if oc is not None:
             ow = max(1, int(round(float(comp.get("outline_width", 1.0)))))
             ldraw.rectangle(bbox, outline=_rgba(oc), width=ow)
-        Image.alpha_composite(composite, layer)
+        composite.alpha_composite(layer)
         self._crosshair(draw, cx_p, cy_p)
 
     def _render_polygon(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
