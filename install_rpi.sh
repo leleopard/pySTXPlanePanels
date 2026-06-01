@@ -100,36 +100,85 @@ echo "  (arcade is ~100 MB; this may take a few minutes on a Pi 4)"
     --quiet
 ok "Core dependencies installed"
 
-# ── 5a. Patch arcade GLES shaders for Raspberry Pi ───────────────────────────
-# Arcade 3.3.x detects Pi and uses OpenGL ES mode, but its GLES geometry shaders
-# omit required precision qualifiers for integer sampler types (isampler2D,
-# usampler2D), causing shader compilation failures on Pi.  Two lines fix it.
-section "Patching arcade GLES shaders for Pi"
+# ── 5a. Patch arcade for Raspberry Pi ────────────────────────────────────────
+# Two arcade 3.3.x bugs affect Pi:
+#
+# Bug 1 (context.py): OpenGLContext.__init__ calls super().__init__ BEFORE
+# setting self.gl_api, so the primitive_restart_index setter sees the class-
+# level default "opengl" instead of "opengles", and calls glPrimitiveRestartIndex
+# which the V3D driver rejects with GL_INVALID_OPERATION.
+# Fix: move self.gl_api = gl_api before super().__init__.
+#
+# Bug 2 (glsl.py): GLES geometry shaders omit precision qualifiers for integer
+# sampler types (isampler2D, usampler2D), required by GLSL ES 3.1.
+# Fix: inject those precision lines in the GLES shader preprocessor.
+section "Patching arcade for Pi (GLES context + shader fixes)"
+CTX_FILE="$("$BIN/python" -c "import arcade.gl.backends.opengl.context as m; import inspect; print(inspect.getfile(m))")"
 GLSL_FILE="$("$BIN/python" -c "import arcade.gl.backends.opengl.glsl as m; import inspect; print(inspect.getfile(m))")"
-if [ -f "$GLSL_FILE" ]; then
-    python3 - "$GLSL_FILE" <<'PYEOF'
-import sys, re
-path = sys.argv[1]
-with open(path) as f:
+"$BIN/python" - "$CTX_FILE" "$GLSL_FILE" <<'PYEOF'
+import sys
+
+# ── Patch 1: context.py ──────────────────────────────────────────────────────
+ctx_path = sys.argv[1]
+with open(ctx_path) as f:
     src = f.read()
-OLD = '            self._lines.insert(1, "precision mediump float;")\n'
-NEW = (
+OLD_CTX = (
+    '    def __init__(\n'
+    '        self, window: pyglet.window.Window, gc_mode: str = "context_gc", gl_api: str = "opengl"\n'
+    '    ):\n'
+    '        super().__init__(window, gc_mode)\n'
+    '\n'
+    '        if gl_api not in self._valid_apis:\n'
+    '            if gl_api == "webgl":\n'
+    '                raise ValueError(\n'
+    '                    "Tried to create a OpenGLContext with WebGL api selected. "\n'
+    '                    + f"Valid options for this backend are: {self._valid_apis}"\n'
+    '                )\n'
+    '            raise ValueError(f"Invalid gl_api. Options are: {self._valid_apis}")\n'
+    '        self.gl_api = gl_api\n'
+)
+NEW_CTX = (
+    '    def __init__(\n'
+    '        self, window: pyglet.window.Window, gc_mode: str = "context_gc", gl_api: str = "opengl"\n'
+    '    ):\n'
+    '        # Pi fix: gl_api must be set before super().__init__() so the\n'
+    '        # primitive_restart_index setter sees "opengles" and skips glPrimitiveRestartIndex.\n'
+    '        if gl_api not in self._valid_apis:\n'
+    '            if gl_api == "webgl":\n'
+    '                raise ValueError(\n'
+    '                    "Tried to create a OpenGLContext with WebGL api selected. "\n'
+    '                    + f"Valid options for this backend are: {self._valid_apis}"\n'
+    '                )\n'
+    '            raise ValueError(f"Invalid gl_api. Options are: {self._valid_apis}")\n'
+    '        self.gl_api = gl_api\n'
+    '        super().__init__(window, gc_mode)\n'
+)
+if OLD_CTX in src and NEW_CTX not in src:
+    with open(ctx_path, 'w') as f:
+        f.write(src.replace(OLD_CTX, NEW_CTX))
+    print("  Patched context.py")
+else:
+    print("  context.py: already patched or pattern not found — skipping.")
+
+# ── Patch 2: glsl.py ─────────────────────────────────────────────────────────
+glsl_path = sys.argv[2]
+with open(glsl_path) as f:
+    src = f.read()
+OLD_GLSL = '            self._lines.insert(1, "precision mediump float;")\n'
+NEW_GLSL = (
     '            self._lines.insert(1, "precision mediump float;")\n'
     '            # Pi fix: GLSL ES requires explicit precision for integer samplers.\n'
     '            self._lines.insert(2, "precision highp isampler2D;")\n'
     '            self._lines.insert(3, "precision highp usampler2D;")\n'
 )
-if OLD in src and NEW not in src:
-    with open(path, 'w') as f:
-        f.write(src.replace(OLD, NEW))
-    print("  Patched:", path)
+if OLD_GLSL in src and NEW_GLSL not in src:
+    with open(glsl_path, 'w') as f:
+        f.write(src.replace(OLD_GLSL, NEW_GLSL))
+    print("  Patched glsl.py")
 else:
-    print("  Already patched or pattern not found — skipping.")
+    print("  glsl.py: already patched or pattern not found — skipping.")
 PYEOF
-    ok "arcade GLES shader patch applied"
-else
-    warn "Could not locate arcade glsl.py — skipping patch."
-fi
+ok "arcade Pi patches applied"
 
 # ── 6. Install this package ───────────────────────────────────────────────────
 section "gauge_core"

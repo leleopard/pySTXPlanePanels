@@ -438,6 +438,8 @@ class MainWindow(QMainWindow):
     def _refresh_recent_menu(self):
         self._recent_menu.clear()
         recent = self._settings.value("recentFiles", []) or []
+        if isinstance(recent, str):
+            recent = [recent]
         if not recent:
             self._recent_menu.setEnabled(False)
             return
@@ -449,6 +451,8 @@ class MainWindow(QMainWindow):
 
     def _push_recent(self, path: str):
         recent = self._settings.value("recentFiles", []) or []
+        if isinstance(recent, str):
+            recent = [recent]
         if path in recent:
             recent.remove(path)
         recent.insert(0, path)
