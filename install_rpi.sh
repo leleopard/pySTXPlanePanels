@@ -100,6 +100,37 @@ echo "  (arcade is ~100 MB; this may take a few minutes on a Pi 4)"
     --quiet
 ok "Core dependencies installed"
 
+# ── 5a. Patch arcade GLES shaders for Raspberry Pi ───────────────────────────
+# Arcade 3.3.x detects Pi and uses OpenGL ES mode, but its GLES geometry shaders
+# omit required precision qualifiers for integer sampler types (isampler2D,
+# usampler2D), causing shader compilation failures on Pi.  Two lines fix it.
+section "Patching arcade GLES shaders for Pi"
+GLSL_FILE="$("$BIN/python" -c "import arcade.gl.backends.opengl.glsl as m; import inspect; print(inspect.getfile(m))")"
+if [ -f "$GLSL_FILE" ]; then
+    python3 - "$GLSL_FILE" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+with open(path) as f:
+    src = f.read()
+OLD = '            self._lines.insert(1, "precision mediump float;")\n'
+NEW = (
+    '            self._lines.insert(1, "precision mediump float;")\n'
+    '            # Pi fix: GLSL ES requires explicit precision for integer samplers.\n'
+    '            self._lines.insert(2, "precision highp isampler2D;")\n'
+    '            self._lines.insert(3, "precision highp usampler2D;")\n'
+)
+if OLD in src and NEW not in src:
+    with open(path, 'w') as f:
+        f.write(src.replace(OLD, NEW))
+    print("  Patched:", path)
+else:
+    print("  Already patched or pattern not found — skipping.")
+PYEOF
+    ok "arcade GLES shader patch applied"
+else
+    warn "Could not locate arcade glsl.py — skipping patch."
+fi
+
 # ── 6. Install this package ───────────────────────────────────────────────────
 section "gauge_core"
 echo "  Installing pySTXPlanePanels in editable mode ..."
