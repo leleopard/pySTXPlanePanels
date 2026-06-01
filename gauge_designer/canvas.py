@@ -481,7 +481,7 @@ class InstrumentCanvas(QWidget):
                 elif ctype == "Arc":
                     self._render_arc(comp, draw, h)
                 elif ctype == "FilledRect":
-                    self._render_filledrect(comp, draw, h)
+                    self._render_filledrect(comp, composite, draw, h)
                 elif ctype == "Polygon":
                     self._render_polygon(comp, draw, h)
                 elif ctype == "Vector":
@@ -592,16 +592,23 @@ class InstrumentCanvas(QWidget):
         draw.line([(cx - 10, cy), (cx + 10, cy)], fill=c, width=1)
         draw.line([(cx, cy - 10), (cx, cy + 10)], fill=c, width=1)
 
-    def _render_filledrect(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+    def _render_filledrect(self, comp: dict, composite: Image.Image,
+                           draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
         cx_p, cy_p = int(pos[0]), canvas_h - int(pos[1])
         hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
         bbox = [cx_p - hw, cy_p - hh, cx_p + hw, cy_p + hh]
-        draw.rectangle(bbox, fill=_rgba(comp.get("color")))
+        # Draw on a transparent layer and alpha_composite onto the background so
+        # that fill colors with alpha < 255 (including alpha=0) composite correctly
+        # instead of punching holes through to the Qt widget background.
+        layer = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+        ldraw = ImageDraw.Draw(layer)
+        ldraw.rectangle(bbox, fill=_rgba(comp.get("color")))
         oc = comp.get("outline_color")
         if oc is not None:
             ow = max(1, int(round(float(comp.get("outline_width", 1.0)))))
-            draw.rectangle(bbox, outline=_rgba(oc), width=ow)
+            ldraw.rectangle(bbox, outline=_rgba(oc), width=ow)
+        Image.alpha_composite(composite, layer)
         self._crosshair(draw, cx_p, cy_p)
 
     def _render_polygon(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
