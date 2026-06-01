@@ -15,7 +15,6 @@ components:
   cliprect:
   - 300
   - 300
-  hidden: true
 - name: airspeed_needle
   type: ImagePanel
   position:
@@ -77,4 +76,3 @@ components:
   position:
   - 155
   - 155
-  hidden: true
