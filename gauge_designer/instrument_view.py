@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
+    QDialog, QDialogButtonBox, QFormLayout,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings, QTimer
 from gauge_designer.ui_utils import QSpinBox
@@ -365,6 +366,24 @@ class InstrumentView(QWidget):
             btn.setToolTip(tip)
             btn.clicked.connect(slot)
             btn_bar.addWidget(btn)
+
+        # Polygon-specific flip buttons (enabled only when a Polygon is selected)
+        self._flip_h_btn = QPushButton()
+        self._flip_h_btn.setIcon(make_svg_icon("flip-horizontal"))
+        self._flip_h_btn.setFixedSize(28, 28)
+        self._flip_h_btn.setToolTip("Flip polygon horizontally (mirror across horizontal axis)")
+        self._flip_h_btn.clicked.connect(self._flip_horizontal)
+        self._flip_h_btn.setEnabled(False)
+        btn_bar.addWidget(self._flip_h_btn)
+
+        self._flip_v_btn = QPushButton()
+        self._flip_v_btn.setIcon(make_svg_icon("flip-vertical"))
+        self._flip_v_btn.setFixedSize(28, 28)
+        self._flip_v_btn.setToolTip("Flip polygon vertically (mirror across vertical axis)")
+        self._flip_v_btn.clicked.connect(self._flip_vertical)
+        self._flip_v_btn.setEnabled(False)
+        btn_bar.addWidget(self._flip_v_btn)
+
         btn_bar.addStretch()
         comp_layout.addLayout(btn_bar)
         self._list = QListWidget()
@@ -734,14 +753,18 @@ class InstrumentView(QWidget):
 
     def _on_row_changed(self, row: int):
         name = None
+        is_polygon = False
         if 0 <= row < len(self._components):
             comp = self._components[row]
             name = comp.get("name")
+            is_polygon = comp.get("type") == "Polygon"
             self._form.load(comp)
             self._form.setVisible(True)
         else:
             self._form.clear()
             self._form.setVisible(False)
+        self._flip_h_btn.setEnabled(is_polygon)
+        self._flip_v_btn.setEnabled(is_polygon)
         self._canvas.set_selected(name)
 
     # ── Form change callback ──────────────────────────────────────────────
@@ -802,6 +825,34 @@ class InstrumentView(QWidget):
         item = self._list.takeItem(row)
         self._list.insertItem(row + 1, item)
         self._list.setCurrentRow(row + 1)
+        self.changed.emit()
+
+    def _flip_horizontal(self):
+        """Mirror all polygon points across the centroid's vertical axis (negate X offsets)."""
+        row = self._list.currentRow()
+        if row < 0 or row >= len(self._components):
+            return
+        comp = self._components[row]
+        pts = comp.get("points")
+        if not pts:
+            return
+        cx = sum(p[0] for p in pts) / len(pts)
+        comp["points"] = [[round(2 * cx - p[0]), p[1]] for p in pts]
+        self._form.load(comp)
+        self.changed.emit()
+
+    def _flip_vertical(self):
+        """Mirror all polygon points across the centroid's horizontal axis (negate Y offsets)."""
+        row = self._list.currentRow()
+        if row < 0 or row >= len(self._components):
+            return
+        comp = self._components[row]
+        pts = comp.get("points")
+        if not pts:
+            return
+        cy = sum(p[1] for p in pts) / len(pts)
+        comp["points"] = [[p[0], round(2 * cy - p[1])] for p in pts]
+        self._form.load(comp)
         self.changed.emit()
 
     def _add_component(self):

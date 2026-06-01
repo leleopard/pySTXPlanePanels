@@ -20,13 +20,13 @@ components:
 - name: pitch_ladder
   type: AttitudeIndicator
   viewport:
-  - 119
+  - 118
   - 173
   - 294
   - 276
   pitch_dataref: sim/cockpit2/gauges/indicators/pitch_electric_deg_pilot
   roll_dataref: sim/cockpit2/gauges/indicators/roll_electric_deg_pilot
-  pixels_per_degree: 6.0
+  pixels_per_degree: 5.0
   sky_color:
   - 10
   - 136
@@ -54,13 +54,13 @@ components:
   - 255
   - 255
   - 255
-  bank_arc_width: 0.5
   roll_pointer_color:
   - 255
   - 255
   - 255
   - 255
   roll_pointer_size: 19.0
+  show_reference: false
   ladder_step: 2.5
   ladder_hw_2: 0.2
   ladder_hw_1: 0.1
@@ -70,8 +70,8 @@ components:
   - 265
   - 311
   size:
-  - 12
-  - 12
+  - 10
+  - 10
   color:
   - 0
   - 0
@@ -82,21 +82,47 @@ components:
   - 255
   - 255
   - 255
-  outline_width: 3.0
+  outline_width: 2.0
 - name: plane_bug_left
   type: Polygon
   points:
   - - 210
-    - 315
+    - 314
   - - 142
-    - 315
+    - 314
   - - 142
-    - 305
-  - - 200
-    - 305
-  - - 200
+    - 307
+  - - 202
+    - 307
+  - - 202
     - 288
   - - 210
+    - 288
+  color:
+  - 0
+  - 0
+  - 0
+  - 255
+  outline_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  outline_width: 2.0
+- name: plane_bug_right
+  type: Polygon
+  points:
+  - - 320
+    - 314
+  - - 388
+    - 314
+  - - 388
+    - 307
+  - - 328
+    - 307
+  - - 328
+    - 288
+  - - 320
     - 288
   color:
   - 0
