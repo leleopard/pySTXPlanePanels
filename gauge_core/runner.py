@@ -107,7 +107,13 @@ class PanelWindow(arcade.Window):
         self._ssaa_chain: list[tuple] = []   # [(fbo, w, h), …] largest first
         if ssaa >= 2:
             ctx = self.ctx
+            max_tex = ctx.info.MAX_TEXTURE_SIZE
+            # Clamp ssaa so the FBO texture fits within the driver's texture limit.
+            # Pi 5 (GLES) caps MAX_TEXTURE_SIZE at 4096; a 1540×920 panel at ssaa=4
+            # would need 6160×3680 which exceeds that.
             factor = ssaa
+            while factor >= 2 and (w * factor > max_tex or h * factor > max_tex):
+                factor //= 2
             while factor >= 2:
                 tex = ctx.texture((w * factor, h * factor), components=4)
                 fbo = ctx.framebuffer(color_attachments=[tex])
