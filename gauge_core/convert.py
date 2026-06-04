@@ -158,6 +158,11 @@ def convert_kgs_to_gallons_avgas(value: float, _get: GetData) -> float:
     """Convert fuel weight in lbs to US gallons avgas."""
     return value / 2.72
 
+
+def convert_kgps_to_gph_avgas(value: float, _get: GetData) -> float:
+    """Convert fuel flow from kg/s to US gallons per hour (avgas, ~2.72 kg/gal)."""
+    return value * 3600.0 / 2.72
+
 def convert_suction(value: float, _get: GetData) -> float:
     """Scale vacuum suction reading (matches original pyXPPanels convertSuction)."""
     return value * 2.8
@@ -198,6 +203,7 @@ for _name, _func in {
     "true_if_over_2": true_if_over_2,
     "convert_lbs_to_gallons": convert_lbs_to_gallons,
     "convert_kgs_to_gallons_avgas": convert_kgs_to_gallons_avgas,
+    "convert_kgps_to_gph_avgas": convert_kgps_to_gph_avgas,
     "convert_suction": convert_suction,
     "nav_gsflg_visible": nav_gsflg_visible,
     "return_units_decimal": return_units_decimal,
