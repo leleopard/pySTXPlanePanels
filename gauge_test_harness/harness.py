@@ -268,10 +268,11 @@ class _DigitSpinBox(QDoubleSpinBox):
 
 # ── Main window ───────────────────────────────────────────────────────────────
 
-_COL_DATAREF = 0
-_COL_VALUE   = 1
-_COL_OUTPUT  = 2
-_COL_USED_BY = 3
+_COL_DATAREF    = 0
+_COL_VALUE      = 1
+_COL_POST_CONV  = 2
+_COL_OUTPUT     = 3
+_COL_USED_BY    = 4
 
 
 class TestHarnessWindow(QMainWindow):
@@ -308,15 +309,16 @@ class TestHarnessWindow(QMainWindow):
         vbox.addLayout(hdr)
 
         # ── table ─────────────────────────────────────────────────────────
-        self._table = QTableWidget(0, 4)
+        self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(
-            ["Dataref", "Input value (post conv.)", "Output", "Used by"]
+            ["Dataref", "Dataref value", "Value post conversion", "Output", "Used by"]
         )
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.horizontalHeader().setMinimumSectionSize(60)
-        self._table.setColumnWidth(_COL_DATAREF, 320)
-        self._table.setColumnWidth(_COL_VALUE,   160)
-        self._table.setColumnWidth(_COL_OUTPUT,   90)
+        self._table.setColumnWidth(_COL_DATAREF,   280)
+        self._table.setColumnWidth(_COL_VALUE,     120)
+        self._table.setColumnWidth(_COL_POST_CONV, 150)
+        self._table.setColumnWidth(_COL_OUTPUT,     80)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         vbox.addWidget(self._table, 1)
@@ -360,6 +362,11 @@ class TestHarnessWindow(QMainWindow):
             )
             self._table.setCellWidget(row, _COL_VALUE, spin)
 
+            # Value post conversion cell (read-only)
+            pc_item = QTableWidgetItem("—" if info.convert_fn else "")
+            pc_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._table.setItem(row, _COL_POST_CONV, pc_item)
+
             # Output cell (read-only, updated on each spinbox change)
             out_item = QTableWidgetItem("0.00")
             out_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -379,19 +386,26 @@ class TestHarnessWindow(QMainWindow):
     # ── Spinbox callback ──────────────────────────────────────────────────
 
     def _on_value_changed(self, row: int, info: _DatarefInfo, value: float) -> None:
-        # Update output column
-        if info.table:
-            table_input = value
-            if info.convert_fn:
-                fn = get_convert(info.convert_fn)
-                if fn is not None:
-                    table_input = float(fn(value, lambda _: 0.0))
-            output = lookup_piecewise(info.table, table_input)
-            item = self._table.item(row, _COL_OUTPUT)
-            if item is not None:
-                item.setText(f"{output:.2f}")
+        # Apply conversion function (if any) to get the post-conversion value
+        post_conv = value
+        if info.convert_fn:
+            fn = get_convert(info.convert_fn)
+            if fn is not None:
+                post_conv = float(fn(value, lambda _: 0.0))
 
-        # Send to MockDataSource
+        # Update post-conversion column
+        pc_item = self._table.item(row, _COL_POST_CONV)
+        if pc_item is not None and info.convert_fn:
+            pc_item.setText(f"{post_conv:.6g}")
+
+        # Update output column (table lookup on post-conversion value)
+        if info.table:
+            output = lookup_piecewise(info.table, post_conv)
+            out_item = self._table.item(row, _COL_OUTPUT)
+            if out_item is not None:
+                out_item.setText(f"{output:.2f}")
+
+        # Send raw dataref value to MockDataSource
         payload = json.dumps({info.dataref: value}).encode("utf-8")
         try:
             self._sock.sendto(payload, ("127.0.0.1", self._port))
