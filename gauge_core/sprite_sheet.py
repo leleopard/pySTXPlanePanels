@@ -90,6 +90,7 @@ class SpriteSheet:
         position_xy: tuple[float, float],
         smooth: bool = True,
         pixels_per_unit: float | None = None,
+        shift_direction: str = "right",
     ) -> None:
         self.name = name
         self._columns = columns
@@ -102,6 +103,9 @@ class SpriteSheet:
         # Default: one full frame-width of shift per integer step (fast, matches
         # old behaviour).  Set smaller (e.g. 5.0) for subtle sub-frame motion.
         self._pixels_per_unit = float(frame_width) if pixels_per_unit is None else float(pixels_per_unit)
+        # "right" = positive shift (atlas moves left, content appears to scroll right).
+        # "left"  = negative shift (atlas moves right, content appears to scroll left).
+        self._shift_sign = -1.0 if str(shift_direction).lower() == "left" else 1.0
 
         texture = load_full_texture(atlas_path)
         self._tex_w = texture.width
@@ -180,13 +184,15 @@ class SpriteSheet:
         col = int_frame % self._columns
         row = int_frame // self._columns
 
+        signed_shift = shift * self._shift_sign
+
         if shift > 0.0 and self._columns == 1:
             # Vertical strip: slide in Y direction.
             tx = self._frame_w / 2
-            ty_down = row * self._stride_y + self._frame_h / 2 + shift
+            ty_down = row * self._stride_y + self._frame_h / 2 + signed_shift
         elif shift > 0.0 and (int_frame + 1) // self._columns == row:
             # Horizontal grid, next frame in same row: slide in X direction.
-            tx = col * self._stride_x + self._frame_w / 2 + shift
+            tx = col * self._stride_x + self._frame_w / 2 + signed_shift
             ty_down = row * self._stride_y + self._frame_h / 2
         else:
             # Row boundary or smooth=False: snap to the integer frame.
@@ -251,6 +257,7 @@ def _sprite_sheet_factory(
         position_xy=tuple(comp["position"]),
         smooth=bool(comp.get("smooth", True)),
         pixels_per_unit=float(comp["pixels_per_unit"]) if "pixels_per_unit" in comp else None,
+        shift_direction=str(comp.get("shift_direction", "right")),
     )
 
     if "animation" in comp:

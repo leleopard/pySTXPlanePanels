@@ -823,7 +823,18 @@ class PropertiesForm(QWidget):
             "Smaller values give subtle sub-frame motion (e.g. 5 px/unit for a slow compass)."
         )
         self._ss_ppu.valueChanged.connect(self._emit)
-        self._ss_sec.row("Pixels / unit", self._ss_ppu)
+
+        self._ss_shift_dir = QComboBox()
+        self._ss_shift_dir.addItem("→  Right", "right")
+        self._ss_shift_dir.addItem("←  Left",  "left")
+        self._ss_shift_dir.setToolTip(
+            "Direction the atlas slides as the fractional value increases.\n"
+            "Right: content appears to scroll right (default).\n"
+            "Left:  content appears to scroll left (e.g. compass heading increasing)."
+        )
+        self._ss_shift_dir.currentIndexChanged.connect(self._emit)
+
+        self._ss_sec.row("Pixels / unit", _pair_box(self._ss_ppu, self._ss_shift_dir, ""))
 
         self._vbox.addWidget(self._ss_sec)
 
@@ -1658,7 +1669,7 @@ class PropertiesForm(QWidget):
             "rotation", "translation",
             # SpriteSheet
             "columns", "rows", "frame_width", "frame_height",
-            "stride_x", "stride_y", "smooth", "pixels_per_unit", "animation",
+            "stride_x", "stride_y", "smooth", "pixels_per_unit", "shift_direction", "animation",
             # ScrollingTape
             "scroll_axis", "scroll",
             # Line
@@ -1730,6 +1741,8 @@ class PropertiesForm(QWidget):
         self._ss_sy.setValue(int(comp.get("stride_y", 0)))
         self._ss_smooth.setChecked(bool(comp.get("smooth", True)))
         self._ss_ppu.setValue(float(comp.get("pixels_per_unit", 0.0)))
+        sd = str(comp.get("shift_direction", "right")).lower()
+        self._ss_shift_dir.setCurrentIndex(0 if sd != "left" else 1)
 
         # ScrollingTape axis
         axis = str(comp.get("scroll_axis", "y"))
@@ -2191,6 +2204,9 @@ class PropertiesForm(QWidget):
             ppu = self._ss_ppu.value()
             if ppu > 0.0:
                 data["pixels_per_unit"] = round(ppu, 2)
+            sd = self._ss_shift_dir.currentData()
+            if sd == "left":
+                data["shift_direction"] = "left"
             anim_dr = self._anim_dr.text().strip()
             anim_tbl = self._anim_tbl.get_data()
             if anim_dr or anim_tbl:
@@ -2342,6 +2358,7 @@ class PropertiesForm(QWidget):
         self._ss_sx.setValue(0); self._ss_sy.setValue(0)
         self._ss_smooth.setChecked(True)
         self._ss_ppu.setValue(0.0)
+        self._ss_shift_dir.setCurrentIndex(0)
         self._st_axis.setCurrentIndex(0)
         self._rot_sec.set_active(False)
         self._tr_sec.set_active(False)
