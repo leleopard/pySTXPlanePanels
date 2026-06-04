@@ -143,9 +143,26 @@ class SpriteSheet:
         row = int_frame // self._columns
 
         # Centre of the target frame in atlas coords (x left-to-right, y down).
-        # frac shifts tx RIGHT toward the next column (forward in the atlas).
-        tx = col * self._stride_x + self._frame_w / 2 + frac * self._stride_x
-        ty_down = row * self._stride_y + self._frame_h / 2
+        #
+        # Smooth interpolation rules:
+        #   columns == 1  → frames go top-to-bottom; interpolate in Y.
+        #   columns  > 1  → frames go left-to-right then wrap; interpolate in X
+        #                   but ONLY when the next frame is in the same row.
+        #                   At row boundaries the next frame is in a different row,
+        #                   so applying frac in X would push the viewport past the
+        #                   atlas edge and show empty pixels — snap instead.
+        if frac > 0.0 and self._columns == 1:
+            # Vertical strip: sub-frame precision by sliding in Y.
+            tx = self._frame_w / 2
+            ty_down = frame_value * self._stride_y + self._frame_h / 2
+        elif frac > 0.0 and (int_frame + 1) // self._columns == row:
+            # Horizontal grid, next frame in same row: safe to interpolate in X.
+            tx = col * self._stride_x + self._frame_w / 2 + frac * self._stride_x
+            ty_down = row * self._stride_y + self._frame_h / 2
+        else:
+            # Row boundary or smooth=False: snap to the integer frame.
+            tx = col * self._stride_x + self._frame_w / 2
+            ty_down = row * self._stride_y + self._frame_h / 2
 
         # To bring atlas point (tx, ty_down) to screen position (base_x, base_y):
         #   center_x = base_x - (tx  - tex_w/2) * scale
