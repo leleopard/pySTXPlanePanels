@@ -810,19 +810,20 @@ class PropertiesForm(QWidget):
         self._ss_smooth.toggled.connect(self._emit)
         self._ss_sec.row_widget(self._ss_smooth)
 
-        self._ss_upf = QDoubleSpinBox()
-        self._ss_upf.setRange(0.001, 100000.0)
-        self._ss_upf.setDecimals(3)
-        self._ss_upf.setSingleStep(1.0)
-        self._ss_upf.setValue(1.0)
-        self._ss_upf.setToolTip(
-            "Units per frame: how many table-output units constitute one full sprite step.\n"
-            "Frame index = floor(value / units_per_frame).\n"
-            "Sub-frame fraction drives the smooth pixel shift (fraction × frame width).\n"
-            "Default 1.0 = one frame per table-output unit."
+        self._ss_ppu = QDoubleSpinBox()
+        self._ss_ppu.setRange(0.0, 100000.0)
+        self._ss_ppu.setDecimals(2)
+        self._ss_ppu.setSingleStep(1.0)
+        self._ss_ppu.setValue(0.0)
+        self._ss_ppu.setSpecialValueText("= frame width")
+        self._ss_ppu.setToolTip(
+            "Pixels per unit: atlas pixels shifted per unit of the fractional frame value.\n"
+            "shift = (frame_value − floor(frame_value)) × pixels_per_unit.\n"
+            "0 (special value) = default, equals frame width (fast, one full frame per step).\n"
+            "Smaller values give subtle sub-frame motion (e.g. 5 px/unit for a slow compass)."
         )
-        self._ss_upf.valueChanged.connect(self._emit)
-        self._ss_sec.row("Units / frame", self._ss_upf)
+        self._ss_ppu.valueChanged.connect(self._emit)
+        self._ss_sec.row("Pixels / unit", self._ss_ppu)
 
         self._vbox.addWidget(self._ss_sec)
 
@@ -1657,7 +1658,7 @@ class PropertiesForm(QWidget):
             "rotation", "translation",
             # SpriteSheet
             "columns", "rows", "frame_width", "frame_height",
-            "stride_x", "stride_y", "smooth", "units_per_frame", "animation",
+            "stride_x", "stride_y", "smooth", "pixels_per_unit", "animation",
             # ScrollingTape
             "scroll_axis", "scroll",
             # Line
@@ -1728,7 +1729,7 @@ class PropertiesForm(QWidget):
         self._ss_sx.setValue(int(comp.get("stride_x", 0)))
         self._ss_sy.setValue(int(comp.get("stride_y", 0)))
         self._ss_smooth.setChecked(bool(comp.get("smooth", True)))
-        self._ss_upf.setValue(float(comp.get("units_per_frame", 1.0)))
+        self._ss_ppu.setValue(float(comp.get("pixels_per_unit", 0.0)))
 
         # ScrollingTape axis
         axis = str(comp.get("scroll_axis", "y"))
@@ -2187,9 +2188,9 @@ class PropertiesForm(QWidget):
                 data["stride_y"] = self._ss_sy.value()
             if not self._ss_smooth.isChecked():
                 data["smooth"] = False
-            upf = self._ss_upf.value()
-            if abs(upf - 1.0) > 1e-6:
-                data["units_per_frame"] = round(upf, 3)
+            ppu = self._ss_ppu.value()
+            if ppu > 0.0:
+                data["pixels_per_unit"] = round(ppu, 2)
             anim_dr = self._anim_dr.text().strip()
             anim_tbl = self._anim_tbl.get_data()
             if anim_dr or anim_tbl:
@@ -2340,7 +2341,7 @@ class PropertiesForm(QWidget):
         self._ss_fw.setValue(1); self._ss_fh.setValue(1)
         self._ss_sx.setValue(0); self._ss_sy.setValue(0)
         self._ss_smooth.setChecked(True)
-        self._ss_upf.setValue(1.0)
+        self._ss_ppu.setValue(0.0)
         self._st_axis.setCurrentIndex(0)
         self._rot_sec.set_active(False)
         self._tr_sec.set_active(False)

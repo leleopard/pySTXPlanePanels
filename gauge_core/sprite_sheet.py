@@ -5,24 +5,34 @@ grid on a single texture.  At runtime a dataref value is mapped through a
 lookup table to a frame index; the full atlas sprite is repositioned so
 that frame is centred in a viewport scissor window.
 
-Frame selection
----------------
-The animation table maps the raw dataref to an intermediate value V.
-    frame_index = floor(V / units_per_frame)
-    sub_frac    = (V % units_per_frame) / units_per_frame   [0, 1)
+Frame selection and smooth shift
+---------------------------------
+The animation table maps the raw dataref to a value V (the frame index):
+    frame_index = floor(V)          → which cell in the grid (raster order,
+                                      left-to-right then top-to-bottom)
+    sub_frac    = V - floor(V)      → [0, 1) fraction within the frame
 
-units_per_frame (default 1.0) decouples how many table-output units
-constitute one full sprite step.  When smooth=true, sub_frac drives a
-pixel-level shift of sub_frac × frame_width within the current frame,
-giving fluid sub-unit animation without jumping past adjacent frames.
+When smooth=true, sub_frac drives a pixel-level offset of the atlas:
+    shift_px = sub_frac × pixels_per_unit
+
+pixels_per_unit (default = frame_width) is how many atlas pixels the
+sprite slides for one full unit of V.  Setting it smaller than frame_width
+gives a subtle sub-frame movement (the viewport stays mostly centred on
+the current frame).
+
+Layout direction of the shift:
+  columns == 1  → frames go top-to-bottom → shift applied in Y.
+  columns  > 1  → frames go left-to-right → shift applied in X, but only
+                  when the next frame is in the same row.  At row
+                  boundaries the sprite snaps to avoid sampling outside
+                  the atlas.
 
 Typical uses
 ------------
 - Wet compass   : 361 heading frames in a 16 × 23 grid.
-                  table [[0,0],[360,360]], units_per_frame 1.0, smooth true.
-                  sub_frac = fractional degree → shifts up to frame_width px.
-- Digit drums   : 10 digit frames in a 1 × 10 grid.
-                  units_per_frame 1.0, smooth false (digits snap cleanly).
+                  table [[0,0],[360,360]], pixels_per_unit ~5, smooth true.
+                  sub_frac = fractional degree → shifts a few pixels.
+- Digit drums   : 10 digit frames in a 1 × 10 grid, smooth false.
 
 Texture size constraint
 -----------------------
@@ -39,10 +49,11 @@ YAML schema
       rows: 23
       frame_width: 120
       frame_height: 66
-      # stride_x: 122       # optional; defaults to frame_width.
-      # stride_y: 66        # optional; defaults to frame_height.
-      smooth: true          # optional, default true.  False = snap only.
-      units_per_frame: 1.0  # optional, default 1.0.  Table-output units per frame.
+      # stride_x: 122         # optional; defaults to frame_width.
+      # stride_y: 66          # optional; defaults to frame_height.
+      smooth: true            # optional, default true.  False = snap only.
+      pixels_per_unit: 5.0    # optional, default = frame_width.
+                              # Atlas pixels to shift per unit of sub_frac.
       position: [760, 66]          # centre of the visible window, instrument coords
       viewport: [700, 33, 120, 66] # scissor clip [x, y, w, h], instrument coords
       animation:
@@ -78,7 +89,7 @@ class SpriteSheet:
         stride_y: int,
         position_xy: tuple[float, float],
         smooth: bool = True,
-        units_per_frame: float = 1.0,
+        pixels_per_unit: float | None = None,
     ) -> None:
         self.name = name
         self._columns = columns
@@ -88,7 +99,9 @@ class SpriteSheet:
         self._stride_x = stride_x
         self._stride_y = stride_y
         self._smooth = smooth
-        self._units_per_frame = max(float(units_per_frame), 1e-9)
+        # Default: one full frame-width of shift per integer step (fast, matches
+        # old behaviour).  Set smaller (e.g. 5.0) for subtle sub-frame motion.
+        self._pixels_per_unit = float(frame_width) if pixels_per_unit is None else float(pixels_per_unit)
 
         texture = load_full_texture(atlas_path)
         self._tex_w = texture.width
@@ -146,43 +159,34 @@ class SpriteSheet:
     # -- per-frame ------------------------------------------------------------
 
     def _set_frame(self, frame_value: float) -> None:
-        """Position the sprite so the frame at *frame_value* is centred at base_x/y.
+        """Position the sprite so frame *frame_value* is centred at base_x/y.
 
-        frame_value is the animation table output (raw table units).
-        Dividing by units_per_frame converts it to a fractional frame index:
-          int_frame  = floor(frame_value / units_per_frame)  → which cell in the grid
-          sub_frac   = fractional remainder, normalised to [0, 1)
-                     → how far to shift within that frame (smooth only)
+        frame_value is the animation table output and is treated directly as
+        the (fractional) frame index:
+          int_frame = floor(frame_value)   → which cell (raster order)
+          sub_frac  = frame_value - int_frame  → [0,1) within that frame
 
-        Smooth shift is sub_frac × frame_width (the frame's own pixel width),
-        so 1 full unit-step moves the viewport by exactly one frame width.
+        When smooth=true the atlas is shifted by sub_frac × pixels_per_unit.
+        Shift direction: Y for single-column atlases, X otherwise (same-row
+        only — row boundaries snap to avoid sampling outside the atlas).
         """
         self._last_frame = frame_value
 
         total = self._columns * self._rows
-        fv_scaled = frame_value / self._units_per_frame          # fractional frame index
-        int_frame = max(0, min(total - 1, int(fv_scaled)))
-        sub_frac = (fv_scaled - int_frame) if self._smooth else 0.0
+        int_frame = max(0, min(total - 1, int(frame_value)))
+        sub_frac = (frame_value - int_frame) if self._smooth else 0.0
+        shift = sub_frac * self._pixels_per_unit
 
         col = int_frame % self._columns
         row = int_frame // self._columns
 
-        # Centre of the target frame in atlas coords (x left-to-right, y down).
-        #
-        # Smooth interpolation rules:
-        #   columns == 1  → frames go top-to-bottom; interpolate in Y.
-        #   columns  > 1  → interpolate in X only when the next frame is in the
-        #                   same row.  At row boundaries applying sub_frac in X
-        #                   would push the viewport past the atlas right edge and
-        #                   show empty pixels — snap to the integer frame instead.
-        if sub_frac > 0.0 and self._columns == 1:
-            # Vertical strip: sub-frame precision by sliding in Y.
+        if shift > 0.0 and self._columns == 1:
+            # Vertical strip: slide in Y direction.
             tx = self._frame_w / 2
-            ty_down = fv_scaled * self._stride_y + self._frame_h / 2
-        elif sub_frac > 0.0 and (int_frame + 1) // self._columns == row:
-            # Horizontal grid, next frame in same row: safe to interpolate in X.
-            # Shift = sub_frac × frame_width (the frame's own pixel width).
-            tx = col * self._stride_x + self._frame_w / 2 + sub_frac * self._frame_w
+            ty_down = row * self._stride_y + self._frame_h / 2 + shift
+        elif shift > 0.0 and (int_frame + 1) // self._columns == row:
+            # Horizontal grid, next frame in same row: slide in X direction.
+            tx = col * self._stride_x + self._frame_w / 2 + shift
             ty_down = row * self._stride_y + self._frame_h / 2
         else:
             # Row boundary or smooth=False: snap to the integer frame.
@@ -246,7 +250,7 @@ def _sprite_sheet_factory(
         stride_y=int(comp.get("stride_y", frame_h)),
         position_xy=tuple(comp["position"]),
         smooth=bool(comp.get("smooth", True)),
-        units_per_frame=float(comp.get("units_per_frame", 1.0)),
+        pixels_per_unit=float(comp["pixels_per_unit"]) if "pixels_per_unit" in comp else None,
     )
 
     if "animation" in comp:
