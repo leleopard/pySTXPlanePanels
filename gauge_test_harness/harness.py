@@ -353,7 +353,7 @@ class TestHarnessWindow(QMainWindow):
             # Value spinbox
             spin = _DigitSpinBox()
             spin.setRange(info.input_min, info.input_max)
-            spin.setDecimals(6)
+            spin.setDecimals(8)
             spin.setValue(0.0)
             spin.setMinimumWidth(90)
             # capture row/info in closure
