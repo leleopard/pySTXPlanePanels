@@ -125,11 +125,14 @@ class _TableEditor(QWidget):
         self._tbl.setFixedHeight(110)
         self._tbl.itemChanged.connect(lambda: self.changed.emit())
 
-        add = QPushButton("+"); add.setFixedWidth(26); add.clicked.connect(self._add)
-        rm  = QPushButton("−"); rm.setFixedWidth(26);  rm.clicked.connect(self._rm)
+        add = QPushButton("+");  add.setFixedWidth(26); add.clicked.connect(self._add)
+        rm  = QPushButton("−");  rm.setFixedWidth(26);  rm.clicked.connect(self._rm)
+        up  = QPushButton("↑");  up.setFixedWidth(26);  up.clicked.connect(self._move_up)
+        dn  = QPushButton("↓");  dn.setFixedWidth(26);  dn.clicked.connect(self._move_dn)
         btns = QHBoxLayout()
         btns.setContentsMargins(0, 0, 0, 0); btns.setSpacing(2)
-        btns.addWidget(add); btns.addWidget(rm); btns.addStretch()
+        btns.addWidget(add); btns.addWidget(rm); btns.addWidget(up); btns.addWidget(dn)
+        btns.addStretch()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(2)
@@ -170,6 +173,31 @@ class _TableEditor(QWidget):
         if r >= 0:
             self._tbl.removeRow(r)
             self.changed.emit()
+
+    def _swap_rows(self, r_a: int, r_b: int) -> None:
+        n = self._tbl.columnCount()
+        self._tbl.blockSignals(True)
+        for c in range(n):
+            a = self._tbl.item(r_a, c)
+            b = self._tbl.item(r_b, c)
+            text_a = a.text() if a else ""
+            text_b = b.text() if b else ""
+            self._tbl.setItem(r_a, c, QTableWidgetItem(text_b))
+            self._tbl.setItem(r_b, c, QTableWidgetItem(text_a))
+        self._tbl.blockSignals(False)
+        self.changed.emit()
+
+    def _move_up(self):
+        r = self._tbl.currentRow()
+        if r > 0:
+            self._swap_rows(r, r - 1)
+            self._tbl.setCurrentCell(r - 1, self._tbl.currentColumn())
+
+    def _move_dn(self):
+        r = self._tbl.currentRow()
+        if 0 <= r < self._tbl.rowCount() - 1:
+            self._swap_rows(r, r + 1)
+            self._tbl.setCurrentCell(r + 1, self._tbl.currentColumn())
 
 
 # ── Polygon points table (spinbox cells) ─────────────────────────────────────
