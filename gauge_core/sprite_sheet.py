@@ -168,8 +168,14 @@ class SpriteSheet:
             return
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
-            ctx = arcade.get_window().ctx
-            ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
+            win = arcade.get_window()
+            ctx = win.ctx
+            # ctx.scissor is in framebuffer pixels; scale from logical coords.
+            # ctx.viewport reflects the active FBO (e.g. 4× larger under SSAA).
+            _, _, fvp_w, fvp_h = ctx.viewport
+            sx = fvp_w / win.width
+            sy = fvp_h / win.height
+            ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
             arcade.draw_sprite(self.sprite)
             ctx.scissor = None
         else:
