@@ -310,12 +310,12 @@ class TestHarnessWindow(QMainWindow):
         # ── table ─────────────────────────────────────────────────────────
         self._table = QTableWidget(0, 4)
         self._table.setHorizontalHeaderLabels(
-            ["Dataref", "Value", "Output", "Used by"]
+            ["Dataref", "Input value (post conv.)", "Output", "Used by"]
         )
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.horizontalHeader().setMinimumSectionSize(60)
         self._table.setColumnWidth(_COL_DATAREF, 320)
-        self._table.setColumnWidth(_COL_VALUE,   110)
+        self._table.setColumnWidth(_COL_VALUE,   160)
         self._table.setColumnWidth(_COL_OUTPUT,   90)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
