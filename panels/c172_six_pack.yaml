@@ -1,6 +1,6 @@
 name: C172 main instrument panel
 size:
-- 1540
+- 1800
 - 920
 background_color:
 - 0.349
@@ -76,3 +76,5 @@ instruments:
   position:
   - 1268
   - 33
+window:
+  fullscreen: true

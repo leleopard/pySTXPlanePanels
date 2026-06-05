@@ -28,7 +28,7 @@ components:
   - 110
   - 18
   rotation:
-    dataref: sim/flightmodel2/electrical/battery_current[0]
+    dataref: sim/cockpit2/electrical/battery_amps[0]
     table:
     - - -66
       - -59.0
@@ -38,6 +38,9 @@ components:
       - 57.0
 - name: vacuum_needle
   type: ImagePanel
+  position:
+  - 44
+  - 102
   texture: assets/c172_text_standard6.png
   origin:
   - 1800
@@ -45,15 +48,9 @@ components:
   cliprect:
   - 110
   - 18
-  position:
-  - 44
-  - 102
   rotation:
-    dataref: sim/cockpit2/engine/indicators/suction_iHg
-    convert_function: convert_suction
+    dataref: sim/cockpit2/gauges/indicators/suction_1_ratio
     table:
-    - - 2.8
-      - 57.0
     - - 3.0
       - 52.0
     - - 4.0
@@ -64,8 +61,6 @@ components:
       - -25.0
     - - 7.0
       - -50.0
-    - - 7.2
-      - -55.0
 - name: border
   type: ImagePanel
   texture: assets/c172_text_standard6.png

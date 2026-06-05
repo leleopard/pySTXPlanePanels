@@ -20,6 +20,9 @@ components:
     predicate: true_if_zero
 - name: gs_flag
   type: ImagePanel
+  position:
+  - 110
+  - 178
   texture: assets/c172_text_standard6.png
   origin:
   - 44
@@ -27,11 +30,8 @@ components:
   cliprect:
   - 45
   - 27
-  position:
-  - 110
-  - 178
   visibility:
-    dataref: sim/cockpit2/radios/nav1_flag_from_to_pilot
+    dataref: sim/cockpit2/radios/indicators/nav1_flag_glideslope
     predicate: true_if_zero
 - name: background
   type: ImagePanel
@@ -47,6 +47,9 @@ components:
   - 155
 - name: to_indicator
   type: ImagePanel
+  position:
+  - 201
+  - 182
   texture: assets/c172_text_standard6.png
   origin:
   - 8
@@ -54,14 +57,14 @@ components:
   cliprect:
   - 37
   - 31
-  position:
-  - 201
-  - 182
   visibility:
-    dataref: sim/cockpit/radios/nav1_fromto
+    dataref: sim/cockpit2/radios/indicators/nav1_flag_from_to_pilot
     predicate: true_if_equals_1
 - name: from_indicator
   type: ImagePanel
+  position:
+  - 201
+  - 128
   texture: assets/c172_text_standard6.png
   origin:
   - 8
@@ -69,11 +72,8 @@ components:
   cliprect:
   - 37
   - 31
-  position:
-  - 201
-  - 128
   visibility:
-    dataref: sim/cockpit/radios/nav1_fromto
+    dataref: sim/cockpit2/radios/indicators/nav1_flag_from_to_pilot
     predicate: true_if_equals_2
 - name: cdi_needle
   type: ImagePanel

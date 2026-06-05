@@ -6,15 +6,16 @@ components:
 - name: heading
   type: SpriteSheet
   position:
-  - 100
-  - 106
+  - 96
+  - 107
   texture: assets/gen_compass.png
   columns: 16
   rows: 23
   frame_width: 120
   frame_height: 66
   stride_x: 122
-  smooth: false
+  pixels_per_unit: 1.0
+  shift_direction: left
   animation:
     dataref: sim/cockpit2/gauges/indicators/compass_heading_deg_mag
     table:
@@ -24,9 +25,9 @@ components:
       - 360
   viewport:
   - 40
-  - 63
+  - 71
   - 120
-  - 66
+  - 70
 - name: bezel
   type: ImagePanel
   position:
@@ -39,3 +40,4 @@ components:
   cliprect:
   - 184
   - 186
+  resize_to_container: true

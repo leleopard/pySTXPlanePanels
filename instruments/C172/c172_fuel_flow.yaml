@@ -17,6 +17,9 @@ components:
   - 100
 - name: fuel_flow_needle
   type: ImagePanel
+  position:
+  - 156
+  - 104
   texture: assets/c172_text_standard6.png
   origin:
   - 1800
@@ -24,23 +27,18 @@ components:
   cliprect:
   - 110
   - 18
-  position:
-  - 156
-  - 104
   rotation:
-    dataref: sim/flightmodel2/engines/fuel_flow_actual_lbshr[0]
-    convert_function: convert_lbs_to_gallons
+    dataref: sim/cockpit2/engine/indicators/fuel_flow_kg_sec[0]
+    convert_function: convert_kgps_to_gph_avgas
     table:
-    - - 2.81
-      - -65.0
-    - - 4.0
-      - -57.0
-    - - 15.0
-      - 17.0
-    - - 19.0
-      - 55.0
-    - - 19.84
-      - 63.0
+    - - 4
+      - -58
+    - - 10
+      - -17
+    - - 15
+      - 18
+    - - 19
+      - 57
 - name: egt_needle
   type: ImagePanel
   position:
@@ -54,16 +52,14 @@ components:
   - 110
   - 18
   rotation:
-    dataref: sim/cockpit2/engine/indicators/EGT_deg_c[0]
+    dataref: sim/cockpit2/engine/indicators/EGT_deg_C[0]
     table:
-    - - 0
+    - - 900
       - 58.0
-    - - 100
-      - 52.0
-    - - 1700
-      - -49.0
-    - - 1900
-      - -62.0
+    - - 1150
+      - 0
+    - - 1350
+      - -58
 - name: border
   type: ImagePanel
   texture: assets/c172_text_standard6.png
