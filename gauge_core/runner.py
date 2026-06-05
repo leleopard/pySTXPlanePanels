@@ -67,8 +67,8 @@ class PanelWindow(arcade.Window):
         w, h = panel.size
 
         # Resolve target screen via pyglet (Arcade's windowing backend).
-        import pyglet
-        screens = pyglet.canvas.get_display().get_screens()
+        import pyglet.display
+        screens = pyglet.display.Display().get_screens()
         target_screen = (
             screens[min(panel.screen_index, len(screens) - 1)]
             if screens else None
