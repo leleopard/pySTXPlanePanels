@@ -149,11 +149,14 @@ class ScrollingTape:
             vx, vy, vw, vh = self._viewport
             win = arcade.get_window()
             ctx = win.ctx
-            # ctx.scissor is in framebuffer pixels; scale from logical coords.
-            # ctx.viewport reflects the active FBO (e.g. 4× larger under SSAA).
+            # ctx.scissor is in framebuffer pixels; scale from logical panel coords.
+            # ctx.viewport reflects the active FBO (SSAA or screen).
+            # _panel_size is the logical panel dimensions set by PanelWindow; it
+            # differs from win.width/height in fullscreen or SSAA modes.
             _, _, fvp_w, fvp_h = ctx.viewport
-            sx = fvp_w / win.width
-            sy = fvp_h / win.height
+            panel_w, panel_h = getattr(win, "_panel_size", (win.width, win.height))
+            sx = fvp_w / panel_w
+            sy = fvp_h / panel_h
             ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
             arcade.draw_sprite(self.sprite)
             ctx.scissor = None

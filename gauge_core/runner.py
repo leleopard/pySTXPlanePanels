@@ -89,6 +89,9 @@ class PanelWindow(arcade.Window):
             self.background_color = arcade.color.BLACK
 
         self.panel = panel
+        # Logical panel dimensions — used by SpriteSheet/ScrollingTape to scale
+        # scissor rectangles correctly (they are in panel coords, not screen pixels).
+        self._panel_size: tuple[int, int] = panel.size
         self._get_data = get_data
         self._is_test_mode = is_test_mode
         self._udp_alive = udp_alive
@@ -145,7 +148,15 @@ class PanelWindow(arcade.Window):
         if self._ssaa_chain:
             self._on_draw_ssaa()
         else:
+            from pyglet.math import Mat4
+            w, h = self.panel.size
             self.clear()
+            # Explicitly set panel-size projection so that fullscreen mode (where
+            # win.width/height equal the screen resolution, not the panel size)
+            # maps sprite positions in panel coords correctly to screen pixels.
+            self.ctx.projection_matrix = Mat4.orthogonal_projection(
+                0, w, 0, h, -100.0, 100.0
+            )
             self._render_scene()
         self._tick_fps()
 
