@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget, QSplitter, QTreeWidget, QTreeWidgetItem, QAbstractItemView,
     QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QMessageBox, QInputDialog, QFileDialog, QColorDialog,
+    QCheckBox, QComboBox, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QSettings, QSize
 from gauge_designer.ui_utils import QSpinBox, QDoubleSpinBox
@@ -252,6 +253,25 @@ class PanelView(QWidget):
         size_bar.addWidget(self._panel_w)
         size_bar.addWidget(QLabel("×"))
         size_bar.addWidget(self._panel_h)
+        size_bar.addSpacing(16)
+
+        self._fullscreen_chk = QCheckBox("Fullscreen")
+        self._fullscreen_chk.setToolTip(
+            "Launch the panel in fullscreen mode.\n"
+            "The selected screen below determines which display is used."
+        )
+        self._fullscreen_chk.toggled.connect(self._on_window_opts_changed)
+        size_bar.addWidget(self._fullscreen_chk)
+
+        size_bar.addSpacing(8)
+        size_bar.addWidget(QLabel("Screen:"))
+        self._screen_combo = QComboBox()
+        self._screen_combo.setMinimumWidth(180)
+        self._screen_combo.setToolTip("Screen to launch the panel on (fullscreen or windowed).")
+        self._screen_combo.currentIndexChanged.connect(self._on_window_opts_changed)
+        self._populate_screen_combo()
+        size_bar.addWidget(self._screen_combo)
+
         size_bar.addStretch()
         ea.addLayout(size_bar)
 
@@ -503,6 +523,18 @@ class PanelView(QWidget):
             self._bg_color = QColor(13, 13, 13)
         self._update_bg_swatch()
 
+        win = panel_data.get("window") or {}
+        self._fullscreen_chk.blockSignals(True)
+        self._screen_combo.blockSignals(True)
+        self._populate_screen_combo()
+        self._fullscreen_chk.setChecked(bool(win.get("fullscreen", False)))
+        scr = int(win.get("screen", 0))
+        self._screen_combo.setCurrentIndex(
+            min(scr, self._screen_combo.count() - 1) if self._screen_combo.count() > 0 else 0
+        )
+        self._fullscreen_chk.blockSignals(False)
+        self._screen_combo.blockSignals(False)
+
         self._loading = False
         self._inst_form.set_yaml_dir(self._yaml_dir)
         self._inst_form.set_ref_height(int(h))
@@ -536,6 +568,12 @@ class PanelView(QWidget):
         self._port_warning.setText("")
         self._bg_color = QColor(13, 13, 13)
         self._update_bg_swatch()
+        self._fullscreen_chk.blockSignals(True)
+        self._fullscreen_chk.setChecked(False)
+        self._fullscreen_chk.blockSignals(False)
+        self._screen_combo.blockSignals(True)
+        self._screen_combo.setCurrentIndex(0)
+        self._screen_combo.blockSignals(False)
         self._tree.clear()
         self._inst_form.clear()
         self._loading = False
@@ -559,6 +597,32 @@ class PanelView(QWidget):
     def get_background_color(self) -> list[float]:
         r, g, b = self._bg_color.red(), self._bg_color.green(), self._bg_color.blue()
         return [round(r / 255, 4), round(g / 255, 4), round(b / 255, 4)]
+
+    def get_window_opts(self) -> dict | None:
+        """Return window launch options dict, or None if all defaults."""
+        fullscreen = self._fullscreen_chk.isChecked()
+        screen_idx = self._screen_combo.currentIndex()
+        if not fullscreen and screen_idx == 0:
+            return None
+        opts: dict = {}
+        if fullscreen:
+            opts["fullscreen"] = True
+        if screen_idx > 0:
+            opts["screen"] = screen_idx
+        return opts
+
+    def _populate_screen_combo(self):
+        self._screen_combo.blockSignals(True)
+        self._screen_combo.clear()
+        for i, scr in enumerate(QApplication.screens()):
+            geo = scr.geometry()
+            label = f"{i}: {scr.name()}  {geo.width()}×{geo.height()}"
+            self._screen_combo.addItem(label)
+        self._screen_combo.blockSignals(False)
+
+    def _on_window_opts_changed(self):
+        if not self._loading:
+            self.changed.emit()
 
     # ── Panel name ─────────────────────────────────────────────────────────
 

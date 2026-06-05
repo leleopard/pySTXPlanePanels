@@ -41,6 +41,8 @@ class Panel:
     background_color: tuple[int, int, int] | None = None
     instruments: list[Instrument] = field(default_factory=list)
     udp_listen_port: int | None = None  # overrides config.yaml when set
+    fullscreen: bool = False
+    screen_index: int = 0
 
     def all_components(self) -> list[Any]:
         """Flat list of every component across every instrument, in order."""
@@ -79,11 +81,14 @@ def load_panel(yaml_path: str | Path) -> Panel:
         data = yaml.safe_load(f)
 
     udp_cfg = data.get("udp", {}) or {}
+    win_cfg = data.get("window", {}) or {}
     panel = Panel(
         name=data["name"],
         size=tuple(data["size"]),
         background_color=_as_color(data.get("background_color")),
         udp_listen_port=udp_cfg.get("listen_port"),
+        fullscreen=bool(win_cfg.get("fullscreen", False)),
+        screen_index=int(win_cfg.get("screen", 0)),
     )
 
     for entry in data.get("instruments", []):

@@ -65,9 +65,23 @@ class PanelWindow(arcade.Window):
         ssaa: int = 4,
     ) -> None:
         w, h = panel.size
+
+        # Resolve target screen via pyglet (Arcade's windowing backend).
+        import pyglet
+        screens = pyglet.canvas.get_display().get_screens()
+        target_screen = (
+            screens[min(panel.screen_index, len(screens) - 1)]
+            if screens else None
+        )
+
         # Always non-MSAA: hardware MSAA is unreliable for python.exe without
         # driver overrides.  AA is provided by the SSAA FBO chain instead.
-        super().__init__(w, h, panel.name, antialiasing=False)
+        super().__init__(
+            w, h, panel.name,
+            antialiasing=False,
+            fullscreen=panel.fullscreen,
+            screen=target_screen,
+        )
 
         if panel.background_color is not None:
             self.background_color = panel.background_color

@@ -667,6 +667,11 @@ class MainWindow(QMainWindow):
             udp.pop("listen_port", None)
             if not udp:
                 self._panel_data.pop("udp", None)
+        win_opts = self._panel_view.get_window_opts()
+        if win_opts:
+            self._panel_data["window"] = win_opts
+        else:
+            self._panel_data.pop("window", None)
         try:
             with open(path, "w", encoding="utf-8") as f:
                 yaml.dump(
