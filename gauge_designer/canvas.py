@@ -637,7 +637,7 @@ class InstrumentCanvas(QWidget):
 
     def _render_rotary_encoder(self, comp: dict, composite: Image.Image,
                                draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
-        """Render background + face textures (if set), then a dashed overlay."""
+        """Render background + face textures (if set), then overlay markers."""
         pos = comp.get("position", [0, 0])
         sz  = comp.get("size", [60, 60])
         cx_p = int(pos[0]); cy_p = canvas_h - int(pos[1])
@@ -646,7 +646,7 @@ class InstrumentCanvas(QWidget):
         x0, y0 = cx_p - hw, cy_p - hh
         x1, y1 = cx_p + hw, cy_p + hh
 
-        # Background texture
+        # Background texture — fills component size
         bg_tex = comp.get("background_texture", "")
         if bg_tex:
             try:
@@ -660,21 +660,28 @@ class InstrumentCanvas(QWidget):
             except Exception:
                 pass
 
-        # Face texture (static preview at angle 0)
+        # Face texture — may have its own size and centre offset
         face_tex = comp.get("face_texture", "")
+        face_off = comp.get("face_offset", [0, 0])
+        fox, foy = int(face_off[0]), int(face_off[1])
+        face_sz  = comp.get("face_size", sz)
+        fw, fh   = int(face_sz[0]), int(face_sz[1])
+        # face_offset is y-up; convert to PIL (y-down) by negating y component
+        face_cx_p = cx_p + fox
+        face_cy_p = cy_p - foy
         if face_tex:
             try:
                 atlas = self._load_atlas(face_tex)
                 ox, oy = comp.get("face_origin", [0, 0])
-                cw, ch = comp.get("face_cliprect", [tw, th])
+                cw, ch = comp.get("face_cliprect", [fw, fh])
                 region = atlas.crop((ox, oy, ox + cw, oy + ch)).resize(
-                    (tw, th), Image.LANCZOS
+                    (fw, fh), Image.LANCZOS
                 )
-                composite.paste(region, (x0, y0), region)
+                composite.paste(region, (face_cx_p - fw // 2, face_cy_p - fh // 2), region)
             except Exception:
                 pass
 
-        # Dashed outline overlay (always shown so it's clearly interactive)
+        # Dashed outline overlay (component bounding box — always shown)
         DASH = (100, 180, 100, 180)
         dash, gap = 6, 4
         for seg_x in range(x0, x1, dash + gap):
@@ -702,7 +709,32 @@ class InstrumentCanvas(QWidget):
             draw.text((cx_p - tw2 // 2, cy_p - th2 // 2), label,
                       fill=(100, 180, 100, 160), font=font)
 
+        # Component centre crosshair (yellow)
         self._crosshair(draw, cx_p, cy_p)
+
+        # Face centre cross (white) — shows where the face texture is anchored
+        if face_tex:
+            FACE_C = (255, 255, 255, 210)
+            arm = 8
+            draw.line([(face_cx_p - arm, face_cy_p), (face_cx_p + arm, face_cy_p)],
+                      fill=FACE_C, width=1)
+            draw.line([(face_cx_p, face_cy_p - arm), (face_cx_p, face_cy_p + arm)],
+                      fill=FACE_C, width=1)
+
+        # Rotation centre marker (cyan) — only when non-zero offset
+        face_rc = comp.get("face_rotation_center", [0, 0])
+        rcx, rcy = int(face_rc[0]), int(face_rc[1])
+        if rcx != 0 or rcy != 0:
+            rc_cx_p = cx_p + rcx
+            rc_cy_p = cy_p - rcy
+            ROT_C = (0, 200, 255, 210)
+            arm = 6
+            draw.line([(rc_cx_p - arm, rc_cy_p), (rc_cx_p + arm, rc_cy_p)],
+                      fill=ROT_C, width=1)
+            draw.line([(rc_cx_p, rc_cy_p - arm), (rc_cx_p, rc_cy_p + arm)],
+                      fill=ROT_C, width=1)
+            draw.ellipse([rc_cx_p - 4, rc_cy_p - 4, rc_cx_p + 4, rc_cy_p + 4],
+                         outline=ROT_C, width=1)
 
     def _render_vector(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0])
