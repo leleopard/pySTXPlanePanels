@@ -1838,6 +1838,9 @@ class PropertiesForm(QWidget):
     # ── Public API ────────────────────────────────────────────────────────
 
     def load(self, comp: dict):
+        import traceback
+        caller = traceback.extract_stack()[-2]
+        print(f"[form.load] type={comp.get('type')} from {caller.name}:{caller.lineno}", flush=True)
         self._loading = True
         known = {
             "name", "type", "position",
@@ -2731,6 +2734,9 @@ class PropertiesForm(QWidget):
     # ── Internal ──────────────────────────────────────────────────────────
 
     def _emit(self):
+        import traceback
+        caller = traceback.extract_stack()[-2]
+        print(f"[_emit] loading={self._loading} from {caller.name}:{caller.lineno} sw={self._re_face_sw.value()}", flush=True)
         if not self._loading:
             self.changed.emit()
 
