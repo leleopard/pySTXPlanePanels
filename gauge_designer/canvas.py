@@ -678,8 +678,8 @@ class InstrumentCanvas(QWidget):
                     (fw, fh), Image.LANCZOS
                 )
                 composite.paste(region, (face_cx_p - fw // 2, face_cy_p - fh // 2), region)
-            except Exception:
-                pass
+            except Exception as _exc:
+                print(f"[canvas RotaryEncoder face] {_exc}", flush=True)
 
         # Face bounding box (light-blue dashed) — shows face_size in canvas
         if face_tex:
@@ -695,6 +695,9 @@ class InstrumentCanvas(QWidget):
                 y_end = min(seg_y + dash2, fy1)
                 draw.line([(fx0, seg_y), (fx0, y_end)], fill=FACE_BOX, width=1)
                 draw.line([(fx1, seg_y), (fx1, y_end)], fill=FACE_BOX, width=1)
+            # Dimension label inside the bounding box (confirms what face_size the canvas uses)
+            font = ImageFont.load_default()
+            draw.text((fx0 + 2, fy0 + 2), f"{fw}×{fh}", fill=(80, 180, 255, 220), font=font)
 
         # Dashed outline overlay (component bounding box — always shown)
         DASH = (100, 180, 100, 180)

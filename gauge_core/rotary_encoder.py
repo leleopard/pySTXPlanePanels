@@ -219,7 +219,10 @@ class RotaryEncoder(InteractiveComponent):
         if not command:
             return
         try:
-            arcade.get_window()._send_cmd(command)
+            win = arcade.get_window()
+            win._send_cmd(command)
+            if getattr(win, "_is_test_mode", False):
+                print(f"[cmd] {self.name}: {command}", flush=True)
         except Exception as exc:
             print(f"[RotaryEncoder:{self.name}] _fire({command!r}) failed: {exc}")
 
