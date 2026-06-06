@@ -43,6 +43,7 @@ class Panel:
     udp_listen_port: int | None = None  # overrides config.yaml when set
     fullscreen: bool = False
     screen_index: int = 0
+    hit_padding_multiplier: float = 1.5
 
     def all_components(self) -> list[Any]:
         """Flat list of every component across every instrument, in order."""
@@ -89,6 +90,7 @@ def load_panel(yaml_path: str | Path) -> Panel:
         udp_listen_port=udp_cfg.get("listen_port"),
         fullscreen=bool(win_cfg.get("fullscreen", False)),
         screen_index=int(win_cfg.get("screen", 0)),
+        hit_padding_multiplier=float(data.get("hit_padding_multiplier", 1.5)),
     )
 
     for entry in data.get("instruments", []):

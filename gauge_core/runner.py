@@ -59,6 +59,7 @@ class PanelWindow(arcade.Window):
         self,
         panel: Panel,
         get_data: Callable[[Any], float],
+        send_cmd: Callable[[str], None],
         is_test_mode: bool,
         udp_alive: Callable[[], bool] | None = None,
         on_shutdown: Callable[[], None] | None = None,
@@ -93,9 +94,13 @@ class PanelWindow(arcade.Window):
         # scissor rectangles correctly (they are in panel coords, not screen pixels).
         self._panel_size: tuple[int, int] = panel.size
         self._get_data = get_data
+        self._send_cmd = send_cmd
         self._is_test_mode = is_test_mode
         self._udp_alive = udp_alive
         self._on_shutdown = on_shutdown
+
+        # Interactive component gesture state
+        self._active_interactive: Any | None = None
 
         self.test_value = 0.0
         self.test_increment = 1.0
@@ -248,6 +253,78 @@ class PanelWindow(arcade.Window):
         elif key == arcade.key.PAGEDOWN:
             self.test_value -= 100.0
 
+    # -- Gesture dispatcher -----------------------------------------------
+
+    def _to_panel_coords(self, x: float, y: float) -> tuple[float, float]:
+        """Convert Arcade window pixels (y-up from bottom-left) to panel logical coords."""
+        pw, ph = self._panel_size
+        return x * pw / self.width, y * ph / self.height
+
+    def _all_interactive(self):
+        """Yield every InteractiveComponent across all instruments."""
+        from gauge_core.interactive import InteractiveComponent
+        for inst in self.panel.instruments:
+            for comp in inst.components:
+                if isinstance(comp, InteractiveComponent):
+                    yield comp
+
+    def _hit_test(self, panel_x: float, panel_y: float):
+        """Return the topmost interactive component at panel coords, or None."""
+        mult = self.panel.hit_padding_multiplier
+        # Iterate in reverse draw order so topmost component wins.
+        from gauge_core.interactive import InteractiveComponent
+        candidates = []
+        for inst in self.panel.instruments:
+            for comp in inst.components:
+                if isinstance(comp, InteractiveComponent):
+                    if comp.hit_test(panel_x, panel_y, mult):
+                        candidates.append(comp)
+        return candidates[-1] if candidates else None
+
+    def on_mouse_press(self, x: float, y: float, button: int, _modifiers: int) -> None:
+        if button != arcade.MOUSE_BUTTON_LEFT:
+            return
+        px, py = self._to_panel_coords(x, y)
+        comp = self._hit_test(px, py)
+        if comp is not None:
+            self._active_interactive = comp
+            comp.on_press(px, py)
+
+    def on_mouse_release(self, x: float, y: float, button: int, _modifiers: int) -> None:
+        if button != arcade.MOUSE_BUTTON_LEFT:
+            return
+        if self._active_interactive is not None:
+            px, py = self._to_panel_coords(x, y)
+            self._active_interactive.on_release(px, py)
+            self._active_interactive = None
+
+    def on_mouse_drag(self, x: float, y: float, dx: float, dy: float,
+                      _buttons: int, _modifiers: int) -> None:
+        if self._active_interactive is None:
+            return
+        px, py = self._to_panel_coords(x, y)
+        pw, ph = self._panel_size
+        # Scale dx/dy from screen pixels to panel logical pixels.
+        dpx = dx * pw / self.width
+        dpy = dy * ph / self.height
+        self._active_interactive.on_drag(px, py, dpx, dpy)
+
+    def on_mouse_scroll(self, x: float, y: float, _scroll_x: float, scroll_y: float) -> None:
+        px, py = self._to_panel_coords(x, y)
+        comp = self._hit_test(px, py)
+        if comp is not None:
+            comp.on_scroll(px, py, scroll_y)
+
+    def on_touch_begin(self, touch) -> None:
+        self.on_mouse_press(touch.x, touch.y, arcade.MOUSE_BUTTON_LEFT, 0)
+
+    def on_touch_end(self, touch) -> None:
+        self.on_mouse_release(touch.x, touch.y, arcade.MOUSE_BUTTON_LEFT, 0)
+
+    def on_touch_motion(self, touch) -> None:
+        self.on_mouse_drag(touch.x, touch.y, touch.dx, touch.dy,
+                           arcade.MOUSE_BUTTON_LEFT, 0)
+
 
 # -- Data sources ---------------------------------------------------------
 
@@ -279,6 +356,9 @@ class UDPDataSource:
 
     def __call__(self, dataref: Any) -> float:
         return float(self._server.getData(dataref))
+
+    def send_cmd(self, command: str) -> None:
+        self._server.sendXPCmd(command)
 
     def alive(self) -> bool:
         return bool(getattr(self._server, "XPalive", False))
@@ -359,11 +439,14 @@ def main(argv: list[str] | None = None) -> int:
     udp: UDPDataSource | None = None
     mock: MockDataSource | None = None
 
+    _noop_send_cmd: Callable[[str], None] = lambda _cmd: None
+
     if args.test:
         data_source = TestDataSource()
         window = PanelWindow(
             panel=panel,
             get_data=data_source,
+            send_cmd=_noop_send_cmd,
             is_test_mode=True,
             ssaa=args.ssaa,
         )
@@ -374,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         window = PanelWindow(
             panel=panel,
             get_data=mock,
+            send_cmd=_noop_send_cmd,
             is_test_mode=True,
             ssaa=args.ssaa,
         )
@@ -386,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
         window = PanelWindow(
             panel=panel,
             get_data=udp,
+            send_cmd=udp.send_cmd,
             is_test_mode=False,
             udp_alive=udp.alive,
             on_shutdown=udp.quit,
