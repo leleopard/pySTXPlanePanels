@@ -204,7 +204,7 @@ class PanelWindow(arcade.Window):
         saved_proj = ctx.projection_matrix
         top_fbo.use()
         top_fbo.viewport = (0, 0, fw, fh)
-        top_fbo.clear(color=self._bg_float)
+        top_fbo.clear(color_normalized=self._bg_float)
         ctx.projection_matrix = Mat4.orthogonal_projection(0, w, 0, h, -100.0, 100.0)
 
         self._render_scene()
