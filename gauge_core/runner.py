@@ -155,14 +155,16 @@ class PanelWindow(arcade.Window):
         else:
             from pyglet.math import Mat4
             w, h = self.panel.size
+            scr_h = self.height
             self.clear()
-            # Explicitly set panel-size projection so that fullscreen mode (where
-            # win.width/height equal the screen resolution, not the panel size)
-            # maps sprite positions in panel coords correctly to screen pixels.
+            # Constrain rendering to the top-left w×h region of the screen so
+            # that fullscreen mode places the panel at the Y-down origin.
+            self.ctx.viewport = (0, scr_h - h, w, h)
             self.ctx.projection_matrix = Mat4.orthogonal_projection(
                 0, w, 0, h, -100.0, 100.0
             )
             self._render_scene()
+            self.ctx.viewport = (0, 0, self.width, scr_h)
         self._tick_fps()
 
     def _render_scene(self) -> None:
@@ -220,9 +222,13 @@ class PanelWindow(arcade.Window):
         last_fbo, lw, lh = self._ssaa_chain[-1]
         ctx.screen.use()
         ctx.projection_matrix = saved_proj
+        # In fullscreen mode self.height == screen resolution; panel must be
+        # placed at the top-left (Y-down convention: y=0 is at the top).
+        # In OpenGL Y-up coords the top-left is at y = scr_h - panel_h.
+        scr_h = self.height
         glBindFramebuffer(GL_READ_FRAMEBUFFER, last_fbo.glo)
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, ctx.screen.glo)
-        glBlitFramebuffer(0, 0, lw, lh, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_LINEAR)
+        glBlitFramebuffer(0, 0, lw, lh, 0, scr_h - h, w, scr_h, GL_COLOR_BUFFER_BIT, GL_LINEAR)
         glBindFramebuffer(GL_READ_FRAMEBUFFER, ctx.screen.glo)
 
     def _tick_fps(self) -> None:
