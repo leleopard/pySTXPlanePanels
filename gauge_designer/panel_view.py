@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QSettings, QSize
-from gauge_designer.ui_utils import QSpinBox, QDoubleSpinBox
+from gauge_designer.ui_utils import QSpinBox, QDoubleSpinBox, is_y_down
 from PySide6.QtGui import QColor
 
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
@@ -683,11 +683,24 @@ class PanelView(QWidget):
 
     def _on_size_changed(self):
         if not self._loading:
-            h = self._panel_h.value()
-            self._inst_form.set_ref_height(h)
-            self._grid_form.set_ref_height(h)
-            self._canvas.set_size(self._panel_w.value(), h)
-            self.refresh_form()
+            new_h = self._panel_h.value()
+            # In Y-down mode the user thinks in distance-from-top, so adjust all
+            # Y-up positions by the height delta so instruments stay anchored to top.
+            if is_y_down() and self._canvas._data:
+                old_h = self._canvas._data.get("size", [0, new_h])[1]
+                delta = new_h - old_h
+                if delta:
+                    for entry in self._instruments:
+                        if "grid" in entry:
+                            g = entry["grid"]
+                            pos = g.get("position", [0, 0])
+                            g["position"] = [pos[0], float(pos[1]) + delta]
+                        else:
+                            pos = entry.get("position", [0, 0])
+                            entry["position"] = [float(pos[0]), float(pos[1]) + delta]
+            self._inst_form.set_ref_height(new_h)
+            self._grid_form.set_ref_height(new_h)
+            self._canvas.set_size(self._panel_w.value(), new_h)
             self.changed.emit()
 
     # ── UDP listen port ────────────────────────────────────────────────────
