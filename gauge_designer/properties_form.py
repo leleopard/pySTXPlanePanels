@@ -2312,10 +2312,7 @@ class PropertiesForm(QWidget):
                 data["face_texture"]  = face
                 data["face_origin"]   = [self._re_face_ox.value(), self._re_face_oy.value()]
                 data["face_cliprect"] = [self._re_face_cw.value(), self._re_face_ch.value()]
-                fsw, fsh = self._re_face_sw.value(), self._re_face_sh.value()
-                comp_sz = [self._re_w.value(), self._re_h.value()]
-                if [fsw, fsh] != comp_sz:
-                    data["face_size"] = [fsw, fsh]
+                data["face_size"] = [self._re_face_sw.value(), self._re_face_sh.value()]
                 fox, foy = self._re_face_offx.value(), self._re_face_offy.value()
                 if fox != 0 or foy != 0:
                     data["face_offset"] = [fox, foy]
