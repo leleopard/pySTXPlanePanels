@@ -39,6 +39,35 @@ def _find_panels_root(yaml_path: str) -> str:
     return str(p)
 
 
+def _has_instrument_ref(data: dict, ref_rel: str) -> bool:
+    """Return True if any instrument entry in data references ref_rel."""
+    for entry in data.get("instruments", []):
+        targets = (
+            entry.get("grid", {}).get("instruments", [])
+            if "grid" in entry else [entry]
+        )
+        if any(inst.get("file", "").replace("\\", "/") == ref_rel for inst in targets):
+            return True
+    return False
+
+
+def _remove_instrument_refs(data: dict, ref_rel: str) -> None:
+    """Remove all instrument entries referencing ref_rel from data (in-place)."""
+    result = []
+    for entry in data.get("instruments", []):
+        if "grid" in entry:
+            grid = entry["grid"]
+            grid["instruments"] = [
+                gi for gi in grid.get("instruments", [])
+                if gi.get("file", "").replace("\\", "/") != ref_rel
+            ]
+            result.append(entry)
+        else:
+            if entry.get("file", "").replace("\\", "/") != ref_rel:
+                result.append(entry)
+    data["instruments"] = result
+
+
 def _rewrite_refs(data: dict, old_rel: str, new_rel: str) -> bool:
     """Replace matching instrument file references in a panel data dict (in-place).
 
@@ -96,6 +125,7 @@ class MainWindow(QMainWindow):
         self._gauge_view.live_running.connect(self._on_live_running)
         self._preview.live_running_changed.connect(self._on_live_running)
         self._gauge_view.instrument_moved.connect(self._on_instrument_moved)
+        self._gauge_view.delete_requested.connect(self._on_instrument_delete_requested)
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._gauge_view, "Instruments")
@@ -417,6 +447,85 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"Auto-updated paths in: {', '.join(updated)}"
             )
+
+    def _on_instrument_delete_requested(self, abs_path: str) -> None:
+        """Confirm deletion of an instrument file, warn if panels reference it, then clean up."""
+        path = Path(abs_path)
+        instruments_root = self._gauge_view._instruments_root
+        panels_root = self._panel_view._panels_root
+
+        # Scan panel YAMLs for references to this file.
+        ref_rel: str | None = None
+        affected: list[tuple[Path, dict]] = []
+        if instruments_root and panels_root:
+            project_root = Path(instruments_root).parent.resolve()
+            try:
+                ref_rel = path.resolve().relative_to(project_root).as_posix()
+            except ValueError:
+                pass
+            if ref_rel:
+                for yaml_path in Path(panels_root).rglob("*.yaml"):
+                    try:
+                        with open(yaml_path, encoding="utf-8") as f:
+                            data = yaml.safe_load(f)
+                    except Exception:
+                        continue
+                    if isinstance(data, dict) and _has_instrument_ref(data, ref_rel):
+                        affected.append((yaml_path, data))
+
+        # Build confirmation dialog.
+        if affected:
+            panel_names = "\n".join(f"  • {p.name}" for p, _ in affected)
+            msg = (
+                f"The following panels reference '{path.name}':\n\n"
+                f"{panel_names}\n\n"
+                f"Delete '{path.name}' and remove it from all listed panels?"
+            )
+            reply = QMessageBox.warning(
+                self, "Delete Instrument — Panels Affected",
+                msg, QMessageBox.Yes | QMessageBox.No,
+            )
+        else:
+            reply = QMessageBox.question(
+                self, "Delete Instrument",
+                f"Delete '{path.name}'?\nThis cannot be undone.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Delete the file.
+        try:
+            path.unlink()
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+
+        # Remove from affected panel YAMLs.
+        if affected and ref_rel:
+            cleaned: list[str] = []
+            for yaml_path, data in affected:
+                _remove_instrument_refs(data, ref_rel)
+                try:
+                    with open(yaml_path, "w", encoding="utf-8") as f:
+                        yaml.dump(data, f, default_flow_style=False,
+                                  allow_unicode=True, sort_keys=False)
+                    cleaned.append(yaml_path.name)
+                except Exception:
+                    continue
+                if self._panel_path and Path(self._panel_path).resolve() == yaml_path.resolve():
+                    self._panel_data = data
+                    self._panel_dirty = False
+                    self._panel_view.load(self._panel_data, self._panel_path)
+                    self._update_save_btn(False)
+                    self._update_save_all_btn()
+            if cleaned:
+                self.statusBar().showMessage(
+                    f"Deleted {path.name}; removed from: {', '.join(cleaned)}"
+                )
+
+        # Refresh the instrument tree (and clear form if the deleted file was open).
+        self._gauge_view.after_file_deleted(abs_path)
 
     # ── Tab handling ──────────────────────────────────────────────────────
 

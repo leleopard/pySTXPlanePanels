@@ -243,6 +243,7 @@ class InstrumentView(QWidget):
     test_running = Signal(bool)    # True when mock test starts, False when it stops
     live_running = Signal(bool)    # True when live X-Plane run starts, False when it stops
     instrument_moved = Signal(str, str)  # old_abs_path, new_abs_path (file or dir)
+    delete_requested = Signal(str)       # abs_path of file the user wants to delete
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -654,20 +655,8 @@ class InstrumentView(QWidget):
         path = Path(item.data(0, _ROLE_PATH))
         typ = item.data(0, _ROLE_TYPE)
         if typ == "file":
-            reply = QMessageBox.question(
-                self, "Delete Instrument",
-                f"Delete '{path.name}'?\nThis cannot be undone.",
-                QMessageBox.Yes | QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
-            try:
-                path.unlink()
-            except Exception as exc:
-                QMessageBox.critical(self, "Error", str(exc))
-                return
-            if self._loaded_path == str(path.resolve()):
-                self.clear()
+            self.delete_requested.emit(str(path.resolve()))
+            return
         elif typ == "dir":
             if any(path.iterdir()):
                 QMessageBox.warning(
@@ -688,6 +677,13 @@ class InstrumentView(QWidget):
                 QMessageBox.critical(self, "Error", str(exc))
                 return
         self._populate_tree(Path(self._instruments_root))
+
+    def after_file_deleted(self, abs_path: str) -> None:
+        """Called by main_window after an instrument file has been deleted from disk."""
+        if self._loaded_path == abs_path:
+            self.clear()
+        if self._instruments_root:
+            self._populate_tree(Path(self._instruments_root))
 
     # ── Gauge size ────────────────────────────────────────────────────────
 
