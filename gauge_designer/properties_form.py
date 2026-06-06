@@ -775,7 +775,7 @@ class PropertiesForm(QWidget):
         )
         hl.addWidget(self._tex)
         btn = QPushButton("…"); btn.setFixedWidth(26)
-        btn.clicked.connect(self._browse_tex)
+        btn.clicked.connect(lambda: self._browse_tex())
         hl.addWidget(btn)
         self._tex_sec.row("File", tex_row)
 
