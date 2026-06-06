@@ -50,7 +50,7 @@ def register_convert(name: str, func: ConvertFunction) -> None:
 
 
 def get_convert(name: str | None) -> ConvertFunction | None:
-    if name is None or name == "":
+    if name is None or name in ("", "(none)"):
         return None
     try:
         return _converts[name]
