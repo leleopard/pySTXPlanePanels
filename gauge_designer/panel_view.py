@@ -216,12 +216,25 @@ class PanelView(QWidget):
         self._file_tree.file_activated.connect(self.open_requested)
         pl.addWidget(self._file_tree)
 
-        # ── Right area: editor (hidden until a panel is loaded) ────────────
+        # ── Right area: always visible; placeholder shown when no panel is loaded ─
         self._editor_area = QWidget()
-        ea = QVBoxLayout(self._editor_area)
+        _ea_outer = QVBoxLayout(self._editor_area)
+        _ea_outer.setContentsMargins(0, 0, 0, 0)
+        _ea_outer.setSpacing(0)
+
+        self._editor_placeholder = QLabel(
+            "Double-click a panel from the list to open it."
+        )
+        self._editor_placeholder.setAlignment(Qt.AlignCenter)
+        self._editor_placeholder.setStyleSheet("color: #888; font-size: 13px;")
+        _ea_outer.addWidget(self._editor_placeholder, 1)
+
+        self._editor_content = QWidget()
+        ea = QVBoxLayout(self._editor_content)
         ea.setContentsMargins(0, 0, 0, 0)
         ea.setSpacing(4)
-        self._editor_area.setVisible(False)
+        self._editor_content.setVisible(False)
+        _ea_outer.addWidget(self._editor_content, 1)
 
         # Panel name header
         self._name_header = header_label("")
@@ -552,7 +565,8 @@ class PanelView(QWidget):
         self._zoom_sb.blockSignals(False)
         self._canvas.set_zoom(zoom)
 
-        self._editor_area.setVisible(True)
+        self._editor_placeholder.setVisible(False)
+        self._editor_content.setVisible(True)
         if yaml_path:
             self._file_tree.highlight(yaml_path)
 
@@ -578,7 +592,8 @@ class PanelView(QWidget):
         self._inst_form.clear()
         self._loading = False
         self._canvas.clear()
-        self._editor_area.setVisible(False)
+        self._editor_content.setVisible(False)
+        self._editor_placeholder.setVisible(True)
 
     def get_instruments(self) -> list[dict]:
         return self._instruments
