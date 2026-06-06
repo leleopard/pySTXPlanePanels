@@ -666,6 +666,10 @@ class InstrumentCanvas(QWidget):
         fox, foy = int(face_off[0]), int(face_off[1])
         face_sz  = comp.get("face_size", sz)
         fw, fh   = int(face_sz[0]), int(face_sz[1])
+        _dbg_key = "_last_dbg_face_sz"
+        if getattr(self, _dbg_key, None) != (fw, fh):
+            print(f"[canvas render] {comp.get('name')} face_size={face_sz} -> fw={fw} fh={fh} comp_dict_id={id(comp)}", flush=True)
+            setattr(self, _dbg_key, (fw, fh))
         # face_offset is y-up; convert to PIL (y-down) by negating y component
         face_cx_p = cx_p + fox
         face_cy_p = cy_p - foy

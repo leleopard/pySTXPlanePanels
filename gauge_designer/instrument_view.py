@@ -774,10 +774,14 @@ class InstrumentView(QWidget):
         if row < 0 or row >= len(self._components):
             return
         updated = self._form.get_data()
+        if updated.get("type") == "RotaryEncoder":
+            print(f"[_on_form_changed] row={row} face_size={updated.get('face_size')} comp_id={id(self._components[row])}", flush=True)
         old_name = self._components[row].get("name", "")
         # update in-place so canvas references stay valid
         self._components[row].clear()
         self._components[row].update(updated)
+        if updated.get("type") == "RotaryEncoder":
+            print(f"[_on_form_changed] after update: comp face_size={self._components[row].get('face_size')} canvas_data_id={id(self._canvas._data.get('components', [None])[row] if self._canvas._data else None)}", flush=True)
         new_name = updated.get("name", "")
         if self._list.item(row) and self._list.item(row).text() != new_name:
             self._list.item(row).setText(new_name)
