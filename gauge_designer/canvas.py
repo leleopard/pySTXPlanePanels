@@ -491,7 +491,7 @@ class InstrumentCanvas(QWidget):
                 elif ctype == "AttitudeIndicator":
                     self._render_ai(comp, composite, draw, w, h)
                 elif ctype == "RotaryEncoder":
-                    self._render_rotary_encoder(comp, draw, h)
+                    self._render_rotary_encoder(comp, composite, draw, h)
             except Exception:
                 continue
 
@@ -635,17 +635,46 @@ class InstrumentCanvas(QWidget):
             px, py = pts[self._selected_point_idx]
             self._crosshair(draw, px, py)
 
-    def _render_rotary_encoder(self, comp: dict, draw: ImageDraw.ImageDraw,
-                               canvas_h: int) -> None:
-        """Draw a dashed bounding box + centre divider to indicate the hit zone."""
+    def _render_rotary_encoder(self, comp: dict, composite: Image.Image,
+                               draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        """Render background + face textures (if set), then a dashed overlay."""
         pos = comp.get("position", [0, 0])
         sz  = comp.get("size", [60, 60])
         cx_p = int(pos[0]); cy_p = canvas_h - int(pos[1])
-        hw = int(sz[0]) // 2; hh = int(sz[1]) // 2
+        tw, th = int(sz[0]), int(sz[1])
+        hw, hh = tw // 2, th // 2
         x0, y0 = cx_p - hw, cy_p - hh
         x1, y1 = cx_p + hw, cy_p + hh
 
-        # Dashed outline
+        # Background texture
+        bg_tex = comp.get("background_texture", "")
+        if bg_tex:
+            try:
+                atlas = self._load_atlas(bg_tex)
+                ox, oy = comp.get("background_origin", [0, 0])
+                cw, ch = comp.get("background_cliprect", [tw, th])
+                region = atlas.crop((ox, oy, ox + cw, oy + ch)).resize(
+                    (tw, th), Image.LANCZOS
+                )
+                composite.paste(region, (x0, y0), region)
+            except Exception:
+                pass
+
+        # Face texture (static preview at angle 0)
+        face_tex = comp.get("face_texture", "")
+        if face_tex:
+            try:
+                atlas = self._load_atlas(face_tex)
+                ox, oy = comp.get("face_origin", [0, 0])
+                cw, ch = comp.get("face_cliprect", [tw, th])
+                region = atlas.crop((ox, oy, ox + cw, oy + ch)).resize(
+                    (tw, th), Image.LANCZOS
+                )
+                composite.paste(region, (x0, y0), region)
+            except Exception:
+                pass
+
+        # Dashed outline overlay (always shown so it's clearly interactive)
         DASH = (100, 180, 100, 180)
         dash, gap = 6, 4
         for seg_x in range(x0, x1, dash + gap):
@@ -657,20 +686,21 @@ class InstrumentCanvas(QWidget):
             draw.line([(x0, seg_y), (x0, y_end)], fill=DASH, width=1)
             draw.line([(x1, seg_y), (x1, y_end)], fill=DASH, width=1)
 
-        # Centre divider line (shows left/right tap halves)
-        DIVIDER = (100, 180, 100, 100)
-        draw.line([(cx_p, y0 + 2), (cx_p, y1 - 2)], fill=DIVIDER, width=1)
+        # Centre divider (shows left/right tap halves)
+        draw.line([(cx_p, y0 + 2), (cx_p, y1 - 2)],
+                  fill=(100, 180, 100, 100), width=1)
 
-        # "⟳" label
-        font = ImageFont.load_default()
-        label = "ROT"
-        try:
-            bbox = draw.textbbox((0, 0), label, font=font)
-            tw = bbox[2] - bbox[0]; th = bbox[3] - bbox[1]
-        except Exception:
-            tw, th = len(label) * 6, 10
-        draw.text((cx_p - tw // 2, cy_p - th // 2), label,
-                  fill=(100, 180, 100, 160), font=font)
+        # Label when no textures are set
+        if not bg_tex and not face_tex:
+            font = ImageFont.load_default()
+            label = "ROT"
+            try:
+                bbox = draw.textbbox((0, 0), label, font=font)
+                tw2 = bbox[2] - bbox[0]; th2 = bbox[3] - bbox[1]
+            except Exception:
+                tw2, th2 = len(label) * 6, 10
+            draw.text((cx_p - tw2 // 2, cy_p - th2 // 2), label,
+                      fill=(100, 180, 100, 160), font=font)
 
         self._crosshair(draw, cx_p, cy_p)
 

@@ -669,6 +669,13 @@ def _pair_box(w1: QWidget, w2: QWidget, sep: str = "×") -> QWidget:
     return box
 
 
+def _sep_label(text: str) -> QLabel:
+    """Thin horizontal separator label used as a sub-section divider."""
+    lbl = QLabel(text)
+    lbl.setStyleSheet("color: #aaa; font-size: 10px; margin-top: 4px;")
+    return lbl
+
+
 # ── Main form ─────────────────────────────────────────────────────────────────
 
 class PropertiesForm(QWidget):
@@ -1586,7 +1593,7 @@ class PropertiesForm(QWidget):
         self._re_sec.setVisible(False)
 
         hint = QLabel(
-            "Invisible hit zone. Left-half tap = CCW · Right-half tap = CW\n"
+            "Left-half tap = CCW · Right-half tap = CW\n"
             "Drag up = CW · Drag down = CCW · Scroll wheel = ±1 step"
         )
         hint.setWordWrap(True)
@@ -1615,6 +1622,70 @@ class PropertiesForm(QWidget):
         self._re_drag_px.setToolTip("Pixels of drag before one command step fires.")
         self._re_drag_px.valueChanged.connect(self._emit)
         self._re_sec.row("Drag px / step", self._re_drag_px)
+
+        # ── Background texture (static encoder body) ──────────────────────
+        self._re_sec.row_widget(_sep_label("Background texture (optional — encoder body)"))
+
+        self._re_bg_tex = QLineEdit()
+        self._re_bg_tex.setPlaceholderText("assets/encoder_bg.png")
+        self._re_bg_tex.editingFinished.connect(self._emit)
+        re_bg_row = QWidget(); re_bgl = QHBoxLayout(re_bg_row)
+        re_bgl.setContentsMargins(0, 0, 0, 0); re_bgl.setSpacing(4)
+        re_bgl.addWidget(self._re_bg_tex)
+        re_bg_btn = QPushButton("…"); re_bg_btn.setFixedWidth(26)
+        re_bg_btn.clicked.connect(lambda: self._browse_tex(self._re_bg_tex))
+        re_bgl.addWidget(re_bg_btn)
+        self._re_sec.row("Texture", re_bg_row)
+
+        self._re_bg_ox = _sb(0, 8192); self._re_bg_oy = _sb(0, 8192)
+        for w in (self._re_bg_ox, self._re_bg_oy):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Origin X  /  Y", self._re_bg_ox, self._re_bg_oy)
+
+        self._re_bg_cw = _sb(1, 4096); self._re_bg_ch = _sb(1, 4096)
+        self._re_bg_cw.setValue(120); self._re_bg_ch.setValue(120)
+        for w in (self._re_bg_cw, self._re_bg_ch):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Cliprect W  ×  H", self._re_bg_cw, self._re_bg_ch)
+
+        # ── Face texture (rotating knob surface) ──────────────────────────
+        self._re_sec.row_widget(_sep_label("Face texture (optional — rotating knob)"))
+
+        self._re_face_tex = QLineEdit()
+        self._re_face_tex.setPlaceholderText("assets/encoder_face.png")
+        self._re_face_tex.editingFinished.connect(self._emit)
+        re_face_row = QWidget(); re_facel = QHBoxLayout(re_face_row)
+        re_facel.setContentsMargins(0, 0, 0, 0); re_facel.setSpacing(4)
+        re_facel.addWidget(self._re_face_tex)
+        re_face_btn = QPushButton("…"); re_face_btn.setFixedWidth(26)
+        re_face_btn.clicked.connect(lambda: self._browse_tex(self._re_face_tex))
+        re_facel.addWidget(re_face_btn)
+        self._re_sec.row("Texture", re_face_row)
+
+        self._re_face_ox = _sb(0, 8192); self._re_face_oy = _sb(0, 8192)
+        for w in (self._re_face_ox, self._re_face_oy):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Origin X  /  Y", self._re_face_ox, self._re_face_oy)
+
+        self._re_face_cw = _sb(1, 4096); self._re_face_ch = _sb(1, 4096)
+        self._re_face_cw.setValue(80); self._re_face_ch.setValue(80)
+        for w in (self._re_face_cw, self._re_face_ch):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Cliprect W  ×  H", self._re_face_cw, self._re_face_ch)
+
+        self._re_face_dr = QLineEdit()
+        self._re_face_dr.setPlaceholderText("dataref driving face rotation")
+        self._re_face_dr.editingFinished.connect(self._emit)
+        self._re_sec.row("Rotation dataref", self._re_face_dr)
+
+        self._re_face_fn = _NoScrollComboBox()
+        self._re_face_fn.addItems(_VALUE_FUNCS)
+        self._re_face_fn.currentTextChanged.connect(self._emit)
+        self._re_sec.row("Convert fn", self._re_face_fn)
+
+        self._re_face_tbl = _TableEditor("Input value", "Angle °")
+        self._re_face_tbl.changed.connect(self._emit)
+        self._re_sec.row("Rotation table", self._re_face_tbl)
 
         self._vbox.addWidget(self._re_sec)
 
@@ -1768,6 +1839,8 @@ class PropertiesForm(QWidget):
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             # RotaryEncoder
             "command_cw", "command_ccw", "drag_px_per_step",
+            "background_texture", "background_origin", "background_cliprect",
+            "face_texture", "face_origin", "face_cliprect", "face_rotation",
             # CircularGauge
             "arc_color", "arc_width", "needle_length", "needle_width",
             "needle_color", "needle_angle",
@@ -2035,6 +2108,23 @@ class PropertiesForm(QWidget):
         self._re_cmd_cw.setText(str(comp.get("command_cw", "")))
         self._re_cmd_ccw.setText(str(comp.get("command_ccw", "")))
         self._re_drag_px.setValue(float(comp.get("drag_px_per_step", 5.0)))
+        # background texture
+        self._re_bg_tex.setText(str(comp.get("background_texture", "")))
+        bg_orig = comp.get("background_origin", [0, 0])
+        self._re_bg_ox.setValue(int(bg_orig[0])); self._re_bg_oy.setValue(int(bg_orig[1]))
+        bg_clip = comp.get("background_cliprect", [120, 120])
+        self._re_bg_cw.setValue(int(bg_clip[0])); self._re_bg_ch.setValue(int(bg_clip[1]))
+        # face texture
+        self._re_face_tex.setText(str(comp.get("face_texture", "")))
+        face_orig = comp.get("face_origin", [0, 0])
+        self._re_face_ox.setValue(int(face_orig[0])); self._re_face_oy.setValue(int(face_orig[1]))
+        face_clip = comp.get("face_cliprect", [80, 80])
+        self._re_face_cw.setValue(int(face_clip[0])); self._re_face_ch.setValue(int(face_clip[1]))
+        fr = comp.get("face_rotation") or {}
+        self._re_face_dr.setText(str(fr.get("dataref", "")))
+        fn_idx = self._re_face_fn.findText(str(fr.get("convert_function") or "identity"))
+        self._re_face_fn.setCurrentIndex(max(fn_idx, 0))
+        self._re_face_tbl.load(fr.get("table", []))
 
         # CircularGauge
         cg_ctr = comp.get("center", [0, 0])
@@ -2160,6 +2250,26 @@ class PropertiesForm(QWidget):
             drag = self._re_drag_px.value()
             if abs(drag - 5.0) > 0.05:
                 data["drag_px_per_step"] = round(drag, 1)
+            # background texture
+            bg = self._re_bg_tex.text().strip()
+            if bg:
+                data["background_texture"] = bg
+                data["background_origin"]  = [self._re_bg_ox.value(), self._re_bg_oy.value()]
+                data["background_cliprect"] = [self._re_bg_cw.value(), self._re_bg_ch.value()]
+            # face texture
+            face = self._re_face_tex.text().strip()
+            if face:
+                data["face_texture"]  = face
+                data["face_origin"]   = [self._re_face_ox.value(), self._re_face_oy.value()]
+                data["face_cliprect"] = [self._re_face_cw.value(), self._re_face_ch.value()]
+                fdr = self._re_face_dr.text().strip()
+                ftbl = self._re_face_tbl.get_data()
+                if fdr or ftbl:
+                    fr: dict = {"dataref": fdr, "table": ftbl}
+                    fn = self._re_face_fn.currentText()
+                    if fn and fn != "identity":
+                        fr["convert_function"] = fn
+                    data["face_rotation"] = fr
 
         elif ct == "CircularGauge":
             data["center"] = [self._cg_cx.value(), flip_y(self._cg_cy.value(), self._ref_height)]
@@ -2483,6 +2593,15 @@ class PropertiesForm(QWidget):
         self._re_w.setValue(60); self._re_h.setValue(60)
         self._re_cmd_cw.clear(); self._re_cmd_ccw.clear()
         self._re_drag_px.setValue(5.0)
+        self._re_bg_tex.clear()
+        self._re_bg_ox.setValue(0); self._re_bg_oy.setValue(0)
+        self._re_bg_cw.setValue(120); self._re_bg_ch.setValue(120)
+        self._re_face_tex.clear()
+        self._re_face_ox.setValue(0); self._re_face_oy.setValue(0)
+        self._re_face_cw.setValue(80); self._re_face_ch.setValue(80)
+        self._re_face_dr.clear()
+        self._re_face_fn.setCurrentIndex(0)
+        self._re_face_tbl.load([])
         # CircularGauge
         self._cg_cx.setValue(0); self._cg_cy.setValue(0)
         self._cg_radius.setValue(100.0)
@@ -2744,11 +2863,14 @@ class PropertiesForm(QWidget):
             self._loading = False
             self._emit()
 
-    def _browse_tex(self):
+    def _browse_tex(self, target: QLineEdit | None = None):
+        """Open a file browser for a texture. *target* defaults to self._tex."""
+        if target is None:
+            target = self._tex
         start = self._yaml_dir
-        if self._tex.text() and self._yaml_dir:
+        if target.text() and self._yaml_dir:
             try:
-                start = str((Path(self._yaml_dir) / self._tex.text()).resolve())
+                start = str((Path(self._yaml_dir) / target.text()).resolve())
             except Exception:
                 pass
         path, _ = QFileDialog.getOpenFileName(
@@ -2758,7 +2880,7 @@ class PropertiesForm(QWidget):
             return
         if self._yaml_dir:
             rel = os.path.relpath(path, self._yaml_dir).replace("\\", "/")
-            self._tex.setText(rel)
+            target.setText(rel)
         else:
-            self._tex.setText(path)
+            target.setText(path)
         self._emit()

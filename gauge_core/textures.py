@@ -24,3 +24,19 @@ def load_full_texture(path: Path) -> arcade.Texture:
         img = Image.open(path).convert("RGBA")
         _CACHE[key] = arcade.Texture(img, hash=key)
     return _CACHE[key]
+
+
+def load_clipped_texture(
+    path: Path,
+    origin: tuple[int, int],
+    cliprect: tuple[int, int],
+) -> arcade.Texture:
+    """Return a cached arcade.Texture cropped from *path* at *origin* with size *cliprect*."""
+    x, y = origin
+    w, h = cliprect
+    key = f"{path}:{x},{y},{w},{h}"
+    if key not in _CACHE:
+        img = Image.open(path).convert("RGBA")
+        region = img.crop((x, y, x + w, y + h))
+        _CACHE[key] = arcade.Texture(region, hash=key)
+    return _CACHE[key]
