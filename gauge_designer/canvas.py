@@ -681,6 +681,21 @@ class InstrumentCanvas(QWidget):
             except Exception:
                 pass
 
+        # Face bounding box (light-blue dashed) — shows face_size in canvas
+        if face_tex:
+            FACE_BOX = (80, 180, 255, 160)
+            fx0 = face_cx_p - fw // 2; fy0 = face_cy_p - fh // 2
+            fx1 = fx0 + fw;            fy1 = fy0 + fh
+            dash2, gap2 = 4, 3
+            for seg_x in range(fx0, fx1, dash2 + gap2):
+                x_end = min(seg_x + dash2, fx1)
+                draw.line([(seg_x, fy0), (x_end, fy0)], fill=FACE_BOX, width=1)
+                draw.line([(seg_x, fy1), (x_end, fy1)], fill=FACE_BOX, width=1)
+            for seg_y in range(fy0, fy1, dash2 + gap2):
+                y_end = min(seg_y + dash2, fy1)
+                draw.line([(fx0, seg_y), (fx0, y_end)], fill=FACE_BOX, width=1)
+                draw.line([(fx1, seg_y), (fx1, y_end)], fill=FACE_BOX, width=1)
+
         # Dashed outline overlay (component bounding box — always shown)
         DASH = (100, 180, 100, 180)
         dash, gap = 6, 4
