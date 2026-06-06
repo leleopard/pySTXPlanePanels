@@ -687,6 +687,7 @@ class PanelView(QWidget):
             self._inst_form.set_ref_height(h)
             self._grid_form.set_ref_height(h)
             self._canvas.set_size(self._panel_w.value(), h)
+            self.refresh_form()
             self.changed.emit()
 
     # ── UDP listen port ────────────────────────────────────────────────────
