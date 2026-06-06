@@ -189,10 +189,12 @@ class RotaryEncoder(InteractiveComponent):
     # ── internal ──────────────────────────────────────────────────────────────
 
     def _fire(self, command: str) -> None:
+        if not command:
+            return
         try:
             arcade.get_window()._send_cmd(command)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[RotaryEncoder:{self.name}] _fire({command!r}) failed: {exc}")
 
 
 # ── factory + registration ────────────────────────────────────────────────────
