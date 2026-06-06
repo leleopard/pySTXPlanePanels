@@ -49,6 +49,7 @@ YAML schema
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Callable
 
@@ -97,6 +98,8 @@ class RotaryEncoder(InteractiveComponent):
         face_rot_dataref: Any | None = None,
         face_rot_table: list[list[float]] | None = None,
         face_rot_convert: Callable | None = None,
+        face_off: tuple[float, float] = (0.0, 0.0),
+        face_rot_center: tuple[float, float] = (0.0, 0.0),
     ) -> None:
         super().__init__(name, position, size)
         self._cmd_cw  = command_cw
@@ -108,6 +111,9 @@ class RotaryEncoder(InteractiveComponent):
         self._face_rot_dr      = face_rot_dataref
         self._face_rot_table   = face_rot_table
         self._face_rot_convert = face_rot_convert
+        # Face layout offsets — kept in panel coords (scaled but not offset-shifted)
+        self._face_off_x, self._face_off_y = float(face_off[0]), float(face_off[1])
+        self._face_rot_cx, self._face_rot_cy = float(face_rot_center[0]), float(face_rot_center[1])
 
         # Gesture tracking
         self._press_x: float = 0.0
@@ -118,31 +124,52 @@ class RotaryEncoder(InteractiveComponent):
 
     def apply_scale(self, scale: float) -> None:
         super().apply_scale(scale)
-        for spr in (self._bg_sprite, self._face_sprite):
-            if spr is not None:
-                spr.scale_x *= scale
-                spr.scale_y *= scale
-                spr.center_x *= scale
-                spr.center_y *= scale
+        if self._bg_sprite is not None:
+            self._bg_sprite.scale_x *= scale
+            self._bg_sprite.scale_y *= scale
+            self._bg_sprite.center_x *= scale
+            self._bg_sprite.center_y *= scale
+        if self._face_sprite is not None:
+            # Visual scale only — center is recomputed each frame in update()
+            self._face_sprite.scale_x *= scale
+            self._face_sprite.scale_y *= scale
+        self._face_off_x *= scale
+        self._face_off_y *= scale
+        self._face_rot_cx *= scale
+        self._face_rot_cy *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         super().apply_offset(dx, dy)
-        for spr in (self._bg_sprite, self._face_sprite):
-            if spr is not None:
-                spr.center_x += dx
-                spr.center_y += dy
+        if self._bg_sprite is not None:
+            self._bg_sprite.center_x += dx
+            self._bg_sprite.center_y += dy
+        # face sprite center is computed from self._x/_y in update()
 
     # ── runtime interface ─────────────────────────────────────────────────────
 
     def update(self, get_data: Callable[[Any], float]) -> None:
-        if self._face_sprite is None or self._face_rot_dr is None:
+        if self._face_sprite is None:
             return
-        if self._face_rot_table is None:
-            return
-        raw = float(get_data(self._face_rot_dr))
-        if self._face_rot_convert is not None:
-            raw = float(self._face_rot_convert(raw, get_data))
-        self._face_sprite.angle = lookup_piecewise(self._face_rot_table, raw)
+        # Determine rotation angle (0 when no dataref configured)
+        angle_deg = 0.0
+        if self._face_rot_dr is not None and self._face_rot_table is not None:
+            raw = float(get_data(self._face_rot_dr))
+            if self._face_rot_convert is not None:
+                raw = float(self._face_rot_convert(raw, get_data))
+            angle_deg = lookup_piecewise(self._face_rot_table, raw)
+        self._face_sprite.angle = angle_deg
+        # Compute face sprite center each frame from rotation geometry.
+        # pivot = component centre + face_rotation_center offset
+        # face_at_0 = component centre + face_offset
+        # face_pos = pivot + rotate(face_at_0 − pivot, angle)
+        cos_a = math.cos(math.radians(angle_deg))
+        sin_a = math.sin(math.radians(angle_deg))
+        vx = self._face_off_x - self._face_rot_cx
+        vy = self._face_off_y - self._face_rot_cy
+        px = self._x + self._face_rot_cx
+        py = self._y + self._face_rot_cy
+        self._face_sprite.center_x = px + vx * cos_a - vy * sin_a
+        self._face_sprite.center_y = py + vx * sin_a + vy * cos_a
 
     def draw(self) -> None:
         if self._bg_sprite is not None:
@@ -209,16 +236,30 @@ def _rotary_encoder_factory(
     cx, cy = float(pos[0]), float(pos[1])
     tw, th = float(size[0]), float(size[1])
 
-    def _sprite(tex_key: str, origin_key: str, clip_key: str) -> arcade.Sprite | None:
+    def _sprite_sized(
+        tex_key: str, origin_key: str, clip_key: str,
+        target_w: float, target_h: float,
+    ) -> arcade.Sprite | None:
         if tex_key not in comp:
             return None
-        path = (base_dir / comp[tex_key]).resolve()
-        origin  = tuple(comp.get(origin_key,  [0, 0]))
-        cliprect = tuple(comp.get(clip_key, [int(tw), int(th)]))
-        return _make_sprite(path, origin, cliprect, cx, cy, tw, th)
+        path     = (base_dir / comp[tex_key]).resolve()
+        origin   = tuple(comp.get(origin_key, [0, 0]))
+        cliprect = tuple(comp.get(clip_key, [int(target_w), int(target_h)]))
+        return _make_sprite(path, origin, cliprect, cx, cy, target_w, target_h)
 
-    bg_sprite   = _sprite("background_texture", "background_origin", "background_cliprect")
-    face_sprite = _sprite("face_texture",       "face_origin",       "face_cliprect")
+    bg_sprite = _sprite_sized(
+        "background_texture", "background_origin", "background_cliprect", tw, th
+    )
+
+    # Face may have its own display size (defaults to component size)
+    face_size_raw = comp.get("face_size", size)
+    fw, fh = float(face_size_raw[0]), float(face_size_raw[1])
+    face_sprite = _sprite_sized(
+        "face_texture", "face_origin", "face_cliprect", fw, fh
+    )
+
+    face_off_raw = comp.get("face_offset", [0, 0])
+    face_rot_ctr_raw = comp.get("face_rotation_center", [0, 0])
 
     face_rot_dr = face_rot_table = face_rot_convert = None
     if "face_rotation" in comp and face_sprite is not None:
@@ -241,6 +282,8 @@ def _rotary_encoder_factory(
         face_rot_dataref=face_rot_dr,
         face_rot_table=face_rot_table,
         face_rot_convert=face_rot_convert,
+        face_off=(float(face_off_raw[0]), float(face_off_raw[1])),
+        face_rot_center=(float(face_rot_ctr_raw[0]), float(face_rot_ctr_raw[1])),
     )
 
 

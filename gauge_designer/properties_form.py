@@ -1635,6 +1635,18 @@ class PropertiesForm(QWidget):
         re_bg_btn = QPushButton("…"); re_bg_btn.setFixedWidth(26)
         re_bg_btn.clicked.connect(lambda: self._browse_tex(self._re_bg_tex))
         re_bgl.addWidget(re_bg_btn)
+        self._re_bg_edit_btn = QPushButton("Edit"); self._re_bg_edit_btn.setFixedWidth(38)
+        self._re_bg_edit_btn.setToolTip("Open texture editor for background")
+        self._re_bg_edit_btn.clicked.connect(lambda: self._open_tex_editor(
+            self._re_bg_tex,
+            self._re_bg_ox, self._re_bg_oy,
+            self._re_bg_cw, self._re_bg_ch,
+        ))
+        self._re_bg_tex.textChanged.connect(
+            lambda t: self._re_bg_edit_btn.setEnabled(bool(t.strip()))
+        )
+        self._re_bg_edit_btn.setEnabled(False)
+        re_bgl.addWidget(self._re_bg_edit_btn)
         self._re_sec.row("Texture", re_bg_row)
 
         self._re_bg_ox = _sb(0, 8192); self._re_bg_oy = _sb(0, 8192)
@@ -1660,6 +1672,18 @@ class PropertiesForm(QWidget):
         re_face_btn = QPushButton("…"); re_face_btn.setFixedWidth(26)
         re_face_btn.clicked.connect(lambda: self._browse_tex(self._re_face_tex))
         re_facel.addWidget(re_face_btn)
+        self._re_face_edit_btn = QPushButton("Edit"); self._re_face_edit_btn.setFixedWidth(38)
+        self._re_face_edit_btn.setToolTip("Open texture editor for face")
+        self._re_face_edit_btn.clicked.connect(lambda: self._open_tex_editor(
+            self._re_face_tex,
+            self._re_face_ox, self._re_face_oy,
+            self._re_face_cw, self._re_face_ch,
+        ))
+        self._re_face_tex.textChanged.connect(
+            lambda t: self._re_face_edit_btn.setEnabled(bool(t.strip()))
+        )
+        self._re_face_edit_btn.setEnabled(False)
+        re_facel.addWidget(self._re_face_edit_btn)
         self._re_sec.row("Texture", re_face_row)
 
         self._re_face_ox = _sb(0, 8192); self._re_face_oy = _sb(0, 8192)
@@ -1672,6 +1696,22 @@ class PropertiesForm(QWidget):
         for w in (self._re_face_cw, self._re_face_ch):
             w.valueChanged.connect(self._emit)
         self._re_sec.row_pair("Cliprect W  ×  H", self._re_face_cw, self._re_face_ch)
+
+        self._re_face_sw = _sb(1, 4096); self._re_face_sh = _sb(1, 4096)
+        self._re_face_sw.setValue(60); self._re_face_sh.setValue(60)
+        for w in (self._re_face_sw, self._re_face_sh):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Display W  ×  H", self._re_face_sw, self._re_face_sh)
+
+        self._re_face_offx = _sb(-2048, 2048); self._re_face_offy = _sb(-2048, 2048)
+        for w in (self._re_face_offx, self._re_face_offy):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Centre offset X  /  Y", self._re_face_offx, self._re_face_offy)
+
+        self._re_face_rcx = _sb(-2048, 2048); self._re_face_rcy = _sb(-2048, 2048)
+        for w in (self._re_face_rcx, self._re_face_rcy):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Rot centre X  /  Y", self._re_face_rcx, self._re_face_rcy)
 
         self._re_face_dr = QLineEdit()
         self._re_face_dr.setPlaceholderText("dataref driving face rotation")
@@ -2109,17 +2149,27 @@ class PropertiesForm(QWidget):
         self._re_cmd_ccw.setText(str(comp.get("command_ccw", "")))
         self._re_drag_px.setValue(float(comp.get("drag_px_per_step", 5.0)))
         # background texture
-        self._re_bg_tex.setText(str(comp.get("background_texture", "")))
+        bg_tex_val = str(comp.get("background_texture", ""))
+        self._re_bg_tex.setText(bg_tex_val)
+        self._re_bg_edit_btn.setEnabled(bool(bg_tex_val.strip()))
         bg_orig = comp.get("background_origin", [0, 0])
         self._re_bg_ox.setValue(int(bg_orig[0])); self._re_bg_oy.setValue(int(bg_orig[1]))
         bg_clip = comp.get("background_cliprect", [120, 120])
         self._re_bg_cw.setValue(int(bg_clip[0])); self._re_bg_ch.setValue(int(bg_clip[1]))
         # face texture
-        self._re_face_tex.setText(str(comp.get("face_texture", "")))
+        face_tex_val = str(comp.get("face_texture", ""))
+        self._re_face_tex.setText(face_tex_val)
+        self._re_face_edit_btn.setEnabled(bool(face_tex_val.strip()))
         face_orig = comp.get("face_origin", [0, 0])
         self._re_face_ox.setValue(int(face_orig[0])); self._re_face_oy.setValue(int(face_orig[1]))
         face_clip = comp.get("face_cliprect", [80, 80])
         self._re_face_cw.setValue(int(face_clip[0])); self._re_face_ch.setValue(int(face_clip[1]))
+        face_sz = comp.get("face_size", re_sz)
+        self._re_face_sw.setValue(int(face_sz[0])); self._re_face_sh.setValue(int(face_sz[1]))
+        face_off = comp.get("face_offset", [0, 0])
+        self._re_face_offx.setValue(int(face_off[0])); self._re_face_offy.setValue(int(face_off[1]))
+        face_rc = comp.get("face_rotation_center", [0, 0])
+        self._re_face_rcx.setValue(int(face_rc[0])); self._re_face_rcy.setValue(int(face_rc[1]))
         fr = comp.get("face_rotation") or {}
         self._re_face_dr.setText(str(fr.get("dataref", "")))
         fn_idx = self._re_face_fn.findText(str(fr.get("convert_function") or "identity"))
@@ -2262,6 +2312,16 @@ class PropertiesForm(QWidget):
                 data["face_texture"]  = face
                 data["face_origin"]   = [self._re_face_ox.value(), self._re_face_oy.value()]
                 data["face_cliprect"] = [self._re_face_cw.value(), self._re_face_ch.value()]
+                fsw, fsh = self._re_face_sw.value(), self._re_face_sh.value()
+                comp_sz = [self._re_w.value(), self._re_h.value()]
+                if [fsw, fsh] != comp_sz:
+                    data["face_size"] = [fsw, fsh]
+                fox, foy = self._re_face_offx.value(), self._re_face_offy.value()
+                if fox != 0 or foy != 0:
+                    data["face_offset"] = [fox, foy]
+                frcx, frcy = self._re_face_rcx.value(), self._re_face_rcy.value()
+                if frcx != 0 or frcy != 0:
+                    data["face_rotation_center"] = [frcx, frcy]
                 fdr = self._re_face_dr.text().strip()
                 ftbl = self._re_face_tbl.get_data()
                 if fdr or ftbl:
@@ -2593,10 +2653,10 @@ class PropertiesForm(QWidget):
         self._re_w.setValue(60); self._re_h.setValue(60)
         self._re_cmd_cw.clear(); self._re_cmd_ccw.clear()
         self._re_drag_px.setValue(5.0)
-        self._re_bg_tex.clear()
+        self._re_bg_tex.clear(); self._re_bg_edit_btn.setEnabled(False)
         self._re_bg_ox.setValue(0); self._re_bg_oy.setValue(0)
         self._re_bg_cw.setValue(120); self._re_bg_ch.setValue(120)
-        self._re_face_tex.clear()
+        self._re_face_tex.clear(); self._re_face_edit_btn.setEnabled(False)
         self._re_face_ox.setValue(0); self._re_face_oy.setValue(0)
         self._re_face_cw.setValue(80); self._re_face_ch.setValue(80)
         self._re_face_dr.clear()
@@ -2841,27 +2901,41 @@ class PropertiesForm(QWidget):
                 lineedit.setText(dr)
                 self._emit()
 
-    def _open_texture_editor(self):
-        tex_rel = self._tex.text().strip()
+    def _open_tex_editor(
+        self,
+        tex_field: QLineEdit,
+        ox_sb: QSpinBox, oy_sb: QSpinBox,
+        cw_sb: QSpinBox, ch_sb: QSpinBox,
+    ) -> None:
+        """Open the texture editor for any texture field + origin/cliprect spinboxes."""
+        tex_rel = tex_field.text().strip()
         if not tex_rel:
             return
         tex_abs = str((Path(self._yaml_dir) / tex_rel).resolve()) if self._yaml_dir else tex_rel
         from gauge_designer.texture_editor import TextureEditorDialog
         dlg = TextureEditorDialog(
             texture_path=tex_abs,
-            clip_w=self._clip_w.value(),
-            clip_h=self._clip_h.value(),
-            origin_x=self._orig_x.value(),
-            origin_y=self._orig_y.value(),
+            clip_w=cw_sb.value(),
+            clip_h=ch_sb.value(),
+            origin_x=ox_sb.value(),
+            origin_y=oy_sb.value(),
             parent=self,
         )
         if dlg.exec() == QDialog.Accepted:
             cw, ch, ox, oy = dlg.get_values()
             self._loading = True
-            self._clip_w.setValue(cw); self._clip_h.setValue(ch)
-            self._orig_x.setValue(ox); self._orig_y.setValue(oy)
+            cw_sb.setValue(cw); ch_sb.setValue(ch)
+            ox_sb.setValue(ox); oy_sb.setValue(oy)
             self._loading = False
             self._emit()
+
+    def _open_texture_editor(self):
+        """Edit button handler for the main ImagePanel texture."""
+        self._open_tex_editor(
+            self._tex,
+            self._orig_x, self._orig_y,
+            self._clip_w, self._clip_h,
+        )
 
     def _browse_tex(self, target: QLineEdit | None = None):
         """Open a file browser for a texture. *target* defaults to self._tex."""
