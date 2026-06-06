@@ -99,7 +99,8 @@ _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
                "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector",
-               "AttitudeIndicator", "CircularGauge"]
+               "AttitudeIndicator", "CircularGauge",
+               "RotaryEncoder"]
 
 
 def _coerce_num(text: str):
@@ -700,6 +701,7 @@ class PropertiesForm(QWidget):
         self._mk_vectortape_sec()
         self._mk_ai_sec()
         self._mk_circulargauge_sec()
+        self._mk_rotary_encoder_sec()
         self._mk_rotation()
         self._mk_translation()
         self._mk_animation()
@@ -1579,6 +1581,43 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._cg_sec)
 
+    def _mk_rotary_encoder_sec(self):
+        self._re_sec = _Section("Rotary Encoder")
+        self._re_sec.setVisible(False)
+
+        hint = QLabel(
+            "Invisible hit zone. Left-half tap = CCW · Right-half tap = CW\n"
+            "Drag up = CW · Drag down = CCW · Scroll wheel = ±1 step"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #999; font-size: 10px;")
+        self._re_sec.row_widget(hint)
+
+        self._re_w = _sb(1, 4096); self._re_h = _sb(1, 4096)
+        self._re_w.setValue(60); self._re_h.setValue(60)
+        for w in (self._re_w, self._re_h):
+            w.valueChanged.connect(self._emit)
+        self._re_sec.row_pair("Width  ×  Height", self._re_w, self._re_h)
+
+        self._re_cmd_cw = QLineEdit()
+        self._re_cmd_cw.setPlaceholderText("sim/autopilot/heading_up")
+        self._re_cmd_cw.editingFinished.connect(self._emit)
+        self._re_sec.row("Command CW  (→ / ↑)", self._re_cmd_cw)
+
+        self._re_cmd_ccw = QLineEdit()
+        self._re_cmd_ccw.setPlaceholderText("sim/autopilot/heading_down")
+        self._re_cmd_ccw.editingFinished.connect(self._emit)
+        self._re_sec.row("Command CCW (← / ↓)", self._re_cmd_ccw)
+
+        self._re_drag_px = QDoubleSpinBox()
+        self._re_drag_px.setRange(0.5, 200.0); self._re_drag_px.setDecimals(1)
+        self._re_drag_px.setValue(5.0)
+        self._re_drag_px.setToolTip("Pixels of drag before one command step fires.")
+        self._re_drag_px.valueChanged.connect(self._emit)
+        self._re_sec.row("Drag px / step", self._re_drag_px)
+
+        self._vbox.addWidget(self._re_sec)
+
     def _mk_rotation(self):
         self._rot_sec = _Section("Rotation", optional=True)
         self._rot_sec.toggled.connect(self._emit)
@@ -1727,6 +1766,8 @@ class PropertiesForm(QWidget):
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
+            # RotaryEncoder
+            "command_cw", "command_ccw", "drag_px_per_step",
             # CircularGauge
             "arc_color", "arc_width", "needle_length", "needle_width",
             "needle_color", "needle_angle",
@@ -1988,6 +2029,13 @@ class PropertiesForm(QWidget):
         self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
         self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
 
+        # RotaryEncoder
+        re_sz = comp.get("size", [60, 60])
+        self._re_w.setValue(int(re_sz[0])); self._re_h.setValue(int(re_sz[1]))
+        self._re_cmd_cw.setText(str(comp.get("command_cw", "")))
+        self._re_cmd_ccw.setText(str(comp.get("command_ccw", "")))
+        self._re_drag_px.setValue(float(comp.get("drag_px_per_step", 5.0)))
+
         # CircularGauge
         cg_ctr = comp.get("center", [0, 0])
         self._cg_cx.setValue(int(cg_ctr[0]))
@@ -2100,6 +2148,18 @@ class PropertiesForm(QWidget):
                     data["cap_height"] = self._vec_cap_height.value()
                     if not self._vec_cap_filled.isChecked():
                         data["cap_filled"] = False
+
+        elif ct == "RotaryEncoder":
+            data["size"] = [self._re_w.value(), self._re_h.value()]
+            cw = self._re_cmd_cw.text().strip()
+            if cw:
+                data["command_cw"] = cw
+            ccw = self._re_cmd_ccw.text().strip()
+            if ccw:
+                data["command_ccw"] = ccw
+            drag = self._re_drag_px.value()
+            if abs(drag - 5.0) > 0.05:
+                data["drag_px_per_step"] = round(drag, 1)
 
         elif ct == "CircularGauge":
             data["center"] = [self._cg_cx.value(), flip_y(self._cg_cy.value(), self._ref_height)]
@@ -2419,6 +2479,11 @@ class PropertiesForm(QWidget):
         self._vec_cap_height.setValue(5.0); self._vec_cap_height.setEnabled(False)
         self._vec_cap_filled.setChecked(True); self._vec_cap_filled.setEnabled(False)
         # CircularGauge
+        # RotaryEncoder
+        self._re_w.setValue(60); self._re_h.setValue(60)
+        self._re_cmd_cw.clear(); self._re_cmd_ccw.clear()
+        self._re_drag_px.setValue(5.0)
+        # CircularGauge
         self._cg_cx.setValue(0); self._cg_cy.setValue(0)
         self._cg_radius.setValue(100.0)
         self._cg_arc_start.setValue(-220.0); self._cg_arc_end.setValue(40.0)
@@ -2504,6 +2569,7 @@ class PropertiesForm(QWidget):
         is_vec  = ct == "Vector"
         is_ai   = ct == "AttitudeIndicator"
         is_cg   = ct == "CircularGauge"
+        is_re   = ct == "RotaryEncoder"
 
         # Position: hide for types that define geometry without a single centre point
         self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai and not is_cg)
@@ -2525,6 +2591,7 @@ class PropertiesForm(QWidget):
         self._vt_sec.setVisible(is_vt)
         self._ai_sec.setVisible(is_ai)
         self._cg_sec.setVisible(is_cg)
+        self._re_sec.setVisible(is_re)
 
         # Rotation and Translation: ImagePanel only
         self._rot_sec.setVisible(is_ip)

@@ -378,7 +378,7 @@ class InstrumentCanvas(QWidget):
                     ax, ay = int(ctr[0]), h - int(ctr[1])
                     if (ax - r) <= cx <= (ax + r) and (ay - r) <= cy <= (ay + r):
                         result.append(comp.get("name"))
-                elif ctype == "FilledRect":
+                elif ctype in ("FilledRect", "RotaryEncoder"):
                     pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
                     fx, fy = int(pos[0]), h - int(pos[1])
                     hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
@@ -490,6 +490,8 @@ class InstrumentCanvas(QWidget):
                     self._render_vectortape(comp, composite, draw, w, h)
                 elif ctype == "AttitudeIndicator":
                     self._render_ai(comp, composite, draw, w, h)
+                elif ctype == "RotaryEncoder":
+                    self._render_rotary_encoder(comp, draw, h)
             except Exception:
                 continue
 
@@ -527,7 +529,7 @@ class InstrumentCanvas(QWidget):
                     bbox = [cx_p - r, cy_p - r, cx_p + r, cy_p + r]
                     sa, ea = float(comp.get("start_angle", 0)), float(comp.get("end_angle", 360))
                     draw.arc(bbox, -ea, -sa, fill=SEL, width=4)
-                elif ctype == "FilledRect":
+                elif ctype in ("FilledRect", "RotaryEncoder"):
                     pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
                     cx_p, cy_p = int(pos[0]), h - int(pos[1])
                     hw, hh = int(sz[0]) // 2, int(sz[1]) // 2
@@ -632,6 +634,45 @@ class InstrumentCanvas(QWidget):
                 and 0 <= self._selected_point_idx < len(pts)):
             px, py = pts[self._selected_point_idx]
             self._crosshair(draw, px, py)
+
+    def _render_rotary_encoder(self, comp: dict, draw: ImageDraw.ImageDraw,
+                               canvas_h: int) -> None:
+        """Draw a dashed bounding box + centre divider to indicate the hit zone."""
+        pos = comp.get("position", [0, 0])
+        sz  = comp.get("size", [60, 60])
+        cx_p = int(pos[0]); cy_p = canvas_h - int(pos[1])
+        hw = int(sz[0]) // 2; hh = int(sz[1]) // 2
+        x0, y0 = cx_p - hw, cy_p - hh
+        x1, y1 = cx_p + hw, cy_p + hh
+
+        # Dashed outline
+        DASH = (100, 180, 100, 180)
+        dash, gap = 6, 4
+        for seg_x in range(x0, x1, dash + gap):
+            x_end = min(seg_x + dash, x1)
+            draw.line([(seg_x, y0), (x_end, y0)], fill=DASH, width=1)
+            draw.line([(seg_x, y1), (x_end, y1)], fill=DASH, width=1)
+        for seg_y in range(y0, y1, dash + gap):
+            y_end = min(seg_y + dash, y1)
+            draw.line([(x0, seg_y), (x0, y_end)], fill=DASH, width=1)
+            draw.line([(x1, seg_y), (x1, y_end)], fill=DASH, width=1)
+
+        # Centre divider line (shows left/right tap halves)
+        DIVIDER = (100, 180, 100, 100)
+        draw.line([(cx_p, y0 + 2), (cx_p, y1 - 2)], fill=DIVIDER, width=1)
+
+        # "⟳" label
+        font = ImageFont.load_default()
+        label = "ROT"
+        try:
+            bbox = draw.textbbox((0, 0), label, font=font)
+            tw = bbox[2] - bbox[0]; th = bbox[3] - bbox[1]
+        except Exception:
+            tw, th = len(label) * 6, 10
+        draw.text((cx_p - tw // 2, cy_p - th // 2), label,
+                  fill=(100, 180, 100, 160), font=font)
+
+        self._crosshair(draw, cx_p, cy_p)
 
     def _render_vector(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0])
