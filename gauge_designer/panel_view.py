@@ -199,8 +199,9 @@ class PanelView(QWidget):
         panels_btn_bar.setContentsMargins(2, 2, 2, 2)
         panels_btn_bar.setSpacing(2)
         for icon_name, tip, slot in [
-            ("plus-circle-outline", "New Panel",    self._new_panel),
-            ("trash-can-outline",   "Delete Panel", self._delete_panel),
+            ("plus-circle-outline",          "New Panel",       self._new_panel),
+            ("plus-circle-multiple-outline", "Duplicate Panel", self._duplicate_panel),
+            ("trash-can-outline",            "Delete Panel",    self._delete_panel),
         ]:
             btn = QPushButton()
             btn.setIcon(make_svg_icon(icon_name))
@@ -475,6 +476,38 @@ class PanelView(QWidget):
             return
         self._file_tree.set_root(str(root))
         self.open_requested.emit(str(file_path))
+
+    def _duplicate_panel(self):
+        item = self._file_tree.currentItem()
+        if item is None:
+            return
+        src_str = item.data(0, Qt.UserRole)
+        if not src_str:
+            return  # folder node selected
+        src = Path(src_str)
+        default = src.stem + "_copy"
+        name, ok = QInputDialog.getText(
+            self, "Duplicate Panel",
+            "Name for the duplicate (without .yaml):",
+            text=default,
+        )
+        if not ok or not name.strip():
+            return
+        dst = src.parent / f"{name.strip()}.yaml"
+        if dst.exists():
+            QMessageBox.warning(self, "Exists", f"'{dst.name}' already exists.")
+            return
+        try:
+            with open(src, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            data["name"] = name.strip()
+            with open(dst, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+        self._file_tree.set_root(self._panels_root)
+        self.open_requested.emit(str(dst))
 
     def _delete_panel(self):
         item = self._file_tree.currentItem()
