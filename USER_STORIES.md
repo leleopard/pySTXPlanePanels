@@ -198,6 +198,72 @@ Full procedural Primary Flight Display modelled on the Boeing 737-800 NG layout 
 
 ---
 
+## EPIC 12 — Interactive Panel Controls
+
+Adds mouse and touchscreen interactivity to the panel. The panel remains a UDP consumer for dataref data; it additionally sends X-Plane commands via `pyxpudpserver.sendXPCmd()` (already implemented in the library). Visual state of all controls is driven by datarefs — no local state. Interactive components are **invisible overlays**; appearance is handled by companion visual components (ImagePanel, FilledRect, etc.) driven by datarefs as normal.
+
+### Architecture decisions
+
+| Decision | Choice |
+|---|---|
+| Send mechanism | `pyxpudpserver.sendXPCmd()` / `sendXPDref()` — already in the library, no new sender needed |
+| State truth | X-Plane datarefs only. Controls read state; they never own it |
+| Optimistic UI | Short-lived pending flag set on press, cleared when confirming dataref arrives or after 600 ms timeout |
+| Visual rendering | Separate from interaction. Interactive components are invisible at runtime; designer shows dashed hit-zone overlays |
+| Input model | `on_mouse_press/drag/release/scroll` as primary path (Pi touchscreen emulates mouse for single touch); `on_touch_*` handlers as thin pass-throughs to the same gesture dispatcher |
+| Rotary gesture | Tap left half = CCW step · tap right half = CW step · drag up = CW continuous · drag down = CCW continuous · mouse scroll = 1 step/notch |
+| Hit target size | `component.size × hit_padding_multiplier` (panel-level YAML key, default 1.5) |
+| `send_cmd` wiring | A `Callable[[str], None]` is passed to interactive components at panel-load time alongside the existing `get_data`. No-op in `--test` mode |
+
+### YAML schemas
+
+```yaml
+# Momentary button — fires command on press, optional command_end on release
+- type: Momentary_Button
+  name: ap_engage_btn
+  position: [150, 200]
+  size: [50, 30]
+  command: sim/autopilot/autopilot_on
+  command_end: sim/autopilot/autopilot_off   # optional: sent on release
+
+# Switch — reads state_dataref to choose which command to send on tap
+- type: Switch
+  name: landing_light_sw
+  position: [80, 150]
+  size: [40, 60]
+  command_on: sim/lights/landing_lights_on
+  command_off: sim/lights/landing_lights_off
+  state_dataref: sim/cockpit/electrical/landing_lights_on
+  # or single toggle: command: sim/lights/landing_lights_on_off_toggle
+
+# Rotary encoder — tap halves or drag
+- type: RotaryEncoder
+  name: heading_bug_knob
+  position: [200, 300]
+  size: [60, 60]
+  command_cw: sim/autopilot/heading_up
+  command_ccw: sim/autopilot/heading_down
+  drag_px_per_step: 5   # pixels of drag before firing one command step
+
+# Panel-level hit padding (top-level key in panel YAML)
+hit_padding_multiplier: 1.5   # default if absent
+```
+
+### Stories
+
+| ID | Story | Status |
+|----|-------|--------|
+| CTRL-01 | As a developer, `PanelWindow` routes `on_mouse_press/drag/release/scroll` and `on_touch_begin/motion/end` through a single gesture dispatcher that hit-tests interactive components in panel coordinates, so both mouse and touchscreen share one code path. | 🔲 |
+| CTRL-02 | As a developer, each interactive component exposes a `hit_rect` (position + size × `hit_padding_multiplier` read from the panel YAML, default 1.5) used exclusively for hit-testing, so touch targets are generously sized without affecting rendering. | 🔲 |
+| CTRL-03 | As a user, I can place a `Momentary_Button` component on an instrument that fires an X-Plane command (`command`) on press and optionally a second command (`command_end`) on release, so I can implement both single-press and hold-to-activate controls. | 🔲 |
+| CTRL-04 | As a user, I can place a `Switch` component that reads a `state_dataref` to decide which command to send (`command_on` or `command_off`) when tapped. A single `command` field is also accepted for instruments that expose a dedicated toggle command. | 🔲 |
+| CTRL-05 | As a user, I can place a `RotaryEncoder` component where tapping the left half sends `command_ccw` and tapping the right half sends `command_cw` (one step each), and dragging up fires continuous CW steps while dragging down fires continuous CCW steps at a rate of one command per `drag_px_per_step` pixels (default 5). Mouse scroll wheel fires one step per notch. | 🔲 |
+| CTRL-06 | As a developer, interactive components support optimistic pending state: on press a `pending` flag is set with a timestamp; when the confirming dataref value arrives the flag clears; if no confirmation arrives within 600 ms the flag times out and the dataref value takes over, preventing permanent divergence from X-Plane state. | 🔲 |
+| CTRL-07 | As a user, I can configure `Momentary_Button`, `Switch`, and `RotaryEncoder` components in the gauge designer with a dedicated properties form for each type. | 🔲 |
+| CTRL-08 | As a user, the designer canvas preview shows interactive components with a dashed hit-zone outline and a type icon (button / switch / encoder) so I can see interactive areas while editing. These overlays are not rendered at runtime. | 🔲 |
+
+---
+
 ## Out of MVP1 (Backlog)
 
 - G1000-style UV-scrolling speed/altitude tapes (superseded by EPIC 10 vector approach)
