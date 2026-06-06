@@ -5,16 +5,17 @@ size:
 components:
 - name: heading_card
   type: ImagePanel
-  texture: assets/c172_text_standard6.png
-  cliprect:
-  - 300
-  - 300
-  origin:
-  - 0
-  - 600
   position:
   - 155
   - 155
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 0
+  - 600
+  cliprect:
+  - 300
+  - 300
+  resize_to_container: true
   rotation:
     dataref: sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot
     table:
@@ -28,16 +29,16 @@ components:
       - -360
 - name: heading_bug
   type: ImagePanel
-  texture: assets/c172_text_standard6.png
-  cliprect:
-  - 300
-  - 300
-  origin:
-  - 900
-  - 300
   position:
   - 155
   - 155
+  texture: assets/c172_text_standard6.png
+  origin:
+  - 900
+  - 300
+  cliprect:
+  - 300
+  - 300
   rotation:
     dataref: sim/cockpit2/autopilot/heading_dial_deg_mag_pilot
     convert_function: add_compass_heading_to_value
@@ -80,14 +81,38 @@ components:
   - 275
   - 35
   size:
-  - 60
-  - 60
+  - 45
+  - 45
   command_cw: sim/autopilot/heading_up
   command_ccw: sim/autopilot/heading_down
   background_texture: assets/c172_text_standard6_v1.1.png
   background_origin:
-  - 955
-  - 1452
+  - 952
+  - 1612
   background_cliprect:
   - 68
   - 68
+  face_texture: assets/c172_text_standard6_v1.1.png
+  face_origin:
+  - 969
+  - 1693
+  face_cliprect:
+  - 35
+  - 41
+  face_size:
+  - 35
+  - 41
+  face_offset:
+  - 4
+  - 0
+  face_rotation_center:
+  - 5
+  - 0
+  face_rotation:
+    dataref: sim/cockpit2/autopilot/heading_dial_deg_mag_pilot
+    table:
+    - - 0
+      - 0
+    - - 360
+      - 360
+    convert_function: (none)

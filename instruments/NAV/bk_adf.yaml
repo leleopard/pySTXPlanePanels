@@ -1,103 +1,104 @@
-# Bendix-King KR87 ADF radio.
-# 399×68 px background. Shows active and standby ADF frequencies plus
-# ANT/ADF/BFO mode indicators driven by adf1_power.
-#
-# Texture region: PIL origin [0, 118], cliprect 399×68.
-#
-# Power enum: 0=off, 1=antenna (ANT), 2=on (ADF), 3=tone (ADF+BFO), 4=test.
-# The instrument hides entirely when power = 0.
-# Mode indicators:
-#   ANT visible when power == 1
-#   ADF visible when power > 1
-#   BFO visible when power == 3
-#
-# Timer mode (FRQ/FLT/ET) required a panel-side state machine in the
-# original implementation. Per project design principles the panel is
-# display-only; we always show the standby frequency (FRQ mode = the
-# default / most-used state) and omit the timer display.
-#
-# ADF frequencies are stored in 10 Hz units; divideby100 yields kHz
-# (e.g. 171000 → 1710 kHz).
-#
-# Text baseline y positions (instrument height 68 px, centre at 34):
-#   y_frequencies = centre − 20 = 14
-#   top indicators = y_frequencies + 19 = 33
-#   bottom indicators = y_frequencies − 3 = 11
-
 name: BK ADF
-size: [399, 68]
-
+size:
+- 399
+- 68
 visibility:
   dataref: sim/cockpit2/radios/actuators/adf1_power
   predicate: true_if_over_zero
-
 components:
-  - name: background
-    type: ImagePanel
-    texture: assets/2048_Radio_Stack_text.png
-    cliprect: [399, 68]
-    origin: [0, 118]
-    position: [199, 34]
-
-  - name: active_freq
-    type: Text
-    text: "1710"
-    font_file: assets/fonts/DS-Digital-ItalicST.ttf
-    font_name: DS-Digital
-    font_size: 32
-    color: [211, 62, 33]
-    position: [105, 14]
-    text_format: "{:04.0f}"
-    convert_function: divideby100
-    dataref: sim/cockpit2/radios/actuators/adf1_frequency_hz
-
-  - name: standby_freq
-    type: Text
-    text: "1710"
-    font_file: assets/fonts/DS-Digital-ItalicST.ttf
-    font_name: DS-Digital
-    font_size: 32
-    color: [211, 62, 33]
-    position: [285, 14]
-    text_format: "{:04.0f}"
-    convert_function: divideby100
-    dataref: sim/cockpit2/radios/actuators/adf1_standby_frequency_hz
-
-  # -- Mode indicators (small labels; use system font) ---------------------
-
-  - name: ant_indicator
-    type: Text
-    text: "ANT"
-    font_size: 12
-    color: [211, 62, 33]
-    position: [45, 33]
-    visibility:
-      dataref: sim/cockpit2/radios/actuators/adf1_power
-      predicate: true_if_equals_1
-
-  - name: adf_indicator
-    type: Text
-    text: "ADF"
-    font_size: 12
-    color: [211, 62, 33]
-    position: [45, 11]
-    visibility:
-      dataref: sim/cockpit2/radios/actuators/adf1_power
-      predicate: true_if_over_1
-
-  - name: bfo_indicator
-    type: Text
-    text: "BFO"
-    font_size: 12
-    color: [211, 62, 33]
-    position: [177, 33]
-    visibility:
-      dataref: sim/cockpit2/radios/actuators/adf1_power
-      predicate: true_if_equals_3
-
-  - name: frq_indicator
-    type: Text
-    text: "FRQ"
-    font_size: 12
-    color: [211, 62, 33]
-    position: [208, 11]
+- name: background
+  type: ImagePanel
+  texture: assets/2048_Radio_Stack_text.png
+  cliprect:
+  - 399
+  - 68
+  origin:
+  - 0
+  - 118
+  position:
+  - 199
+  - 34
+- name: active_freq
+  type: Text
+  position:
+  - 105
+  - 14
+  dataref: sim/cockpit2/radios/actuators/adf1_frequency_hz
+  convert_function: divideby100
+  text_format: '{:04.0f}'
+  font_name: DS-Digital
+  font_size: 32.0
+  color:
+  - 211
+  - 62
+  - 33
+  - 255
+- name: standby_freq
+  type: Text
+  text: '1710'
+  font_file: assets/fonts/DS-Digital-ItalicST.ttf
+  font_name: DS-Digital
+  font_size: 32
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 285
+  - 14
+  text_format: '{:04.0f}'
+  convert_function: divideby100
+  dataref: sim/cockpit2/radios/actuators/adf1_standby_frequency_hz
+- name: ant_indicator
+  type: Text
+  text: ANT
+  font_size: 12
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 45
+  - 33
+  visibility:
+    dataref: sim/cockpit2/radios/actuators/adf1_power
+    predicate: true_if_equals_1
+- name: adf_indicator
+  type: Text
+  text: ADF
+  font_size: 12
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 45
+  - 11
+  visibility:
+    dataref: sim/cockpit2/radios/actuators/adf1_power
+    predicate: true_if_over_1
+- name: bfo_indicator
+  type: Text
+  text: BFO
+  font_size: 12
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 177
+  - 33
+  visibility:
+    dataref: sim/cockpit2/radios/actuators/adf1_power
+    predicate: true_if_equals_3
+- name: frq_indicator
+  type: Text
+  text: FRQ
+  font_size: 12
+  color:
+  - 211
+  - 62
+  - 33
+  position:
+  - 208
+  - 11
