@@ -197,24 +197,6 @@ class PanelView(QWidget):
         pl.setSpacing(0)
         pl.addWidget(header_label("Panels"))
 
-        panels_btn_bar = QHBoxLayout()
-        panels_btn_bar.setContentsMargins(2, 2, 2, 2)
-        panels_btn_bar.setSpacing(2)
-        for icon_name, tip, slot in [
-            ("plus-circle-outline",          "New Panel",       self._new_panel),
-            ("plus-circle-multiple-outline", "Duplicate Panel", self._duplicate_panel),
-            ("trash-can-outline",            "Delete Panel",    self._delete_panel),
-        ]:
-            btn = QPushButton()
-            btn.setIcon(make_svg_icon(icon_name))
-            btn.setIconSize(QSize(20, 20))
-            btn.setFixedSize(28, 28)
-            btn.setToolTip(tip)
-            btn.clicked.connect(slot)
-            panels_btn_bar.addWidget(btn)
-        panels_btn_bar.addStretch()
-        pl.addLayout(panels_btn_bar)
-
         self._file_tree = _PanelFileTree()
         self._file_tree.file_activated.connect(self.open_requested)
         self._file_tree.itemClicked.connect(lambda: self._set_add_context("panel"))
