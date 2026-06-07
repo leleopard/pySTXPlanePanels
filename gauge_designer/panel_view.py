@@ -769,9 +769,12 @@ class PanelView(QWidget):
 
     # ── Context actions (Add / Delete / Duplicate / Copy / Paste) ─────────
 
+    _CTX_BORDER = "border: 2px solid #6682c5; border-radius: 3px;"
+
     def _set_add_context(self, ctx: str) -> None:
         if self._add_context != ctx:
             self._add_context = ctx
+            self._file_tree.setStyleSheet(self._CTX_BORDER if ctx == "panel" else "")
             self.context_changed.emit()
 
     def can_add(self) -> bool:
