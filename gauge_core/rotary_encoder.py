@@ -100,6 +100,7 @@ class RotaryEncoder(InteractiveComponent):
         face_rot_convert: Callable | None = None,
         face_off: tuple[float, float] = (0.0, 0.0),
         face_rot_center: tuple[float, float] = (0.0, 0.0),
+        show_touch_zones: bool = False,
     ) -> None:
         super().__init__(name, position, size)
         self._cmd_cw  = command_cw
@@ -114,6 +115,7 @@ class RotaryEncoder(InteractiveComponent):
         # Face layout offsets — kept in panel coords (scaled but not offset-shifted)
         self._face_off_x, self._face_off_y = float(face_off[0]), float(face_off[1])
         self._face_rot_cx, self._face_rot_cy = float(face_rot_center[0]), float(face_rot_center[1])
+        self._show_touch_zones = show_touch_zones
 
         # Gesture tracking
         self._press_x: float = 0.0
@@ -176,6 +178,17 @@ class RotaryEncoder(InteractiveComponent):
             arcade.draw_sprite(self._bg_sprite)
         if self._face_sprite is not None:
             arcade.draw_sprite(self._face_sprite)
+        if self._show_touch_zones:
+            hw = self._w / 2
+            # CCW = left half (yellow), CW = right half (green)
+            arcade.draw_rect_filled(
+                arcade.XYWH(self._x - hw / 2, self._y, hw, self._h),
+                (255, 220, 0, 100),
+            )
+            arcade.draw_rect_filled(
+                arcade.XYWH(self._x + hw / 2, self._y, hw, self._h),
+                (0, 200, 80, 100),
+            )
 
     # ── gesture handlers ──────────────────────────────────────────────────────
 
@@ -287,6 +300,7 @@ def _rotary_encoder_factory(
         face_rot_convert=face_rot_convert,
         face_off=(float(face_off_raw[0]), float(face_off_raw[1])),
         face_rot_center=(float(face_rot_ctr_raw[0]), float(face_rot_ctr_raw[1])),
+        show_touch_zones=bool(comp.get("show_touch_zones", False)),
     )
 
 

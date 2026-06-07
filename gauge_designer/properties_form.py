@@ -1623,6 +1623,10 @@ class PropertiesForm(QWidget):
         self._re_drag_px.valueChanged.connect(self._emit)
         self._re_sec.row("Drag px / step", self._re_drag_px)
 
+        self._re_show_zones = QCheckBox("Show touch zones at runtime  (yellow = CCW · green = CW)")
+        self._re_show_zones.toggled.connect(self._emit)
+        self._re_sec.row_widget(self._re_show_zones)
+
         # ── Background texture (static encoder body) ──────────────────────
         self._re_sec.row_widget(_sep_label("Background texture (optional — encoder body)"))
 
@@ -1878,7 +1882,7 @@ class PropertiesForm(QWidget):
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             # RotaryEncoder
-            "command_cw", "command_ccw", "drag_px_per_step",
+            "command_cw", "command_ccw", "drag_px_per_step", "show_touch_zones",
             "background_texture", "background_origin", "background_cliprect",
             "face_texture", "face_origin", "face_cliprect", "face_size",
             "face_offset", "face_rotation_center", "face_rotation",
@@ -2149,6 +2153,7 @@ class PropertiesForm(QWidget):
         self._re_cmd_cw.setText(str(comp.get("command_cw", "")))
         self._re_cmd_ccw.setText(str(comp.get("command_ccw", "")))
         self._re_drag_px.setValue(float(comp.get("drag_px_per_step", 5.0)))
+        self._re_show_zones.setChecked(bool(comp.get("show_touch_zones", False)))
         # background texture
         bg_tex_val = str(comp.get("background_texture", ""))
         self._re_bg_tex.setText(bg_tex_val)
@@ -2301,6 +2306,8 @@ class PropertiesForm(QWidget):
             drag = self._re_drag_px.value()
             if abs(drag - 5.0) > 0.05:
                 data["drag_px_per_step"] = round(drag, 1)
+            if self._re_show_zones.isChecked():
+                data["show_touch_zones"] = True
             # background texture
             bg = self._re_bg_tex.text().strip()
             if bg:
@@ -2651,6 +2658,7 @@ class PropertiesForm(QWidget):
         self._re_w.setValue(60); self._re_h.setValue(60)
         self._re_cmd_cw.clear(); self._re_cmd_ccw.clear()
         self._re_drag_px.setValue(5.0)
+        self._re_show_zones.setChecked(False)
         self._re_bg_tex.clear(); self._re_bg_edit_btn.setEnabled(False)
         self._re_bg_ox.setValue(0); self._re_bg_oy.setValue(0)
         self._re_bg_cw.setValue(120); self._re_bg_ch.setValue(120)
