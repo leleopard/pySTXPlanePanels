@@ -351,6 +351,8 @@ class PanelView(QWidget):
 
         self._tree = _InstrumentTree(self)
         self._tree.currentItemChanged.connect(self._on_tree_selection_changed)
+        self._tree.itemClicked.connect(lambda: self._set_add_context("instrument"))
+        self._tree.currentItemChanged.connect(self._on_ctx_selection_changed)
         ll.addWidget(self._tree)
 
         # Pane 2: stacked properties forms
@@ -762,6 +764,7 @@ class PanelView(QWidget):
         if self._add_context != ctx:
             self._add_context = ctx
             self._file_tree.setStyleSheet(self._CTX_BORDER if ctx == "panel" else "")
+            self._tree.setStyleSheet(self._CTX_BORDER if ctx == "instrument" else "")
             self.context_changed.emit()
 
     def _file_tree_has_file(self) -> bool:
@@ -772,7 +775,11 @@ class PanelView(QWidget):
         return self._add_context is not None
 
     def can_delete(self) -> bool:
-        return self._add_context == "panel" and self._file_tree_has_file()
+        if self._add_context == "panel":
+            return self._file_tree_has_file()
+        if self._add_context == "instrument":
+            return self._tree.currentItem() is not None
+        return False
 
     def can_duplicate(self) -> bool:
         return self._add_context == "panel" and self._file_tree_has_file()
@@ -783,17 +790,21 @@ class PanelView(QWidget):
     def can_paste(self) -> bool:
         return False
 
+    def do_add(self) -> None:
+        if self._add_context == "panel":
+            self._new_panel()
+        elif self._add_context == "instrument":
+            self._add_instrument()
+
     def do_delete(self) -> None:
         if self._add_context == "panel":
             self._delete_panel()
+        elif self._add_context == "instrument":
+            self._remove_item()
 
     def do_duplicate(self) -> None:
         if self._add_context == "panel":
             self._duplicate_panel()
-
-    def do_add(self) -> None:
-        if self._add_context == "panel":
-            self._new_panel()
 
     # ── Tree helpers ────────────────────────────────────────────────────────
 
