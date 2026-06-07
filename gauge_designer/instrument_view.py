@@ -288,15 +288,10 @@ class InstrumentView(QWidget):
         crud_bar = QHBoxLayout()
         crud_bar.setContentsMargins(0, 2, 0, 0)
         crud_bar.setSpacing(2)
-        for label, slot, tip in [
-            ("+ Folder",  self._new_folder,      "Create a new sub-folder"),
-            ("+ Instr",   self._new_instrument,  "Create a new instrument YAML"),
-            ("Delete",    self._delete_selected, "Delete selected file or folder"),
-        ]:
-            btn = QPushButton(label)
-            btn.setToolTip(tip)
-            btn.clicked.connect(slot)
-            crud_bar.addWidget(btn)
+        btn = QPushButton("+ Folder")
+        btn.setToolTip("Create a new sub-folder")
+        btn.clicked.connect(self._new_folder)
+        crud_bar.addWidget(btn)
         crud_bar.addStretch()
         tl.addLayout(crud_bar)
 
