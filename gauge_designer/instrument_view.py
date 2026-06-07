@@ -737,7 +737,7 @@ class InstrumentView(QWidget):
         return self._add_context == "component" and self._list.currentRow() >= 0
 
     def can_paste(self) -> bool:
-        return InstrumentView._component_clipboard is not None
+        return self._add_context == "component" and InstrumentView._component_clipboard is not None
 
     def do_copy(self) -> None:
         row = self._list.currentRow()
