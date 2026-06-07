@@ -131,6 +131,10 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._gauge_view, "Instruments")
         self._tabs.addTab(self._panel_view, "Panels")
         self._tabs.currentChanged.connect(self._on_tab_changed)
+        self._tabs.setStyleSheet(
+            "QTabBar::tab:selected { color: #6682c5; font-weight: bold;"
+            " border-bottom: 2px solid #6682c5; }"
+        )
         self.setCentralWidget(self._tabs)
 
         self._build_menu()
