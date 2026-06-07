@@ -304,11 +304,11 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         for icon, tip, act, attr in (
-            ("plus",                     "Add",       self._ctx_add_act,       "_ctx_add_btn"),
-            ("delete-outline",           "Delete",    self._ctx_delete_act,    "_ctx_delete_btn"),
+            ("plus-circle-outline",          "Add",       self._ctx_add_act,       "_ctx_add_btn"),
+            ("trash-can-outline",            "Delete",    self._ctx_delete_act,    "_ctx_delete_btn"),
             ("plus-circle-multiple-outline", "Duplicate", self._ctx_duplicate_act, "_ctx_duplicate_btn"),
-            ("content-copy",             "Copy",      self._ctx_copy_act,      "_ctx_copy_btn"),
-            ("content-paste",            "Paste",     self._ctx_paste_act,     "_ctx_paste_btn"),
+            ("content-copy",                 "Copy",      self._ctx_copy_act,      "_ctx_copy_btn"),
+            ("content-paste",                "Paste",     self._ctx_paste_act,     "_ctx_paste_btn"),
         ):
             btn = QPushButton()
             btn.setIcon(make_svg_icon(icon, self._ICON_GREY, size=36))
