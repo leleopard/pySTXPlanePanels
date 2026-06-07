@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
 
         self._build_menu()
         self._build_toolbar()
+        self._wire_ctx_actions()
         self.statusBar().showMessage("Open a gauge or panel YAML to begin.")
 
         geometry = self._settings.value("windowGeometry")
@@ -573,6 +574,31 @@ class MainWindow(QMainWindow):
         # Refresh the instrument tree (and clear form if the deleted file was open).
         self._gauge_view.after_file_deleted(abs_path)
 
+    # ── Context toolbar actions ────────────────────────────────────────────
+
+    def _wire_ctx_actions(self) -> None:
+        self._gauge_view.context_changed.connect(self._refresh_ctx_actions)
+        self._panel_view.context_changed.connect(self._refresh_ctx_actions)
+        self._ctx_add_act.triggered.connect(self._on_ctx_add)
+
+    def _refresh_ctx_actions(self) -> None:
+        idx = self._tabs.currentIndex()
+        if idx == _TAB_GAUGE:
+            can_add = self._gauge_view.can_add()
+        elif idx == _TAB_PANEL:
+            can_add = self._panel_view.can_add()
+        else:
+            can_add = False
+        self._ctx_add_act.setEnabled(can_add)
+        self._ctx_add_btn.setEnabled(can_add)
+
+    def _on_ctx_add(self) -> None:
+        idx = self._tabs.currentIndex()
+        if idx == _TAB_GAUGE:
+            self._gauge_view.do_add()
+        elif idx == _TAB_PANEL:
+            self._panel_view.do_add()
+
     # ── Tab handling ──────────────────────────────────────────────────────
 
     def _on_tab_changed(self, idx: int):
@@ -586,6 +612,7 @@ class MainWindow(QMainWindow):
         self._update_script_btn()
         self._update_play_btn()
         self._update_run_btn()
+        self._refresh_ctx_actions()
         self._update_title()
 
     # ── Recent files ──────────────────────────────────────────────────────

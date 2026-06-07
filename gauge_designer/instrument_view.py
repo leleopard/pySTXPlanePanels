@@ -244,10 +244,12 @@ class InstrumentView(QWidget):
     live_running = Signal(bool)    # True when live X-Plane run starts, False when it stops
     instrument_moved = Signal(str, str)  # old_abs_path, new_abs_path (file or dir)
     delete_requested = Signal(str)       # abs_path of file the user wants to delete
+    context_changed = Signal()           # emitted when the active editing context changes
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._components: list[dict] = []
+        self._add_context: str | None = None  # "instrument" | "component" | None
         self._hidden: set[str] = set()
         self._loading = False
         self._instruments_root: str = ""
@@ -277,6 +279,7 @@ class InstrumentView(QWidget):
         self._tree = _InstrumentTree()
         self._tree.itemActivated.connect(self._on_tree_activated)
         self._tree.item_moved.connect(self._on_item_moved)
+        self._tree.itemClicked.connect(lambda: self._set_add_context("instrument"))
         tl.addWidget(self._tree)
 
         crud_bar = QHBoxLayout()
@@ -389,6 +392,7 @@ class InstrumentView(QWidget):
         comp_layout.addLayout(btn_bar)
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
+        self._list.itemClicked.connect(lambda: self._set_add_context("component"))
         self._delegate = _EyeDelegate(self._list)
         self._delegate.visibility_toggled.connect(self._on_visibility_toggled)
         self._list.setItemDelegate(self._delegate)
@@ -684,6 +688,22 @@ class InstrumentView(QWidget):
             self.clear()
         if self._instruments_root:
             self._populate_tree(Path(self._instruments_root))
+
+    # ── Context actions (Add / Delete / Duplicate / Copy / Paste) ─────────
+
+    def _set_add_context(self, ctx: str) -> None:
+        if self._add_context != ctx:
+            self._add_context = ctx
+            self.context_changed.emit()
+
+    def can_add(self) -> bool:
+        return self._add_context is not None
+
+    def do_add(self) -> None:
+        if self._add_context == "instrument":
+            self._new_instrument()
+        elif self._add_context == "component":
+            self._add_component()
 
     # ── Gauge size ────────────────────────────────────────────────────────
 

@@ -174,12 +174,14 @@ class _InstrumentTree(QTreeWidget):
 class PanelView(QWidget):
     changed = Signal()
     open_requested = Signal(str)  # emitted when a panel file is double-clicked
+    context_changed = Signal()    # emitted when the active editing context changes
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._instruments: list[dict] = []
         self._yaml_dir: str = ""
         self._yaml_path: str = ""
+        self._add_context: str | None = None  # "panel" | None
         self._panels_root: str = str(_DEFAULT_PANELS_ROOT)
         self._loading = False
         self._sel_path: tuple[int, ...] | None = None
@@ -215,6 +217,7 @@ class PanelView(QWidget):
 
         self._file_tree = _PanelFileTree()
         self._file_tree.file_activated.connect(self.open_requested)
+        self._file_tree.itemClicked.connect(lambda: self._set_add_context("panel"))
         pl.addWidget(self._file_tree)
 
         # ── Right area: always visible; placeholder shown when no panel is loaded ─
@@ -763,6 +766,20 @@ class PanelView(QWidget):
         current = self._tree.currentItem()
         if current:
             self._on_tree_selection_changed(current, None)
+
+    # ── Context actions (Add / Delete / Duplicate / Copy / Paste) ─────────
+
+    def _set_add_context(self, ctx: str) -> None:
+        if self._add_context != ctx:
+            self._add_context = ctx
+            self.context_changed.emit()
+
+    def can_add(self) -> bool:
+        return self._add_context is not None
+
+    def do_add(self) -> None:
+        if self._add_context == "panel":
+            self._new_panel()
 
     # ── Tree helpers ────────────────────────────────────────────────────────
 
