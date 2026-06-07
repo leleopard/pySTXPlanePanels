@@ -186,6 +186,32 @@ class MainWindow(QMainWindow):
 
         edit_menu = menu.addMenu("&Edit")
 
+        self._ctx_add_act = QAction("&Add", self)
+        self._ctx_add_act.setEnabled(False)
+        edit_menu.addAction(self._ctx_add_act)
+
+        self._ctx_delete_act = QAction("&Delete", self)
+        self._ctx_delete_act.setEnabled(False)
+        edit_menu.addAction(self._ctx_delete_act)
+
+        self._ctx_duplicate_act = QAction("D&uplicate", self)
+        self._ctx_duplicate_act.setEnabled(False)
+        edit_menu.addAction(self._ctx_duplicate_act)
+
+        edit_menu.addSeparator()
+
+        self._ctx_copy_act = QAction("&Copy", self)
+        self._ctx_copy_act.setShortcut("Ctrl+C")
+        self._ctx_copy_act.setEnabled(False)
+        edit_menu.addAction(self._ctx_copy_act)
+
+        self._ctx_paste_act = QAction("&Paste", self)
+        self._ctx_paste_act.setShortcut("Ctrl+V")
+        self._ctx_paste_act.setEnabled(False)
+        edit_menu.addAction(self._ctx_paste_act)
+
+        edit_menu.addSeparator()
+
         xplane_act = QAction("X-Plane &Network Settings…", self)
         xplane_act.triggered.connect(self._open_xplane_settings)
         edit_menu.addAction(xplane_act)
@@ -274,6 +300,26 @@ class MainWindow(QMainWindow):
         self._save_all_btn.setEnabled(False)
         self._save_all_btn.clicked.connect(self._save_all)
         tb.addWidget(self._save_all_btn)
+
+        tb.addSeparator()
+
+        for icon, tip, act, attr in (
+            ("plus",                     "Add",       self._ctx_add_act,       "_ctx_add_btn"),
+            ("delete-outline",           "Delete",    self._ctx_delete_act,    "_ctx_delete_btn"),
+            ("plus-circle-multiple-outline", "Duplicate", self._ctx_duplicate_act, "_ctx_duplicate_btn"),
+            ("content-copy",             "Copy",      self._ctx_copy_act,      "_ctx_copy_btn"),
+            ("content-paste",            "Paste",     self._ctx_paste_act,     "_ctx_paste_btn"),
+        ):
+            btn = QPushButton()
+            btn.setIcon(make_svg_icon(icon, self._ICON_GREY, size=36))
+            btn.setIconSize(QSize(36, 36))
+            btn.setFixedSize(48, 48)
+            btn.setStyleSheet(_btn_style)
+            btn.setToolTip(tip)
+            btn.setEnabled(False)
+            btn.clicked.connect(act.trigger)
+            setattr(self, attr, btn)
+            tb.addWidget(btn)
 
         tb.addSeparator()
 
