@@ -356,11 +356,8 @@ class InstrumentView(QWidget):
         btn_bar.setContentsMargins(2, 2, 2, 2)
         btn_bar.setSpacing(2)
         for icon_name, slot, tip in [
-            ("plus-circle-outline",          self._add_component,       "Add component"),
-            ("plus-circle-multiple-outline", self._duplicate_component, "Duplicate selected component"),
-            ("trash-can-outline",            self._remove_component,    "Remove component"),
-            ("menu-up",                      self._move_up,             "Move up"),
-            ("menu-down",                    self._move_down,           "Move down"),
+            ("menu-up",   self._move_up,   "Move up"),
+            ("menu-down", self._move_down, "Move down"),
         ]:
             btn = QPushButton()
             btn.setIcon(make_svg_icon(icon_name))
