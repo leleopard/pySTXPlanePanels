@@ -582,15 +582,23 @@ class MainWindow(QMainWindow):
         self._ctx_add_act.triggered.connect(self._on_ctx_add)
 
     def _refresh_ctx_actions(self) -> None:
+        from gauge_designer.ui_utils import _HEADER_COLOR
         idx = self._tabs.currentIndex()
-        if idx == _TAB_GAUGE:
-            can_add = self._gauge_view.can_add()
-        elif idx == _TAB_PANEL:
-            can_add = self._panel_view.can_add()
-        else:
-            can_add = False
+        can_add = (
+            self._gauge_view.can_add() if idx == _TAB_GAUGE else
+            self._panel_view.can_add() if idx == _TAB_PANEL else False
+        )
+        # When enabled the icon uses the scheme colour; when disabled, grey.
+        for btn, icon, enabled in (
+            (self._ctx_add_btn,       "plus-circle-outline",          can_add),
+            (self._ctx_delete_btn,    "trash-can-outline",            False),
+            (self._ctx_duplicate_btn, "plus-circle-multiple-outline", False),
+            (self._ctx_copy_btn,      "content-copy",                 False),
+            (self._ctx_paste_btn,     "content-paste",                False),
+        ):
+            btn.setEnabled(enabled)
+            btn.setIcon(make_svg_icon(icon, _HEADER_COLOR if enabled else self._ICON_GREY, size=36))
         self._ctx_add_act.setEnabled(can_add)
-        self._ctx_add_btn.setEnabled(can_add)
 
     def _on_ctx_add(self) -> None:
         idx = self._tabs.currentIndex()
