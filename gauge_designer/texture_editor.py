@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QWidget, QDialogButtonBox,
 )
 from gauge_designer.ui_utils import QSpinBox
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPainter, QPixmap, QColor, QPen
 
 
@@ -28,6 +28,7 @@ class _TextureView(QWidget):
                  orig_x: QSpinBox, orig_y: QSpinBox,
                  clip_w: QSpinBox, clip_h: QSpinBox,
                  grid_x: QSpinBox, grid_y: QSpinBox,
+                 scroll_area=None,
                  parent=None):
         super().__init__(parent)
         self._pixmap = pixmap
@@ -37,6 +38,7 @@ class _TextureView(QWidget):
         self._clip_h = clip_h
         self._grid_x = grid_x
         self._grid_y = grid_y
+        self._scroll_area = scroll_area
         self._zoom = 0.5
         self.setCursor(Qt.CrossCursor)
         self.setMouseTracking(True)
@@ -78,7 +80,21 @@ class _TextureView(QWidget):
     def wheelEvent(self, event):
         if event.modifiers() & Qt.ControlModifier:
             factor = 1.15 if event.angleDelta().y() > 0 else 1.0 / 1.15
+            old_zoom = self._zoom
+            cx = event.position().x()
+            cy = event.position().y()
+            sa = self._scroll_area
+            h_val = sa.horizontalScrollBar().value() if sa else 0
+            v_val = sa.verticalScrollBar().value()   if sa else 0
             self.set_zoom(self._zoom * factor)
+            if sa and self._zoom != old_zoom:
+                zoom_ratio = self._zoom / old_zoom
+                new_h = int(cx * (zoom_ratio - 1) + h_val)
+                new_v = int(cy * (zoom_ratio - 1) + v_val)
+                QTimer.singleShot(0, lambda: (
+                    sa.horizontalScrollBar().setValue(new_h),
+                    sa.verticalScrollBar().setValue(new_v),
+                ))
             event.accept()
         else:
             event.ignore()
@@ -206,12 +222,18 @@ class TextureEditorDialog(QDialog):
         grid.addWidget(self._zoom_sb,       1, 6)
 
         # ── Texture view ───────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(False)
+        scroll.setAlignment(Qt.AlignCenter)
+
         self._view = _TextureView(
             pixmap,
             self._orig_x, self._orig_y,
             self._clip_w, self._clip_h,
             self._grid_x, self._grid_y,
+            scroll_area=scroll,
         )
+        scroll.setWidget(self._view)
 
         for sb in (self._orig_x, self._orig_y,
                    self._clip_w, self._clip_h,
@@ -224,11 +246,6 @@ class TextureEditorDialog(QDialog):
         if not pixmap.isNull():
             fit = min(1.0, 580 / max(pixmap.height(), 1))
             self._view.set_zoom(fit)  # emits zoom_changed → updates _zoom_sb
-
-        scroll = QScrollArea()
-        scroll.setWidget(self._view)
-        scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignCenter)
 
         # ── Coordinate label ───────────────────────────────────────────────
         self._coord_label = QLabel("X: —   Y: —")
