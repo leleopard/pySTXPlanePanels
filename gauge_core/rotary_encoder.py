@@ -198,8 +198,11 @@ class RotaryEncoder(InteractiveComponent):
 
     def on_drag(self, panel_x: float, panel_y: float,
                 ddx: float, ddy: float) -> None:
-        # y-up: ddy > 0 = finger moved up → CW
-        self._drag_accum += ddy
+        # Left zone: drag up → CW (pulling the left side of the knob upward).
+        # Right zone: drag down → CW (pushing the right side of the knob downward).
+        # Both mimic the physical feel of rotating a real knob.
+        effective_ddy = -ddy if self._press_x >= self._x else ddy
+        self._drag_accum += effective_ddy
         while self._drag_accum >= self._drag_threshold:
             self._fire(self._cmd_cw)
             self._drag_accum -= self._drag_threshold
