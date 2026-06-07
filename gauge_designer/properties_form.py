@@ -1734,7 +1734,7 @@ class PropertiesForm(QWidget):
         self._re_face_dr = QLineEdit()
         self._re_face_dr.setPlaceholderText("dataref driving face rotation")
         self._re_face_dr.editingFinished.connect(self._emit)
-        self._re_sec.row("Rotation dataref", self._re_face_dr)
+        self._re_sec.row("Rotation dataref", self._dr_field(self._re_face_dr))
 
         self._re_face_fn = _NoScrollComboBox()
         self._re_face_fn.addItems(_VALUE_FUNCS)
