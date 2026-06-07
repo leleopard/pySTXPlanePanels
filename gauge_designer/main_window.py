@@ -210,22 +210,22 @@ class MainWindow(QMainWindow):
         self._ctx_paste_act.setEnabled(False)
         edit_menu.addAction(self._ctx_paste_act)
 
-        edit_menu.addSeparator()
+        settings_menu = menu.addMenu("&Settings")
 
         xplane_act = QAction("X-Plane &Network Settings…", self)
         xplane_act.triggered.connect(self._open_xplane_settings)
-        edit_menu.addAction(xplane_act)
+        settings_menu.addAction(xplane_act)
 
         aa_act = QAction("&Antialiasing…", self)
         aa_act.triggered.connect(self._open_antialiasing)
-        edit_menu.addAction(aa_act)
+        settings_menu.addAction(aa_act)
 
-        edit_menu.addSeparator()
+        settings_menu.addSeparator()
 
         prefs_act = QAction("&Preferences…", self)
         prefs_act.setShortcut("Ctrl+,")
         prefs_act.triggered.connect(self._open_preferences)
-        edit_menu.addAction(prefs_act)
+        settings_menu.addAction(prefs_act)
 
     def _open_antialiasing(self):
         from gauge_designer.antialiasing_dialog import AntialiasingDialog
