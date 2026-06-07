@@ -795,6 +795,12 @@ class PanelView(QWidget):
     def can_duplicate(self) -> bool:
         return self._add_context == "panel" and self._file_tree_has_file()
 
+    def can_copy(self) -> bool:
+        return False
+
+    def can_paste(self) -> bool:
+        return False
+
     def do_delete(self) -> None:
         if self._add_context == "panel":
             self._delete_panel()

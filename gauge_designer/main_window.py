@@ -582,26 +582,32 @@ class MainWindow(QMainWindow):
         self._ctx_add_act.triggered.connect(self._on_ctx_add)
         self._ctx_delete_act.triggered.connect(self._on_ctx_delete)
         self._ctx_duplicate_act.triggered.connect(self._on_ctx_duplicate)
+        self._ctx_copy_act.triggered.connect(self._on_ctx_copy)
+        self._ctx_paste_act.triggered.connect(self._on_ctx_paste)
 
     def _refresh_ctx_actions(self) -> None:
         from gauge_designer.ui_utils import _HEADER_COLOR
         idx = self._tabs.currentIndex()
         view = self._gauge_view if idx == _TAB_GAUGE else self._panel_view if idx == _TAB_PANEL else None
-        can_add  = view.can_add()       if view else False
-        can_del  = view.can_delete()    if view else False
-        can_dup  = view.can_duplicate() if view else False
+        can_add   = view.can_add()       if view else False
+        can_del   = view.can_delete()    if view else False
+        can_dup   = view.can_duplicate() if view else False
+        can_copy  = view.can_copy()      if view else False
+        can_paste = view.can_paste()     if view else False
         for btn, icon, enabled in (
             (self._ctx_add_btn,       "plus-circle-outline",          can_add),
             (self._ctx_delete_btn,    "trash-can-outline",            can_del),
             (self._ctx_duplicate_btn, "plus-circle-multiple-outline", can_dup),
-            (self._ctx_copy_btn,      "content-copy",                 False),
-            (self._ctx_paste_btn,     "content-paste",                False),
+            (self._ctx_copy_btn,      "content-copy",                 can_copy),
+            (self._ctx_paste_btn,     "content-paste",                can_paste),
         ):
             btn.setEnabled(enabled)
             btn.setIcon(make_svg_icon(icon, _HEADER_COLOR if enabled else self._ICON_GREY, size=36))
         self._ctx_add_act.setEnabled(can_add)
         self._ctx_delete_act.setEnabled(can_del)
         self._ctx_duplicate_act.setEnabled(can_dup)
+        self._ctx_copy_act.setEnabled(can_copy)
+        self._ctx_paste_act.setEnabled(can_paste)
 
     def _on_ctx_add(self) -> None:
         idx = self._tabs.currentIndex()
@@ -623,6 +629,16 @@ class MainWindow(QMainWindow):
             self._gauge_view.do_duplicate()
         elif idx == _TAB_PANEL:
             self._panel_view.do_duplicate()
+
+    def _on_ctx_copy(self) -> None:
+        idx = self._tabs.currentIndex()
+        if idx == _TAB_GAUGE:
+            self._gauge_view.do_copy()
+
+    def _on_ctx_paste(self) -> None:
+        idx = self._tabs.currentIndex()
+        if idx == _TAB_GAUGE:
+            self._gauge_view.do_paste()
 
     # ── Tab handling ──────────────────────────────────────────────────────
 

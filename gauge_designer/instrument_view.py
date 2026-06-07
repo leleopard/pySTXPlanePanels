@@ -246,6 +246,8 @@ class InstrumentView(QWidget):
     delete_requested = Signal(str)       # abs_path of file the user wants to delete
     context_changed = Signal()           # emitted when the active editing context changes
 
+    _component_clipboard: "dict | None" = None  # class-level, survives instrument switches
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._components: list[dict] = []
@@ -730,6 +732,39 @@ class InstrumentView(QWidget):
         if self._add_context == "component":
             return self._list.currentRow() >= 0
         return False
+
+    def can_copy(self) -> bool:
+        return self._add_context == "component" and self._list.currentRow() >= 0
+
+    def can_paste(self) -> bool:
+        return InstrumentView._component_clipboard is not None
+
+    def do_copy(self) -> None:
+        row = self._list.currentRow()
+        if row < 0 or row >= len(self._components):
+            return
+        import copy
+        InstrumentView._component_clipboard = copy.deepcopy(self._components[row])
+        self.context_changed.emit()
+
+    def do_paste(self) -> None:
+        if InstrumentView._component_clipboard is None:
+            return
+        import copy
+        new_comp = copy.deepcopy(InstrumentView._component_clipboard)
+        existing = {c.get("name", "") for c in self._components}
+        base_name = new_comp.get("name", "component")
+        candidate = f"{base_name}_copy"
+        suffix = 1
+        while candidate in existing:
+            suffix += 1
+            candidate = f"{base_name}_copy{suffix}"
+        new_comp["name"] = candidate
+        self._components.append(new_comp)
+        self._list.addItem(new_comp["name"])
+        self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
+        self._list.setCurrentRow(len(self._components) - 1)
+        self.changed.emit()
 
     def do_add(self) -> None:
         if self._add_context == "instrument":
