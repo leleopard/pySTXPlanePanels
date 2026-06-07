@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
     QDialog, QDialogButtonBox, QFormLayout,
 )
-from PySide6.QtCore import Qt, Signal, QEvent, QRect, QPoint, QSettings, QTimer
+from PySide6.QtCore import Qt, Signal, QEvent, QEvent, QRect, QPoint, QSettings, QTimer
 from gauge_designer.ui_utils import QSpinBox
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
@@ -395,6 +395,7 @@ class InstrumentView(QWidget):
         self._list.currentRowChanged.connect(self._on_row_changed)
         self._list.itemClicked.connect(lambda: self._set_add_context("component"))
         self._list.currentRowChanged.connect(self._on_ctx_selection_changed)
+        self._list.viewport().installEventFilter(self)
         self._delegate = _EyeDelegate(self._list)
         self._delegate.visibility_toggled.connect(self._on_visibility_toggled)
         self._list.setItemDelegate(self._delegate)
@@ -500,6 +501,7 @@ class InstrumentView(QWidget):
         self._editor_content.setVisible(True)
         self._loaded_path = str(Path(yaml_path).resolve()) if yaml_path else None
         self._sync_tree_selection()
+        self._set_add_context("component")
 
     def clear(self):
         self._loading = True
@@ -694,6 +696,11 @@ class InstrumentView(QWidget):
     # ── Context actions (Add / Delete / Duplicate / Copy / Paste) ─────────
 
     _CTX_BORDER = "border: 2px solid #6682c5; border-radius: 3px;"
+
+    def eventFilter(self, obj, event):
+        if obj is self._list.viewport() and event.type() == QEvent.Type.MouseButtonPress:
+            self._set_add_context("component")
+        return super().eventFilter(obj, event)
 
     def _on_ctx_selection_changed(self, *_) -> None:
         if self._add_context is not None:
