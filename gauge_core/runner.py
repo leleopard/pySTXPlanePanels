@@ -276,14 +276,16 @@ class PanelWindow(arcade.Window):
 
     def _hit_test(self, panel_x: float, panel_y: float):
         """Return the topmost interactive component at panel coords, or None."""
-        mult = self.panel.hit_padding_multiplier
+        panel_mult = self.panel.hit_padding_multiplier
         # Iterate in reverse draw order so topmost component wins.
         from gauge_core.interactive import InteractiveComponent
         candidates = []
         for inst in self.panel.instruments:
             for comp in inst.components:
                 if isinstance(comp, InteractiveComponent):
-                    if comp.hit_test(panel_x, panel_y, mult):
+                    # Per-component hit_padding overrides the panel-level multiplier.
+                    comp_mult = getattr(comp, "hit_padding", None) or panel_mult
+                    if comp.hit_test(panel_x, panel_y, comp_mult):
                         candidates.append(comp)
         return candidates[-1] if candidates else None
 

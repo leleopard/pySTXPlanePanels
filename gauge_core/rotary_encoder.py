@@ -101,6 +101,7 @@ class RotaryEncoder(InteractiveComponent):
         face_off: tuple[float, float] = (0.0, 0.0),
         face_rot_center: tuple[float, float] = (0.0, 0.0),
         show_touch_zones: bool = False,
+        hit_padding: float | None = None,
     ) -> None:
         super().__init__(name, position, size)
         self._cmd_cw  = command_cw
@@ -116,6 +117,8 @@ class RotaryEncoder(InteractiveComponent):
         self._face_off_x, self._face_off_y = float(face_off[0]), float(face_off[1])
         self._face_rot_cx, self._face_rot_cy = float(face_rot_center[0]), float(face_rot_center[1])
         self._show_touch_zones = show_touch_zones
+        # None = use panel-level hit_padding_multiplier; a float overrides it for this knob.
+        self.hit_padding: float | None = hit_padding
 
         # Gesture tracking
         self._press_x: float = 0.0
@@ -179,16 +182,12 @@ class RotaryEncoder(InteractiveComponent):
         if self._face_sprite is not None:
             arcade.draw_sprite(self._face_sprite)
         if self._show_touch_zones:
-            hw = self._w / 2
+            # Use the effective multiplier (per-component override or panel default 1.5)
+            eff_mult = self.hit_padding if self.hit_padding is not None else 1.5
+            lx, ly, lw, lh = self.hit_rect(eff_mult)
             # CCW = left half (yellow), CW = right half (green)
-            arcade.draw_rect_filled(
-                arcade.XYWH(self._x - hw / 2, self._y, hw, self._h),
-                (255, 220, 0, 100),
-            )
-            arcade.draw_rect_filled(
-                arcade.XYWH(self._x + hw / 2, self._y, hw, self._h),
-                (0, 200, 80, 100),
-            )
+            arcade.draw_rect_filled(arcade.LBWH(lx,          ly, lw / 2, lh), (255, 220, 0, 100))
+            arcade.draw_rect_filled(arcade.LBWH(lx + lw / 2, ly, lw / 2, lh), (0, 200, 80, 100))
 
     # ── gesture handlers ──────────────────────────────────────────────────────
 
@@ -301,6 +300,7 @@ def _rotary_encoder_factory(
         face_off=(float(face_off_raw[0]), float(face_off_raw[1])),
         face_rot_center=(float(face_rot_ctr_raw[0]), float(face_rot_ctr_raw[1])),
         show_touch_zones=bool(comp.get("show_touch_zones", False)),
+        hit_padding=float(comp["hit_padding"]) if "hit_padding" in comp else None,
     )
 
 
