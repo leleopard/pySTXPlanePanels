@@ -218,6 +218,7 @@ class PanelView(QWidget):
         self._file_tree = _PanelFileTree()
         self._file_tree.file_activated.connect(self.open_requested)
         self._file_tree.itemClicked.connect(lambda: self._set_add_context("panel"))
+        self._file_tree.currentItemChanged.connect(self._on_ctx_selection_changed)
         pl.addWidget(self._file_tree)
 
         # ── Right area: always visible; placeholder shown when no panel is loaded ─
@@ -771,14 +772,36 @@ class PanelView(QWidget):
 
     _CTX_BORDER = "border: 2px solid #6682c5; border-radius: 3px;"
 
+    def _on_ctx_selection_changed(self, *_) -> None:
+        if self._add_context is not None:
+            self.context_changed.emit()
+
     def _set_add_context(self, ctx: str) -> None:
         if self._add_context != ctx:
             self._add_context = ctx
             self._file_tree.setStyleSheet(self._CTX_BORDER if ctx == "panel" else "")
             self.context_changed.emit()
 
+    def _file_tree_has_file(self) -> bool:
+        item = self._file_tree.currentItem()
+        return item is not None and bool(item.data(0, Qt.UserRole))
+
     def can_add(self) -> bool:
         return self._add_context is not None
+
+    def can_delete(self) -> bool:
+        return self._add_context == "panel" and self._file_tree_has_file()
+
+    def can_duplicate(self) -> bool:
+        return self._add_context == "panel" and self._file_tree_has_file()
+
+    def do_delete(self) -> None:
+        if self._add_context == "panel":
+            self._delete_panel()
+
+    def do_duplicate(self) -> None:
+        if self._add_context == "panel":
+            self._duplicate_panel()
 
     def do_add(self) -> None:
         if self._add_context == "panel":

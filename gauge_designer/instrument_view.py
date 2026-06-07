@@ -280,6 +280,7 @@ class InstrumentView(QWidget):
         self._tree.itemActivated.connect(self._on_tree_activated)
         self._tree.item_moved.connect(self._on_item_moved)
         self._tree.itemClicked.connect(lambda: self._set_add_context("instrument"))
+        self._tree.currentItemChanged.connect(self._on_ctx_selection_changed)
         tl.addWidget(self._tree)
 
         crud_bar = QHBoxLayout()
@@ -393,6 +394,7 @@ class InstrumentView(QWidget):
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._on_row_changed)
         self._list.itemClicked.connect(lambda: self._set_add_context("component"))
+        self._list.currentRowChanged.connect(self._on_ctx_selection_changed)
         self._delegate = _EyeDelegate(self._list)
         self._delegate.visibility_toggled.connect(self._on_visibility_toggled)
         self._list.setItemDelegate(self._delegate)
@@ -693,6 +695,10 @@ class InstrumentView(QWidget):
 
     _CTX_BORDER = "border: 2px solid #6682c5; border-radius: 3px;"
 
+    def _on_ctx_selection_changed(self, *_) -> None:
+        if self._add_context is not None:
+            self.context_changed.emit()
+
     def _set_add_context(self, ctx: str) -> None:
         if self._add_context != ctx:
             self._add_context = ctx
@@ -703,11 +709,65 @@ class InstrumentView(QWidget):
     def can_add(self) -> bool:
         return self._add_context is not None
 
+    def can_delete(self) -> bool:
+        if self._add_context == "instrument":
+            return self._tree.currentItem() is not None
+        if self._add_context == "component":
+            return self._list.currentRow() >= 0
+        return False
+
+    def can_duplicate(self) -> bool:
+        if self._add_context == "instrument":
+            item = self._tree.currentItem()
+            return item is not None and item.data(0, _ROLE_TYPE) == "file"
+        if self._add_context == "component":
+            return self._list.currentRow() >= 0
+        return False
+
     def do_add(self) -> None:
         if self._add_context == "instrument":
             self._new_instrument()
         elif self._add_context == "component":
             self._add_component()
+
+    def do_delete(self) -> None:
+        if self._add_context == "instrument":
+            self._delete_selected()
+        elif self._add_context == "component":
+            self._remove_component()
+
+    def do_duplicate(self) -> None:
+        if self._add_context == "instrument":
+            self._duplicate_instrument()
+        elif self._add_context == "component":
+            self._duplicate_component()
+
+    def _duplicate_instrument(self) -> None:
+        item = self._tree.currentItem()
+        if item is None or item.data(0, _ROLE_TYPE) != "file":
+            return
+        src = Path(item.data(0, _ROLE_PATH))
+        name, ok = QInputDialog.getText(
+            self, "Duplicate Instrument",
+            "Name for the duplicate (without .yaml):",
+            text=src.stem + "_copy",
+        )
+        if not ok or not name.strip():
+            return
+        dst = src.parent / f"{name.strip()}.yaml"
+        if dst.exists():
+            QMessageBox.warning(self, "Exists", f"'{dst.name}' already exists.")
+            return
+        try:
+            with open(src, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            data["name"] = name.strip()
+            with open(dst, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+            return
+        self._populate_tree(Path(self._instruments_root))
 
     # ── Gauge size ────────────────────────────────────────────────────────
 
