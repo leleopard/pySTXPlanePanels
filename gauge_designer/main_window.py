@@ -132,7 +132,8 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._panel_view, "Panels")
         self._tabs.currentChanged.connect(self._on_tab_changed)
         self._tabs.setStyleSheet(
-            "QTabBar::tab:selected { color: #6682c5; font-weight: bold;"
+            "QTabBar::tab { padding: 4px 16px; }"
+            "QTabBar::tab:selected { color: black; font-weight: bold;"
             " border-bottom: 2px solid #6682c5; }"
         )
         self.setCentralWidget(self._tabs)
