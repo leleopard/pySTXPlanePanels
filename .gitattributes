@@ -1,0 +1,13 @@
+# Force LF line endings for files that must be Unix-readable
+*.sh        text eol=lf
+*.yaml      text eol=lf
+*.py        text eol=lf
+*.md        text eol=lf
+*.toml      text eol=lf
+*.txt       text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+*.json      text eol=lf
+
+# Windows-only files can keep CRLF
+*.bat       text eol=crlf
