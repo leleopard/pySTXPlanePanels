@@ -65,3 +65,45 @@ components:
   position:
   - 155
   - 155
+- name: OBS_knob_copy
+  type: RotaryEncoder
+  position:
+  - 33
+  - 35
+  size:
+  - 65
+  - 65
+  command_cw: sim/radios/adf1_card_up
+  command_ccw: sim/radios/adf1_card_down
+  hit_padding: 1.6
+  background_texture: assets/c172_text_standard6_v1.1.png
+  background_origin:
+  - 952
+  - 1612
+  background_cliprect:
+  - 68
+  - 68
+  face_texture: assets/c172_text_standard6_v1.1.png
+  face_origin:
+  - 962
+  - 1787
+  face_cliprect:
+  - 61
+  - 27
+  face_size:
+  - 44
+  - 25
+  face_offset:
+  - 3
+  - -3
+  face_rotation_center:
+  - 3
+  - -3
+  face_rotation:
+    dataref: sim/cockpit/radios/adf1_cardinal_dir
+    table:
+    - - 0
+      - 0
+    - - 360
+      - 360
+    convert_function: (none)

@@ -4,14 +4,13 @@ size:
 - 310
 components:
 - name: jkk;
-  type: ImagePanel
-  texture: ''
-  origin:
-  - 0
-  - 0
-  cliprect:
-  - 100
-  - 100
+  type: Text
   position:
   - 155
   - 155
+  font_size: 12.0
+  color:
+  - 255
+  - 255
+  - 255
+  - 255

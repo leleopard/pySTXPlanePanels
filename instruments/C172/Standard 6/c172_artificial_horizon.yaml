@@ -1,90 +1,140 @@
-# C172 Artificial Horizon (attitude indicator).
-# Roll dataref = DATA group 17 index 1 (degrees of bank)
-# Pitch dataref = DATA group 17 index 0 (degrees of pitch)
-# Pilot pitch-trim adjustment = sim/cockpit2/.../artificial_horizon_adjust_deg_pilot
-#
-# The inner horizon both rotates with roll AND translates along the
-# roll-rotated axis to show pitch — i.e. the pitch line stays
-# perpendicular to the wings as the plane banks. This is achieved by
-# leaving translation_angle unset, so the translation direction
-# follows the current rotation angle (matches the original engine).
-#
-# The plane gizmo (pilot's manual horizon adjustment) translates
-# vertically only (no rotation set, so its translation defaults to
-# 0° → pure y-axis movement).
-
 name: C172 Artificial Horizon
-size: [310, 310]
-
+size:
+- 310
+- 310
 components:
-  - name: background_horizon
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [0, 900]
-    position: [155, 155]
-    rotation:
-      dataref: sim/flightmodel/position/phi   # roll, deg
-      table:
-        - [-180, 180]
-        - [0, 0]
-        - [180, -180]
-
-  - name: inner_horizon
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [300, 900]
-    position: [155, 155]
-    rotation:
-      dataref: sim/flightmodel/position/phi   # roll, deg
-      table:
-        - [-180, 180]
-        - [0, 0]
-        - [180, -180]
-    translation:
-      dataref: sim/flightmodel/position/theta   # pitch, deg
-      table:
-        - [-25, 48]
-        - [0, 0]
-        - [25, -50]
-
-  - name: outer_horizon
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [600, 900]
-    position: [155, 155]
-    rotation:
-      dataref: sim/flightmodel/position/phi   # roll, deg
-      table:
-        - [-180, 180]
-        - [0, 0]
-        - [180, -180]
-
-  - name: plane_gizmo
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [1200, 900]
-    position: [155, 155]
-    translation:
-      dataref: sim/cockpit2/gauges/actuators/artificial_horizon_adjust_deg_pilot[0]
-      table:
-        - [-25, -48]
-        - [0, 0]
-        - [25, 50]
-
-  - name: plane_silhouette
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [900, 900]
-    position: [155, 155]
-
-  - name: bezel
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [310, 310]
-    origin: [1200, 1500]
-    position: [155, 155]
+- name: background_horizon
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 0
+  - 900
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/flightmodel/position/phi
+    table:
+    - - -180
+      - 180
+    - - 0
+      - 0
+    - - 180
+      - -180
+- name: inner_horizon
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 300
+  - 900
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/flightmodel/position/phi
+    table:
+    - - -180
+      - 180
+    - - 0
+      - 0
+    - - 180
+      - -180
+  translation:
+    dataref: sim/flightmodel/position/theta
+    table:
+    - - -25
+      - 48
+    - - 0
+      - 0
+    - - 25
+      - -50
+- name: outer_horizon
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 600
+  - 900
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/flightmodel/position/phi
+    table:
+    - - -180
+      - 180
+    - - 0
+      - 0
+    - - 180
+      - -180
+- name: plane_gizmo
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 1200
+  - 900
+  position:
+  - 155
+  - 155
+  translation:
+    dataref: sim/cockpit2/gauges/actuators/artificial_horizon_adjust_deg_pilot[0]
+    table:
+    - - -25
+      - -48
+    - - 0
+      - 0
+    - - 25
+      - 50
+- name: plane_silhouette
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 900
+  - 900
+  position:
+  - 155
+  - 155
+- name: bezel
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 310
+  - 310
+  origin:
+  - 1200
+  - 1500
+  position:
+  - 155
+  - 155
+- name: ahref_knob
+  type: RotaryEncoder
+  position:
+  - 155
+  - 52
+  size:
+  - 55
+  - 55
+  command_cw: sim/instruments/ah_ref_up
+  command_ccw: sim/instruments/ah_ref_down
+  hit_padding: 1.6
+  background_texture: assets/c172_text_standard6_v1.1.png
+  background_origin:
+  - 952
+  - 1612
+  background_cliprect:
+  - 68
+  - 68

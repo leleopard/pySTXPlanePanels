@@ -1,99 +1,162 @@
-# C172 Altimeter — three-needle altimeter with rotating Hg / Mb pressure
-# wheels behind the dial face.
-#
-# Atlas coordinate convention (PIL): origin = top-left of the region in
-# the PNG, y grows DOWN. Atlas regions are derived from the original
-# pyXPPanels code by `(y_pil = 2048 - y_gl - height)`.
-#
-# Component order = z-order (first = bottom).
-
 name: C172 Altimeter
-size: [310, 310]
-
+size:
+- 310
+- 310
 components:
-  - name: black_background
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [300, 300]
-    position: [155, 155]
-
-  - name: hg_wheel
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [600, 300]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
-      table:
-        - [28.0, 154]
-        - [29.5, -0.5]
-        - [31.1, -165.1]
-
-  - name: mb_wheel
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [600, 600]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
-      convert_function: convert_in_to_mb
-      table:
-        - [945, 165.5]
-        - [1000, 0.5]
-        - [1050, -149.5]
-
-  - name: dial_face
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [300, 600]
-    position: [155, 155]
-
-  - name: needle_10k
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [300, 300]
-    origin: [900, 600]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
-      convert_function: return10000s
-      table:
-        - [0, 0]
-        - [1.0, 360]
-
-  - name: needle_1k
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [40, 300]
-    origin: [130, 1500]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
-      convert_function: return1000s
-      table:
-        - [0, 0]
-        - [1.0, 360]
-
-  - name: needle_100s
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [40, 300]
-    origin: [430, 1500]
-    position: [155, 155]
-    rotation:
-      dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
-      convert_function: return100s
-      table:
-        - [0, 0]
-        - [1.0, 360]
-
-  - name: bezel
-    type: ImagePanel
-    texture: assets/c172_text_standard6.png
-    cliprect: [310, 310]
-    origin: [1200, 1500]
-    position: [155, 155]
+- name: black_background
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 300
+  - 300
+  position:
+  - 155
+  - 155
+- name: hg_wheel
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 600
+  - 300
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
+    table:
+    - - 28.0
+      - 154
+    - - 29.5
+      - -0.5
+    - - 31.1
+      - -165.1
+- name: mb_wheel
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 600
+  - 600
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
+    convert_function: convert_in_to_mb
+    table:
+    - - 945
+      - 165.5
+    - - 1000
+      - 0.5
+    - - 1050
+      - -149.5
+- name: dial_face
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 300
+  - 600
+  position:
+  - 155
+  - 155
+- name: needle_10k
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 300
+  - 300
+  origin:
+  - 900
+  - 600
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    convert_function: return10000s
+    table:
+    - - 0
+      - 0
+    - - 1.0
+      - 360
+- name: needle_1k
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 40
+  - 300
+  origin:
+  - 130
+  - 1500
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    convert_function: return1000s
+    table:
+    - - 0
+      - 0
+    - - 1.0
+      - 360
+- name: needle_100s
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 40
+  - 300
+  origin:
+  - 430
+  - 1500
+  position:
+  - 155
+  - 155
+  rotation:
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    convert_function: return100s
+    table:
+    - - 0
+      - 0
+    - - 1.0
+      - 360
+- name: bezel
+  type: ImagePanel
+  texture: assets/c172_text_standard6.png
+  cliprect:
+  - 310
+  - 310
+  origin:
+  - 1200
+  - 1500
+  position:
+  - 155
+  - 155
+- name: press_knob
+  type: RotaryEncoder
+  position:
+  - 33
+  - 35
+  size:
+  - 65
+  - 65
+  command_cw: sim/instruments/barometer_up
+  command_ccw: sim/instruments/barometer_down
+  hit_padding: 1.6
+  background_texture: assets/c172_text_standard6_v1.1.png
+  background_origin:
+  - 952
+  - 1612
+  background_cliprect:
+  - 68
+  - 68

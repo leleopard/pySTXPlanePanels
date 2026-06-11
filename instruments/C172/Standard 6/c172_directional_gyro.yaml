@@ -81,10 +81,11 @@ components:
   - 275
   - 35
   size:
-  - 45
-  - 45
+  - 65
+  - 65
   command_cw: sim/autopilot/heading_up
   command_ccw: sim/autopilot/heading_down
+  hit_padding: 1.6
   background_texture: assets/c172_text_standard6_v1.1.png
   background_origin:
   - 952
@@ -100,17 +101,61 @@ components:
   - 35
   - 41
   face_size:
-  - 35
-  - 41
+  - 30
+  - 39
   face_offset:
-  - 4
-  - 0
+  - 2
+  - -2
   face_rotation_center:
-  - 5
-  - 0
+  - 2
+  - -2
   face_rotation:
     dataref: sim/cockpit2/autopilot/heading_dial_deg_mag_pilot
     table:
+    - - 0
+      - 0
+    - - 360
+      - 360
+    convert_function: (none)
+- name: DG_sync_knob
+  type: RotaryEncoder
+  position:
+  - 33
+  - 35
+  size:
+  - 65
+  - 65
+  command_cw: sim/instruments/DG_sync_up
+  command_ccw: sim/instruments/DG_sync_down
+  hit_padding: 1.6
+  background_texture: assets/c172_text_standard6_v1.1.png
+  background_origin:
+  - 952
+  - 1612
+  background_cliprect:
+  - 68
+  - 68
+  face_texture: assets/c172_text_standard6_v1.1.png
+  face_origin:
+  - 962
+  - 1829
+  face_cliprect:
+  - 65
+  - 60
+  face_size:
+  - 46
+  - 46
+  face_offset:
+  - 3
+  - -2
+  face_rotation_center:
+  - 3
+  - -2
+  face_rotation:
+    dataref: sim/cockpit/gyros/dg_drift_vac_deg
+    table:
+    - - -360
+      - -360
     - - 0
       - 0
     - - 360

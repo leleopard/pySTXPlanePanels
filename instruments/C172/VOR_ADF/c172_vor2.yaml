@@ -157,3 +157,45 @@ components:
   position:
   - 155
   - 155
+- name: OBS_knob
+  type: RotaryEncoder
+  position:
+  - 33
+  - 35
+  size:
+  - 65
+  - 65
+  command_cw: sim/radios/obs2_up
+  command_ccw: sim/radios/obs2_down
+  hit_padding: 1.6
+  background_texture: assets/c172_text_standard6_v1.1.png
+  background_origin:
+  - 952
+  - 1612
+  background_cliprect:
+  - 68
+  - 68
+  face_texture: assets/c172_text_standard6_v1.1.png
+  face_origin:
+  - 962
+  - 1746
+  face_cliprect:
+  - 55
+  - 28
+  face_size:
+  - 46
+  - 27
+  face_offset:
+  - 2
+  - -2
+  face_rotation_center:
+  - 2
+  - -2
+  face_rotation:
+    dataref: sim/cockpit/radios/nav2_obs_degm
+    table:
+    - - 0
+      - 0
+    - - 360
+      - 360
+    convert_function: (none)

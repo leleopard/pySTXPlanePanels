@@ -1,0 +1,15 @@
+name: G1000_copy
+size:
+- 1540
+- 920
+instruments:
+- file: instruments/G1000/test.yaml
+  position:
+  - 0
+  - 0
+background_color:
+- 0.051
+- 0.051
+- 0.051
+udp:
+  listen_port: 49052
