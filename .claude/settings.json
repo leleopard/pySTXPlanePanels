@@ -1,7 +1,30 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(git commit -m ' *)",
+      "WebFetch(domain:developer.x-plane.com)",
+      "Bash(git commit -m 'refactor\\(core\\): remove unused axis shorthand from translation loader *)",
+      "Bash(git commit -m 'feat\\(core\\): add SpriteSheet and ScrollingTape component types *)",
+      "PowerShell(py -c \"import arcade, inspect; src = inspect.getsource\\(arcade.draw_sprite\\); print\\(src[:3000]\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//c/Users/stephane/AppData/Local/Programs/Python/Python313/Lib/site-packages/arcade/**)",
+      "Bash(C:/Users/stephane/AppData/Local/Programs/Python/Python312/python.exe -c \"import arcade; import os; print\\(os.path.dirname\\(arcade.__file__\\)\\)\")",
+      "PowerShell(python -c \"import arcade; import os; print\\(os.path.dirname\\(arcade.__file__\\)\\)\")",
+      "PowerShell(py -c \"import arcade; import os; print\\(os.path.dirname\\(arcade.__file__\\)\\)\")",
+      "PowerShell(\\(Get-Command python3 -ErrorAction SilentlyContinue\\).Source; \\(Get-Command py -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell(py -c \"import arcade; print\\(arcade.__version__\\); print\\([x for x in dir\\(arcade\\) if 'shape' in x.lower\\(\\) or 'Shape' in x]\\)\")",
+      "PowerShell(py -c \"import arcade.shape_list as sl; print\\(dir\\(sl\\)\\)\")",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git stash *)",
+      "Bash(git pull *)",
+      "Read(//c/Users/stephane/AppData/Roaming/Python/Python313/site-packages/pyxpudpserver/**)",
+      "Bash(py -c ' *)",
+      "Bash(git commit -m 'fix\\(registry\\): treat '\\\\''\\(none\\)'\\\\'' as null convert function *)",
+      "Bash(py -c \"import arcade, inspect; print\\(inspect.getsource\\(arcade.Window.clear\\)\\)\")",
+      "Bash(py -c \"import arcade.gl, inspect; print\\(inspect.getsource\\(arcade.gl.Framebuffer.clear\\)\\)\")",
+      "Read(//c/Users/stephane/Desktop/pyxpudpserver/**)"
     ]
   }
 }
