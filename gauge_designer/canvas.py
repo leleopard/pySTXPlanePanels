@@ -1081,13 +1081,20 @@ class InstrumentCanvas(QWidget):
                     fill=arc_c, width=arc_w + 1)
 
         if show_arc_ticks:
+            _tick_lens = {
+                10: float(comp.get("bank_tick_10", 6.0)),
+                20: float(comp.get("bank_tick_20", 6.0)),
+                30: float(comp.get("bank_tick_30", 10.0)),
+                45: float(comp.get("bank_tick_45", 6.0)),
+                60: float(comp.get("bank_tick_60", 6.0)),
+            }
             # Tick marks — same formula as runtime, y-flipped for PIL
             for a in [10, 20, 30, 45, 60]:
                 for sign in (-1, 1):
                     ba_rad = math.radians(sign * a)
                     ox = int(cx_c      + arc_r * math.sin(ba_rad))
                     oy = int(arc_cy_c  - arc_r * math.cos(ba_rad))
-                    tick_len = 10 if a == 30 else 6
+                    tick_len = _tick_lens[a]
                     ix = int(cx_c      + (arc_r - tick_len) * math.sin(ba_rad))
                     iy = int(arc_cy_c  - (arc_r - tick_len) * math.cos(ba_rad))
                     cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)

@@ -1568,6 +1568,13 @@ class PropertiesForm(QWidget):
         self._ai_arc_y_offset.valueChanged.connect(self._emit)
         _ai_arc.row("Centre Y offset", self._ai_arc_y_offset)
 
+        for _deg, _default in ((10, 6.0), (20, 6.0), (30, 10.0), (45, 6.0), (60, 6.0)):
+            sb = QDoubleSpinBox()
+            sb.setRange(0.0, 100.0); sb.setDecimals(1); sb.setValue(_default)
+            sb.valueChanged.connect(self._emit)
+            setattr(self, f"_ai_tick_{_deg}", sb)
+            _ai_arc.row(f"Tick {_deg}° len", sb)
+
         _ai_arc_vis_row = QWidget()
         _ai_arc_vis_hl  = QHBoxLayout(_ai_arc_vis_row)
         _ai_arc_vis_hl.setContentsMargins(0, 0, 0, 0)
@@ -1981,6 +1988,7 @@ class PropertiesForm(QWidget):
             "ladder_color", "ladder_width", "label_font_size",
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "bank_arc_y_offset", "show_arc_line", "show_arc_ticks",
+            "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
@@ -2247,6 +2255,9 @@ class PropertiesForm(QWidget):
         self._ai_arc_width.setValue(float(comp.get("bank_arc_width", 2.0)))
         self._ai_arc_r.setValue(float(comp.get("bank_arc_radius", 0.0)))
         self._ai_arc_y_offset.setValue(float(comp.get("bank_arc_y_offset", 0.0)))
+        for _deg, _default in ((10, 6.0), (20, 6.0), (30, 10.0), (45, 6.0), (60, 6.0)):
+            getattr(self, f"_ai_tick_{_deg}").setValue(
+                float(comp.get(f"bank_tick_{_deg}", _default)))
         _legacy_arc = bool(comp.get("show_bank_arc", True))
         self._ai_show_arc_line.setChecked(bool(comp.get("show_arc_line", _legacy_arc)))
         self._ai_show_arc_ticks.setChecked(bool(comp.get("show_arc_ticks", _legacy_arc)))
@@ -2514,6 +2525,10 @@ class PropertiesForm(QWidget):
             ayo = self._ai_arc_y_offset.value()
             if ayo != 0.0:
                 data["bank_arc_y_offset"] = ayo
+            for _deg, _default in ((10, 6.0), (20, 6.0), (30, 10.0), (45, 6.0), (60, 6.0)):
+                v = getattr(self, f"_ai_tick_{_deg}").value()
+                if v != _default:
+                    data[f"bank_tick_{_deg}"] = v
             if not self._ai_show_arc_line.isChecked():
                 data["show_arc_line"] = False
             if not self._ai_show_arc_ticks.isChecked():
@@ -2818,6 +2833,8 @@ class PropertiesForm(QWidget):
         self._ai_ladder_bold.setChecked(False); self._ai_ladder_italic.setChecked(False)
         self._ai_arc_color.set_rgba(None); self._ai_arc_width.setValue(2.0)
         self._ai_arc_r.setValue(0.0); self._ai_arc_y_offset.setValue(0.0)
+        for _deg, _default in ((10, 6.0), (20, 6.0), (30, 10.0), (45, 6.0), (60, 6.0)):
+            getattr(self, f"_ai_tick_{_deg}").setValue(_default)
         self._ai_show_arc_line.setChecked(True); self._ai_show_arc_ticks.setChecked(True)
         self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
         self._vt_axis.setCurrentIndex(0)
