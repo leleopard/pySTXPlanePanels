@@ -1627,8 +1627,14 @@ class PropertiesForm(QWidget):
         self._ai_ref_height.setRange(1.0, 100.0); self._ai_ref_height.setDecimals(1)
         self._ai_ref_height.setValue(10.0); self._ai_ref_height.setSuffix(" H")
         self._ai_ref_height.valueChanged.connect(self._emit)
+        self._ai_ref_offset = QDoubleSpinBox()
+        self._ai_ref_offset.setRange(-200.0, 200.0); self._ai_ref_offset.setDecimals(1)
+        self._ai_ref_offset.setValue(0.0); self._ai_ref_offset.setSuffix(" px")
+        self._ai_ref_offset.valueChanged.connect(self._emit)
         _ai_ref_hl.addWidget(self._ai_ref_shape)
         _ai_ref_hl.addWidget(self._ai_ref_height)
+        _ai_ref_hl.addWidget(QLabel("offset"))
+        _ai_ref_hl.addWidget(self._ai_ref_offset)
         _ai_arc.row("0° mark", _ai_ref_row)
 
         _ai_ref_style_row = QWidget()
@@ -2094,7 +2100,7 @@ class PropertiesForm(QWidget):
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "bank_arc_y_offset", "show_arc_line", "show_arc_ticks",
             "arc_ref_shape", "arc_ref_height", "arc_ref_width",
-            "arc_ref_filled", "arc_ref_line_width",
+            "arc_ref_filled", "arc_ref_line_width", "arc_ref_offset",
             "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
             "ticks_inward", "show_arc_bg", "arc_bg_color", "arc_bg_inset",
             "roll_pointer_color", "roll_pointer_size",
@@ -2377,6 +2383,7 @@ class PropertiesForm(QWidget):
         self._ai_ref_shape.setCurrentIndex(
             self._ai_ref_shape.findText(_ref_shape) if self._ai_ref_shape.findText(_ref_shape) >= 0 else 0)
         self._ai_ref_height.setValue(float(comp.get("arc_ref_height", 10.0)))
+        self._ai_ref_offset.setValue(float(comp.get("arc_ref_offset", 0.0)))
         _ref_is_arrow = (_ref_shape.lower() == "arrow")
         self._ai_ref_width.setValue(float(comp.get("arc_ref_width", 10.0)))
         self._ai_ref_width.setEnabled(_ref_is_arrow)
@@ -2682,6 +2689,8 @@ class PropertiesForm(QWidget):
                 data["arc_ref_shape"] = _ref_shape_out
             if self._ai_ref_height.value() != 10.0:
                 data["arc_ref_height"] = self._ai_ref_height.value()
+            if self._ai_ref_offset.value() != 0.0:
+                data["arc_ref_offset"] = self._ai_ref_offset.value()
             if _ref_shape_out == "arrow":
                 if self._ai_ref_width.value() != 10.0:
                     data["arc_ref_width"] = self._ai_ref_width.value()
@@ -3010,7 +3019,7 @@ class PropertiesForm(QWidget):
         self._ai_ticks_inward.setChecked(True)
         self._ai_show_arc_line.setChecked(True); self._ai_show_arc_ticks.setChecked(True)
         self._ai_ref_shape.setCurrentIndex(0)   # Tick
-        self._ai_ref_height.setValue(10.0)
+        self._ai_ref_height.setValue(10.0); self._ai_ref_offset.setValue(0.0)
         self._ai_ref_width.setValue(10.0); self._ai_ref_width.setEnabled(False)
         self._ai_ref_filled.setChecked(True); self._ai_ref_filled.setEnabled(False)
         self._ai_ref_line_w.setValue(2.0); self._ai_ref_line_w.setEnabled(False)

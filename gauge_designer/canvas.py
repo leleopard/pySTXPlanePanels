@@ -1105,7 +1105,8 @@ class InstrumentCanvas(QWidget):
         arc_ref_w       = int(float(comp.get("arc_ref_width", 10.0)))
         arc_ref_filled  = bool(comp.get("arc_ref_filled", True))
         arc_ref_line_w  = max(1, int(float(comp.get("arc_ref_line_width", 2.0))))
-        arc_top_y = int(arc_cy_c - arc_r_i)  # PIL top of arc (min y = outer edge)
+        arc_ref_offset  = float(comp.get("arc_ref_offset", 0.0))
+        arc_top_y = int(arc_cy_c - arc_r_i - arc_ref_offset)  # offset: +outward = smaller y in PIL
         if arc_ref_shape == "arrow":
             arrow_pts = [
                 (int(cx_c), arc_top_y + arc_ref_h),        # tip (inward = larger y)

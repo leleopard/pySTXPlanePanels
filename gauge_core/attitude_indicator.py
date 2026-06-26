@@ -45,6 +45,7 @@ YAML schema
       arc_ref_width:      10    # base width of arrow (px); ignored for tick
       arc_ref_filled:     true  # arrow only: false → outline triangle
       arc_ref_line_width: 2     # arrow outline width (px) when arc_ref_filled is false
+      arc_ref_offset:     0     # radial shift of mark base from arc (+outward, −inward)
       show_arc_ticks:     true  # set false to hide the ±10/20/30/45/60° tick marks
       bank_tick_10:       6     # tick length in px for the ±10° marks
       bank_tick_20:       6     # tick length in px for the ±20° marks
@@ -125,6 +126,7 @@ class AttitudeIndicator(_VecBase):
         arc_ref_width: float = 10.0,
         arc_ref_filled: bool = True,
         arc_ref_line_width: float = 2.0,
+        arc_ref_offset: float = 0.0,
         show_arc_ticks: bool = True,
         bank_arc_y_offset: float = 0.0,
         bank_tick_10: float = 6.0,
@@ -176,6 +178,7 @@ class AttitudeIndicator(_VecBase):
         self._arc_ref_w        = float(arc_ref_width)
         self._arc_ref_filled   = bool(arc_ref_filled)
         self._arc_ref_line_w   = float(arc_ref_line_width)
+        self._arc_ref_offset   = float(arc_ref_offset)
         self._show_arc_ticks   = bool(show_arc_ticks)
         self._arc_y_offset   = float(bank_arc_y_offset)
         self._tick_lens = {
@@ -234,6 +237,7 @@ class AttitudeIndicator(_VecBase):
         self._arc_ref_h      *= scale
         self._arc_ref_w      *= scale
         self._arc_ref_line_w *= scale
+        self._arc_ref_offset *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -419,7 +423,7 @@ class AttitudeIndicator(_VecBase):
                 num_segments=64,
             )
         # 0° reference mark — drawn whenever bank arc is visible (line or ticks)
-        top_y = arc_cy + arc_r
+        top_y = arc_cy + arc_r + self._arc_ref_offset
         if self._arc_ref_shape == "arrow":
             pts = [(cx, top_y - self._arc_ref_h),
                    (cx - self._arc_ref_w * 0.5, top_y),
@@ -526,6 +530,7 @@ def _ai_factory(
         arc_ref_width=float(comp.get("arc_ref_width", 10.0)),
         arc_ref_filled=bool(comp.get("arc_ref_filled", True)),
         arc_ref_line_width=float(comp.get("arc_ref_line_width", 2.0)),
+        arc_ref_offset=float(comp.get("arc_ref_offset", 0.0)),
         show_arc_ticks=bool(comp.get("show_arc_ticks", comp.get("show_bank_arc", True))),
         bank_arc_y_offset=float(comp.get("bank_arc_y_offset", 0.0)),
         bank_tick_10=float(comp.get("bank_tick_10", 6.0)),
