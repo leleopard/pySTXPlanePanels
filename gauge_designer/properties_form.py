@@ -669,8 +669,8 @@ class _SubSection(QWidget):
         self._hdr.setFlat(True)
         self._hdr.setStyleSheet(
             "QPushButton { text-align: left; font-weight: bold; "
-            "color: #bbb; padding: 3px 0 1px 0; border: none; }"
-            "QPushButton:hover { color: #fff; }"
+            "color: black; padding: 3px 0 1px 0; border: none; }"
+            "QPushButton:hover { color: #333; }"
         )
         self._hdr.clicked.connect(self._toggle)
         self._update_btn()
