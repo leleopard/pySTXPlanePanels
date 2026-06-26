@@ -1098,26 +1098,27 @@ class InstrumentCanvas(QWidget):
             bbox = [int(cx_c - arc_r_i), int(arc_cy_c - arc_r_i),
                     int(cx_c + arc_r_i), int(arc_cy_c + arc_r_i)]
             cd.arc(bbox, 210, 330, fill=arc_c, width=arc_w)
-            # 0° reference mark — inward from arc top (larger y in PIL = toward centre)
-            arc_ref_shape   = str(comp.get("arc_ref_shape", "tick"))
-            arc_ref_h       = int(float(comp.get("arc_ref_height", 10.0)))
-            arc_ref_w       = int(float(comp.get("arc_ref_width", 10.0)))
-            arc_ref_filled  = bool(comp.get("arc_ref_filled", True))
-            arc_ref_line_w  = max(1, int(float(comp.get("arc_ref_line_width", 2.0))))
-            arc_top_y = int(arc_cy_c - arc_r_i)  # PIL top of arc (min y = outer edge)
-            if arc_ref_shape == "arrow":
-                arrow_pts = [
-                    (int(cx_c), arc_top_y + arc_ref_h),        # tip (inward = larger y)
-                    (int(cx_c) - arc_ref_w // 2, arc_top_y),   # base left
-                    (int(cx_c) + arc_ref_w // 2, arc_top_y),   # base right
-                ]
-                if arc_ref_filled:
-                    cd.polygon(arrow_pts, fill=arc_c)
-                else:
-                    cd.polygon(arrow_pts, outline=arc_c, width=arc_ref_line_w)
+
+        # 0° reference mark — drawn whenever bank arc is visible (line or ticks)
+        arc_ref_shape   = str(comp.get("arc_ref_shape", "tick"))
+        arc_ref_h       = int(float(comp.get("arc_ref_height", 10.0)))
+        arc_ref_w       = int(float(comp.get("arc_ref_width", 10.0)))
+        arc_ref_filled  = bool(comp.get("arc_ref_filled", True))
+        arc_ref_line_w  = max(1, int(float(comp.get("arc_ref_line_width", 2.0))))
+        arc_top_y = int(arc_cy_c - arc_r_i)  # PIL top of arc (min y = outer edge)
+        if arc_ref_shape == "arrow":
+            arrow_pts = [
+                (int(cx_c), arc_top_y + arc_ref_h),        # tip (inward = larger y)
+                (int(cx_c) - arc_ref_w // 2, arc_top_y),   # base left
+                (int(cx_c) + arc_ref_w // 2, arc_top_y),   # base right
+            ]
+            if arc_ref_filled:
+                cd.polygon(arrow_pts, fill=arc_c)
             else:
-                cd.line([(int(cx_c), arc_top_y), (int(cx_c), arc_top_y + arc_ref_h)],
-                        fill=arc_c, width=arc_w + 1)
+                cd.polygon(arrow_pts, outline=arc_c, width=arc_ref_line_w)
+        else:
+            cd.line([(int(cx_c), arc_top_y), (int(cx_c), arc_top_y + arc_ref_h)],
+                    fill=arc_c, width=arc_w + 1)
 
         if show_arc_ticks:
             _tick_lens = {

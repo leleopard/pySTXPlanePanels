@@ -418,20 +418,20 @@ class AttitudeIndicator(_VecBase):
                 self._arc_width,
                 num_segments=64,
             )
-            # 0° reference mark at top of arc, pointing inward toward centre
-            top_y = arc_cy + arc_r
-            if self._arc_ref_shape == "arrow":
-                pts = [(cx, top_y - self._arc_ref_h),
-                       (cx - self._arc_ref_w * 0.5, top_y),
-                       (cx + self._arc_ref_w * 0.5, top_y)]
-                if self._arc_ref_filled:
-                    arcade.draw_polygon_filled(pts, self._arc_color)
-                else:
-                    arcade.draw_polygon_outline(pts, self._arc_color, self._arc_ref_line_w)
+        # 0° reference mark — drawn whenever bank arc is visible (line or ticks)
+        top_y = arc_cy + arc_r
+        if self._arc_ref_shape == "arrow":
+            pts = [(cx, top_y - self._arc_ref_h),
+                   (cx - self._arc_ref_w * 0.5, top_y),
+                   (cx + self._arc_ref_w * 0.5, top_y)]
+            if self._arc_ref_filled:
+                arcade.draw_polygon_filled(pts, self._arc_color)
             else:
-                arcade.draw_line(cx, top_y - self._arc_ref_h,
-                                 cx, top_y,
-                                 self._arc_color, self._arc_width + 1)
+                arcade.draw_polygon_outline(pts, self._arc_color, self._arc_ref_line_w)
+        else:
+            arcade.draw_line(cx, top_y - self._arc_ref_h,
+                             cx, top_y,
+                             self._arc_color, self._arc_width + 1)
         if self._show_arc_ticks:
             # Tick marks at ±10/20/30/45/60°
             for a in _BANK_TICKS:
