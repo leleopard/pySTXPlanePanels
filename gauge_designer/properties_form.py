@@ -1500,6 +1500,17 @@ class PropertiesForm(QWidget):
         self._ai_arc_r.valueChanged.connect(self._emit)
         self._ai_sec.row("Arc radius  (0=auto)", self._ai_arc_r)
 
+        self._ai_arc_y_offset = QDoubleSpinBox()
+        self._ai_arc_y_offset.setRange(-2048.0, 2048.0); self._ai_arc_y_offset.setDecimals(1)
+        self._ai_arc_y_offset.setValue(0.0)
+        self._ai_arc_y_offset.valueChanged.connect(self._emit)
+        self._ai_sec.row("Arc centre Y offset", self._ai_arc_y_offset)
+
+        self._ai_show_arc = QCheckBox("Show bank arc + ticks")
+        self._ai_show_arc.setChecked(True)
+        self._ai_show_arc.stateChanged.connect(self._emit)
+        self._ai_sec.row("Bank arc", self._ai_show_arc)
+
         # Roll pointer
         self._ai_ptr_color = _ColorButton()
         self._ai_ptr_color.color_changed.connect(self._emit)
@@ -1892,6 +1903,7 @@ class PropertiesForm(QWidget):
             "sky_color", "ground_color", "horizon_color", "horizon_width",
             "ladder_color", "ladder_width", "label_font_size",
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
+            "bank_arc_y_offset", "show_bank_arc",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
@@ -2157,6 +2169,8 @@ class PropertiesForm(QWidget):
         self._ai_arc_color.set_rgba(comp.get("bank_arc_color"))
         self._ai_arc_width.setValue(float(comp.get("bank_arc_width", 2.0)))
         self._ai_arc_r.setValue(float(comp.get("bank_arc_radius", 0.0)))
+        self._ai_arc_y_offset.setValue(float(comp.get("bank_arc_y_offset", 0.0)))
+        self._ai_show_arc.setChecked(bool(comp.get("show_bank_arc", True)))
         self._ai_ptr_color.set_rgba(comp.get("roll_pointer_color"))
         self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
         self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
@@ -2418,6 +2432,11 @@ class PropertiesForm(QWidget):
             ar = self._ai_arc_r.value()
             if ar > 0:
                 data["bank_arc_radius"] = ar
+            ayo = self._ai_arc_y_offset.value()
+            if ayo != 0.0:
+                data["bank_arc_y_offset"] = ayo
+            if not self._ai_show_arc.isChecked():
+                data["show_bank_arc"] = False
             data["roll_pointer_color"] = list(self._ai_ptr_color.get_rgba())
             ps = self._ai_ptr_size.value()
             if ps != 12.0:
@@ -2717,7 +2736,8 @@ class PropertiesForm(QWidget):
         self._ai_ladder_font.clear()
         self._ai_ladder_bold.setChecked(False); self._ai_ladder_italic.setChecked(False)
         self._ai_arc_color.set_rgba(None); self._ai_arc_width.setValue(2.0)
-        self._ai_arc_r.setValue(0.0)
+        self._ai_arc_r.setValue(0.0); self._ai_arc_y_offset.setValue(0.0)
+        self._ai_show_arc.setChecked(True)
         self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
