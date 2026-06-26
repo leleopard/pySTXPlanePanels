@@ -1615,6 +1615,48 @@ class PropertiesForm(QWidget):
         _ai_arc_vis_hl.addStretch()
         _ai_arc.row("Show", _ai_arc_vis_row)
 
+        # 0° reference mark
+        _ai_ref_row = QWidget()
+        _ai_ref_hl  = QHBoxLayout(_ai_ref_row)
+        _ai_ref_hl.setContentsMargins(0, 0, 0, 0); _ai_ref_hl.setSpacing(6)
+        self._ai_ref_shape = QComboBox()
+        self._ai_ref_shape.addItems(["Tick", "Arrow"])
+        self._ai_ref_shape.currentIndexChanged.connect(self._on_arc_ref_shape_change)
+        self._ai_ref_shape.currentIndexChanged.connect(self._emit)
+        self._ai_ref_height = QDoubleSpinBox()
+        self._ai_ref_height.setRange(1.0, 100.0); self._ai_ref_height.setDecimals(1)
+        self._ai_ref_height.setValue(10.0); self._ai_ref_height.setSuffix(" H")
+        self._ai_ref_height.valueChanged.connect(self._emit)
+        _ai_ref_hl.addWidget(self._ai_ref_shape)
+        _ai_ref_hl.addWidget(self._ai_ref_height)
+        _ai_arc.row("0° mark", _ai_ref_row)
+
+        _ai_ref_style_row = QWidget()
+        _ai_ref_style_hl  = QHBoxLayout(_ai_ref_style_row)
+        _ai_ref_style_hl.setContentsMargins(0, 0, 0, 0); _ai_ref_style_hl.setSpacing(6)
+        self._ai_ref_filled = QCheckBox("Filled")
+        self._ai_ref_filled.setChecked(True)
+        self._ai_ref_filled.setEnabled(False)
+        self._ai_ref_filled.stateChanged.connect(
+            lambda on: self._ai_ref_line_w.setEnabled(not bool(on)))
+        self._ai_ref_filled.stateChanged.connect(self._emit)
+        self._ai_ref_width = QDoubleSpinBox()
+        self._ai_ref_width.setRange(1.0, 100.0); self._ai_ref_width.setDecimals(1)
+        self._ai_ref_width.setValue(10.0); self._ai_ref_width.setSuffix(" W")
+        self._ai_ref_width.setEnabled(False)
+        self._ai_ref_width.valueChanged.connect(self._emit)
+        self._ai_ref_line_w = QDoubleSpinBox()
+        self._ai_ref_line_w.setRange(0.5, 20.0); self._ai_ref_line_w.setDecimals(1)
+        self._ai_ref_line_w.setValue(2.0); self._ai_ref_line_w.setSuffix(" px")
+        self._ai_ref_line_w.setEnabled(False)
+        self._ai_ref_line_w.valueChanged.connect(self._emit)
+        _ai_ref_style_hl.addWidget(self._ai_ref_filled)
+        _ai_ref_style_hl.addWidget(QLabel("W:"))
+        _ai_ref_style_hl.addWidget(self._ai_ref_width)
+        _ai_ref_style_hl.addWidget(QLabel("outline:"))
+        _ai_ref_style_hl.addWidget(self._ai_ref_line_w)
+        _ai_arc.row("Arrow style", _ai_ref_style_row)
+
         self._ai_sec.row_widget(_ai_arc)
 
         # ── Roll Pointer & Reference ──────────────────────────────────────────
@@ -2051,6 +2093,8 @@ class PropertiesForm(QWidget):
             "ladder_color", "ladder_width", "label_font_size",
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "bank_arc_y_offset", "show_arc_line", "show_arc_ticks",
+            "arc_ref_shape", "arc_ref_height", "arc_ref_width",
+            "arc_ref_filled", "arc_ref_line_width",
             "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
             "ticks_inward", "show_arc_bg", "arc_bg_color", "arc_bg_inset",
             "roll_pointer_color", "roll_pointer_size",
@@ -2329,6 +2373,18 @@ class PropertiesForm(QWidget):
         _legacy_arc = bool(comp.get("show_bank_arc", True))
         self._ai_show_arc_line.setChecked(bool(comp.get("show_arc_line", _legacy_arc)))
         self._ai_show_arc_ticks.setChecked(bool(comp.get("show_arc_ticks", _legacy_arc)))
+        _ref_shape = str(comp.get("arc_ref_shape", "tick")).capitalize()
+        self._ai_ref_shape.setCurrentIndex(
+            self._ai_ref_shape.findText(_ref_shape) if self._ai_ref_shape.findText(_ref_shape) >= 0 else 0)
+        self._ai_ref_height.setValue(float(comp.get("arc_ref_height", 10.0)))
+        _ref_is_arrow = (_ref_shape.lower() == "arrow")
+        self._ai_ref_width.setValue(float(comp.get("arc_ref_width", 10.0)))
+        self._ai_ref_width.setEnabled(_ref_is_arrow)
+        _ref_filled = bool(comp.get("arc_ref_filled", True))
+        self._ai_ref_filled.setChecked(_ref_filled)
+        self._ai_ref_filled.setEnabled(_ref_is_arrow)
+        self._ai_ref_line_w.setValue(float(comp.get("arc_ref_line_width", 2.0)))
+        self._ai_ref_line_w.setEnabled(_ref_is_arrow and not _ref_filled)
         _show_arc_bg = bool(comp.get("show_arc_bg", False))
         self._ai_show_arc_bg.blockSignals(True)
         self._ai_show_arc_bg.setChecked(_show_arc_bg)
@@ -2621,6 +2677,17 @@ class PropertiesForm(QWidget):
                 data["ticks_inward"] = False
             if not self._ai_show_arc_line.isChecked():
                 data["show_arc_line"] = False
+            _ref_shape_out = self._ai_ref_shape.currentText().lower()
+            if _ref_shape_out != "tick":
+                data["arc_ref_shape"] = _ref_shape_out
+            if self._ai_ref_height.value() != 10.0:
+                data["arc_ref_height"] = self._ai_ref_height.value()
+            if _ref_shape_out == "arrow":
+                if self._ai_ref_width.value() != 10.0:
+                    data["arc_ref_width"] = self._ai_ref_width.value()
+                if not self._ai_ref_filled.isChecked():
+                    data["arc_ref_filled"] = False
+                    data["arc_ref_line_width"] = self._ai_ref_line_w.value()
             if not self._ai_show_arc_ticks.isChecked():
                 data["show_arc_ticks"] = False
             if self._ai_show_arc_bg.isChecked():
@@ -2942,6 +3009,11 @@ class PropertiesForm(QWidget):
             getattr(self, f"_ai_tick_{_deg}").setValue(_default)
         self._ai_ticks_inward.setChecked(True)
         self._ai_show_arc_line.setChecked(True); self._ai_show_arc_ticks.setChecked(True)
+        self._ai_ref_shape.setCurrentIndex(0)   # Tick
+        self._ai_ref_height.setValue(10.0)
+        self._ai_ref_width.setValue(10.0); self._ai_ref_width.setEnabled(False)
+        self._ai_ref_filled.setChecked(True); self._ai_ref_filled.setEnabled(False)
+        self._ai_ref_line_w.setValue(2.0); self._ai_ref_line_w.setEnabled(False)
         self._ai_show_arc_bg.setChecked(False)
         self._ai_arc_bg_color.set_rgba([0, 100, 180, 255]); self._ai_arc_bg_color.setEnabled(False)
         self._ai_arc_bg_inset.setValue(0.0); self._ai_arc_bg_inset.setEnabled(False)
@@ -2988,6 +3060,12 @@ class PropertiesForm(QWidget):
         self._loading = False
 
     # ── Internal ──────────────────────────────────────────────────────────
+
+    def _on_arc_ref_shape_change(self, idx: int) -> None:
+        is_arrow = (self._ai_ref_shape.currentText().lower() == "arrow")
+        self._ai_ref_width.setEnabled(is_arrow)
+        self._ai_ref_filled.setEnabled(is_arrow)
+        self._ai_ref_line_w.setEnabled(is_arrow and not self._ai_ref_filled.isChecked())
 
     def _on_arc_bg_toggle(self, on: int) -> None:
         enabled = bool(on)

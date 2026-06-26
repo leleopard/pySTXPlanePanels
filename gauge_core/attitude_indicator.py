@@ -40,6 +40,11 @@ YAML schema
       arc_bg_color:       [0, 100, 180, 255]  # omit to default to sky_color
       arc_bg_inset:       0     # gap in px between arc line and bottom edge of background
       show_arc_line:      true  # set false to hide the arc outline and 0° reference mark
+      arc_ref_shape:      tick  # "tick" (line) or "arrow" (triangle pointing inward)
+      arc_ref_height:     10    # length of tick / height of arrow (px)
+      arc_ref_width:      10    # base width of arrow (px); ignored for tick
+      arc_ref_filled:     true  # arrow only: false → outline triangle
+      arc_ref_line_width: 2     # arrow outline width (px) when arc_ref_filled is false
       show_arc_ticks:     true  # set false to hide the ±10/20/30/45/60° tick marks
       bank_tick_10:       6     # tick length in px for the ±10° marks
       bank_tick_20:       6     # tick length in px for the ±20° marks
@@ -115,6 +120,11 @@ class AttitudeIndicator(_VecBase):
         smoothing: float = 0.0,
         show_reference: bool = True,
         show_arc_line: bool = True,
+        arc_ref_shape: str = "tick",
+        arc_ref_height: float = 10.0,
+        arc_ref_width: float = 10.0,
+        arc_ref_filled: bool = True,
+        arc_ref_line_width: float = 2.0,
         show_arc_ticks: bool = True,
         bank_arc_y_offset: float = 0.0,
         bank_tick_10: float = 6.0,
@@ -160,8 +170,13 @@ class AttitudeIndicator(_VecBase):
         # Clamp to [0, 0.99]: 0 = no smoothing, higher = heavier EMA low-pass.
         self._smooth = max(0.0, min(0.99, float(smoothing)))
         self._show_reference = bool(show_reference)
-        self._show_arc_line  = bool(show_arc_line)
-        self._show_arc_ticks = bool(show_arc_ticks)
+        self._show_arc_line    = bool(show_arc_line)
+        self._arc_ref_shape    = str(arc_ref_shape)
+        self._arc_ref_h        = float(arc_ref_height)
+        self._arc_ref_w        = float(arc_ref_width)
+        self._arc_ref_filled   = bool(arc_ref_filled)
+        self._arc_ref_line_w   = float(arc_ref_line_width)
+        self._show_arc_ticks   = bool(show_arc_ticks)
         self._arc_y_offset   = float(bank_arc_y_offset)
         self._tick_lens = {
             10: float(bank_tick_10),
@@ -212,10 +227,13 @@ class AttitudeIndicator(_VecBase):
         self._ptr_line_w   *= scale
         self._ptr_y_off    *= scale
         self._tick_lens = {a: v * scale for a, v in self._tick_lens.items()}
-        self._hor_width    *= scale
-        self._ldr_width    *= scale
-        self._arc_width    *= scale
-        self._arc_bg_inset *= scale
+        self._hor_width      *= scale
+        self._ldr_width      *= scale
+        self._arc_width      *= scale
+        self._arc_bg_inset   *= scale
+        self._arc_ref_h      *= scale
+        self._arc_ref_w      *= scale
+        self._arc_ref_line_w *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -400,10 +418,20 @@ class AttitudeIndicator(_VecBase):
                 self._arc_width,
                 num_segments=64,
             )
-            # 0° reference mark at top
-            arcade.draw_line(cx, arc_cy + arc_r - 10,
-                             cx, arc_cy + arc_r,
-                             self._arc_color, self._arc_width + 1)
+            # 0° reference mark at top of arc, pointing inward toward centre
+            top_y = arc_cy + arc_r
+            if self._arc_ref_shape == "arrow":
+                pts = [(cx, top_y - self._arc_ref_h),
+                       (cx - self._arc_ref_w * 0.5, top_y),
+                       (cx + self._arc_ref_w * 0.5, top_y)]
+                if self._arc_ref_filled:
+                    arcade.draw_polygon_filled(pts, self._arc_color)
+                else:
+                    arcade.draw_polygon_outline(pts, self._arc_color, self._arc_ref_line_w)
+            else:
+                arcade.draw_line(cx, top_y - self._arc_ref_h,
+                                 cx, top_y,
+                                 self._arc_color, self._arc_width + 1)
         if self._show_arc_ticks:
             # Tick marks at ±10/20/30/45/60°
             for a in _BANK_TICKS:
@@ -493,6 +521,11 @@ def _ai_factory(
         smoothing=float(comp.get("smoothing", 0.0)),
         show_reference=bool(comp.get("show_reference", True)),
         show_arc_line=bool(comp.get("show_arc_line", comp.get("show_bank_arc", True))),
+        arc_ref_shape=str(comp.get("arc_ref_shape", "tick")),
+        arc_ref_height=float(comp.get("arc_ref_height", 10.0)),
+        arc_ref_width=float(comp.get("arc_ref_width", 10.0)),
+        arc_ref_filled=bool(comp.get("arc_ref_filled", True)),
+        arc_ref_line_width=float(comp.get("arc_ref_line_width", 2.0)),
         show_arc_ticks=bool(comp.get("show_arc_ticks", comp.get("show_bank_arc", True))),
         bank_arc_y_offset=float(comp.get("bank_arc_y_offset", 0.0)),
         bank_tick_10=float(comp.get("bank_tick_10", 6.0)),
