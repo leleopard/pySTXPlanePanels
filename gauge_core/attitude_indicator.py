@@ -36,6 +36,8 @@ YAML schema
       bank_arc_width:     2
       bank_arc_radius:    0     # 0 → auto: 0.45 * min(viewport_w, viewport_h)
       bank_arc_y_offset:  0     # shift arc centre up (+) or down (−) from viewport centre (px)
+      show_arc_bg:        false # filled region above the arc (follows arc contour, fills to top)
+      arc_bg_color:       [0, 100, 180, 255]  # omit to default to sky_color
       show_arc_line:      true  # set false to hide the arc outline and 0° reference mark
       show_arc_ticks:     true  # set false to hide the ±10/20/30/45/60° tick marks
       bank_tick_10:       6     # tick length in px for the ±10° marks
@@ -109,6 +111,8 @@ class AttitudeIndicator(_VecBase):
         bank_tick_45: float = 6.0,
         bank_tick_60: float = 6.0,
         ticks_inward: bool = True,
+        show_arc_bg: bool = False,
+        arc_bg_color: tuple | None = None,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -149,6 +153,8 @@ class AttitudeIndicator(_VecBase):
             60: float(bank_tick_60),
         }
         self._ticks_inward = bool(ticks_inward)
+        self._show_arc_bg  = bool(show_arc_bg)
+        self._arc_bg_color = arc_bg_color
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -237,6 +243,8 @@ class AttitudeIndicator(_VecBase):
         self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
+        if self._show_arc_bg:
+            self._draw_arc_background(cx, arc_cy, arc_r)
         if self._show_arc_line or self._show_arc_ticks:
             self._draw_bank_arc(cx, arc_cy, arc_r)
         self._draw_roll_pointer(cx, arc_cy, arc_r)
@@ -333,6 +341,13 @@ class AttitudeIndicator(_VecBase):
                     tl.draw()
 
                 lbl_idx += 1
+
+    def _draw_arc_background(self, cx: float, arc_cy: float, arc_r: float) -> None:
+        bg_color = self._arc_bg_color if self._arc_bg_color is not None else self._sky_color
+        # Filled pie sector from center to the ±60° arc; drawn before arc/ticks
+        # so the bank scale lines appear on top.  The GL scissor clips to the viewport.
+        arcade.draw_arc_filled(cx, arc_cy, arc_r * 2, arc_r * 2,
+                               bg_color, 30.0, 150.0, num_segments=64)
 
     def _draw_bank_arc(self, cx, arc_cy, arc_r) -> None:
         if self._show_arc_line:
@@ -436,6 +451,8 @@ def _ai_factory(
         bank_tick_45=float(comp.get("bank_tick_45", 6.0)),
         bank_tick_60=float(comp.get("bank_tick_60", 6.0)),
         ticks_inward=bool(comp.get("ticks_inward", True)),
+        show_arc_bg=bool(comp.get("show_arc_bg", False)),
+        arc_bg_color=(_as_color(comp["arc_bg_color"]) if "arc_bg_color" in comp else None),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],

@@ -1069,6 +1069,14 @@ class InstrumentCanvas(QWidget):
         arc_cy_c = cy_c - arc_y_offset
         arc_r_i  = int(arc_r)
 
+        show_arc_bg = bool(comp.get("show_arc_bg", False))
+        if show_arc_bg:
+            raw_bg = comp.get("arc_bg_color")
+            bg_c = _rgba(raw_bg) if raw_bg is not None else sky_c
+            bg_bbox = [int(cx_c - arc_r_i), int(arc_cy_c - arc_r_i),
+                       int(cx_c + arc_r_i), int(arc_cy_c + arc_r_i)]
+            cd.pieslice(bg_bbox, 210, 330, fill=bg_c)
+
         if show_arc_line:
             # Upper portion ±60° from vertical.
             # PIL arc CW from 210° to 330° passes through 270° (top) ✓
