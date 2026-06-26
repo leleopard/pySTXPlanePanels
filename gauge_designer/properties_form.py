@@ -1584,15 +1584,21 @@ class PropertiesForm(QWidget):
         _ai_arc_bg_hl = QHBoxLayout(_ai_arc_bg_row)
         _ai_arc_bg_hl.setContentsMargins(0, 0, 0, 0); _ai_arc_bg_hl.setSpacing(6)
         self._ai_show_arc_bg = QCheckBox()
-        self._ai_show_arc_bg.stateChanged.connect(
-            lambda on: self._ai_arc_bg_color.setEnabled(bool(on)))
+        self._ai_show_arc_bg.stateChanged.connect(self._on_arc_bg_toggle)
         self._ai_show_arc_bg.stateChanged.connect(self._emit)
         self._ai_arc_bg_color = _ColorButton()
         self._ai_arc_bg_color.set_rgba([0, 100, 180, 255])
         self._ai_arc_bg_color.setEnabled(False)
         self._ai_arc_bg_color.color_changed.connect(self._emit)
+        self._ai_arc_bg_inset = QDoubleSpinBox()
+        self._ai_arc_bg_inset.setRange(0.0, 200.0); self._ai_arc_bg_inset.setDecimals(1)
+        self._ai_arc_bg_inset.setSuffix(" px"); self._ai_arc_bg_inset.setValue(0.0)
+        self._ai_arc_bg_inset.setEnabled(False)
+        self._ai_arc_bg_inset.valueChanged.connect(self._emit)
         _ai_arc_bg_hl.addWidget(self._ai_show_arc_bg)
         _ai_arc_bg_hl.addWidget(self._ai_arc_bg_color, 1)
+        _ai_arc_bg_hl.addWidget(QLabel("inset"))
+        _ai_arc_bg_hl.addWidget(self._ai_arc_bg_inset)
         _ai_arc.row("Arc background", _ai_arc_bg_row)
 
         _ai_arc_vis_row = QWidget()
@@ -2009,7 +2015,7 @@ class PropertiesForm(QWidget):
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "bank_arc_y_offset", "show_arc_line", "show_arc_ticks",
             "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
-            "ticks_inward", "show_arc_bg", "arc_bg_color",
+            "ticks_inward", "show_arc_bg", "arc_bg_color", "arc_bg_inset",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
@@ -2288,11 +2294,13 @@ class PropertiesForm(QWidget):
         self._ai_show_arc_bg.setChecked(_show_arc_bg)
         self._ai_show_arc_bg.blockSignals(False)
         self._ai_arc_bg_color.setEnabled(_show_arc_bg)
+        self._ai_arc_bg_inset.setEnabled(_show_arc_bg)
         _raw_arc_bg = comp.get("arc_bg_color")
         self._ai_arc_bg_color.set_rgba(
             _raw_arc_bg if _raw_arc_bg is not None
             else comp.get("sky_color", [0, 100, 180])
         )
+        self._ai_arc_bg_inset.setValue(float(comp.get("arc_bg_inset", 0.0)))
         self._ai_ptr_color.set_rgba(comp.get("roll_pointer_color"))
         self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
         self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
@@ -2570,6 +2578,8 @@ class PropertiesForm(QWidget):
             if self._ai_show_arc_bg.isChecked():
                 data["show_arc_bg"] = True
                 data["arc_bg_color"] = list(self._ai_arc_bg_color.get_rgba())
+                if self._ai_arc_bg_inset.value() != 0.0:
+                    data["arc_bg_inset"] = self._ai_arc_bg_inset.value()
             data["roll_pointer_color"] = list(self._ai_ptr_color.get_rgba())
             ps = self._ai_ptr_size.value()
             if ps != 12.0:
@@ -2876,6 +2886,7 @@ class PropertiesForm(QWidget):
         self._ai_show_arc_line.setChecked(True); self._ai_show_arc_ticks.setChecked(True)
         self._ai_show_arc_bg.setChecked(False)
         self._ai_arc_bg_color.set_rgba([0, 100, 180, 255]); self._ai_arc_bg_color.setEnabled(False)
+        self._ai_arc_bg_inset.setValue(0.0); self._ai_arc_bg_inset.setEnabled(False)
         self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
@@ -2915,6 +2926,11 @@ class PropertiesForm(QWidget):
         self._loading = False
 
     # ── Internal ──────────────────────────────────────────────────────────
+
+    def _on_arc_bg_toggle(self, on: int) -> None:
+        enabled = bool(on)
+        self._ai_arc_bg_color.setEnabled(enabled)
+        self._ai_arc_bg_inset.setEnabled(enabled)
 
     def _emit(self):
         if not self._loading:

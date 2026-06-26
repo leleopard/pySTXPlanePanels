@@ -1073,14 +1073,16 @@ class InstrumentCanvas(QWidget):
         if show_arc_bg:
             raw_bg = comp.get("arc_bg_color")
             bg_c = _rgba(raw_bg) if raw_bg is not None else sky_c
+            arc_bg_inset = float(comp.get("arc_bg_inset", 0.0))
+            r_bg = max(0.0, arc_r_i - arc_bg_inset)
             # Polygon: arc contour (left→top→right) then viewport top corners.
             # PIL angles 210°→330° CW pass through 270° (top) — same ±60° arc.
             n = 64
             bg_pts = []
             for i in range(n + 1):
                 theta = math.radians(210.0 + 120.0 * i / n)
-                bg_pts.append((cx_c + arc_r_i * math.cos(theta),
-                                arc_cy_c + arc_r_i * math.sin(theta)))
+                bg_pts.append((cx_c + r_bg * math.cos(theta),
+                                arc_cy_c + r_bg * math.sin(theta)))
             bg_pts += [(clip_w - 1, 0), (0, 0)]
             cd.polygon(bg_pts, fill=bg_c)
 

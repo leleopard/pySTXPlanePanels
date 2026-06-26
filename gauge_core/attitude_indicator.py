@@ -38,6 +38,7 @@ YAML schema
       bank_arc_y_offset:  0     # shift arc centre up (+) or down (−) from viewport centre (px)
       show_arc_bg:        false # filled region above the arc (follows arc contour, fills to top)
       arc_bg_color:       [0, 100, 180, 255]  # omit to default to sky_color
+      arc_bg_inset:       0     # gap in px between arc line and bottom edge of background
       show_arc_line:      true  # set false to hide the arc outline and 0° reference mark
       show_arc_ticks:     true  # set false to hide the ±10/20/30/45/60° tick marks
       bank_tick_10:       6     # tick length in px for the ±10° marks
@@ -113,6 +114,7 @@ class AttitudeIndicator(_VecBase):
         ticks_inward: bool = True,
         show_arc_bg: bool = False,
         arc_bg_color: tuple | None = None,
+        arc_bg_inset: float = 0.0,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -155,6 +157,7 @@ class AttitudeIndicator(_VecBase):
         self._ticks_inward = bool(ticks_inward)
         self._show_arc_bg  = bool(show_arc_bg)
         self._arc_bg_color = arc_bg_color
+        self._arc_bg_inset = float(arc_bg_inset)
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -190,9 +193,10 @@ class AttitudeIndicator(_VecBase):
         self._arc_y_offset *= scale
         self._ptr_size     *= scale
         self._tick_lens = {a: v * scale for a, v in self._tick_lens.items()}
-        self._hor_width *= scale
-        self._ldr_width *= scale
-        self._arc_width *= scale
+        self._hor_width    *= scale
+        self._ldr_width    *= scale
+        self._arc_width    *= scale
+        self._arc_bg_inset *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -346,8 +350,11 @@ class AttitudeIndicator(_VecBase):
         bg_color = self._arc_bg_color if self._arc_bg_color is not None else self._sky_color
         # Fill the region between the arc contour and the top of the viewport
         # (the "cap" above the arc, not the interior pie sector).
-        # Build a GL_TRIANGLE_FAN polygon anchored at the top-centre of the viewport;
+        # arc_bg_inset shrinks the polygon radius so the fill starts that many
+        # pixels away from the arc line, leaving a visible gap.
+        # Build a GL_TRIANGLE_FAN polygon anchored at the viewport top-centre;
         # all other vertices lie at or below that edge so the fan is valid.
+        r_bg     = max(0.0, arc_r - self._arc_bg_inset)
         vx_left  = self._vx
         vx_right = self._vx + self._vw
         vy_top   = self._vy + self._vh
@@ -355,8 +362,8 @@ class AttitudeIndicator(_VecBase):
         pts: list[tuple[float, float]] = [(cx, vy_top), (vx_left, vy_top)]
         for i in range(n + 1):
             theta = math.radians(150.0 - 120.0 * i / n)  # 150° → 30° left to right
-            pts.append((cx + arc_r * math.cos(theta),
-                        arc_cy + arc_r * math.sin(theta)))
+            pts.append((cx + r_bg * math.cos(theta),
+                        arc_cy + r_bg * math.sin(theta)))
         pts.append((vx_right, vy_top))
         arcade.draw_polygon_filled(pts, bg_color)
 
@@ -464,6 +471,7 @@ def _ai_factory(
         ticks_inward=bool(comp.get("ticks_inward", True)),
         show_arc_bg=bool(comp.get("show_arc_bg", False)),
         arc_bg_color=(_as_color(comp["arc_bg_color"]) if "arc_bg_color" in comp else None),
+        arc_bg_inset=float(comp.get("arc_bg_inset", 0.0)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],
