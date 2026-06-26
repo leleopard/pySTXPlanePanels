@@ -657,6 +657,58 @@ class _Section(QWidget):
         self.toggled.emit(on)
 
 
+class _SubSection(QWidget):
+    """Collapsible sub-group for nesting inside a _Section body."""
+
+    def __init__(self, title: str, collapsed: bool = False, parent=None):
+        super().__init__(parent)
+        self._title = title
+        self._collapsed = collapsed
+
+        self._hdr = QPushButton()
+        self._hdr.setFlat(True)
+        self._hdr.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; "
+            "color: #bbb; padding: 3px 0 1px 0; border: none; }"
+            "QPushButton:hover { color: #fff; }"
+        )
+        self._hdr.clicked.connect(self._toggle)
+        self._update_btn()
+
+        self._body = QWidget()
+        self._form = QFormLayout(self._body)
+        self._form.setContentsMargins(8, 2, 0, 4)
+        self._form.setHorizontalSpacing(8)
+        self._form.setVerticalSpacing(4)
+        self._body.setVisible(not collapsed)
+
+        vbox = QVBoxLayout(self)
+        vbox.setContentsMargins(0, 2, 0, 0)
+        vbox.setSpacing(0)
+        vbox.addWidget(self._hdr)
+        vbox.addWidget(self._body)
+
+    def _update_btn(self):
+        arrow = "▸" if self._collapsed else "▾"
+        self._hdr.setText(f"  {arrow}  {self._title}")
+
+    def _toggle(self):
+        self._collapsed = not self._collapsed
+        self._body.setVisible(not self._collapsed)
+        self._update_btn()
+
+    def row(self, label: str, widget: QWidget) -> QWidget:
+        self._form.addRow(label, widget)
+        return widget
+
+    def row_pair(self, label: str, w1: QWidget, w2: QWidget):
+        box = QWidget()
+        hl = QHBoxLayout(box)
+        hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
+        hl.addWidget(w1); hl.addWidget(w2)
+        self._form.addRow(label, box)
+
+
 def _sb(lo: int = -4096, hi: int = 4096) -> QSpinBox:
     s = QSpinBox(); s.setRange(lo, hi); s.setMinimumWidth(64); return s
 
@@ -1349,36 +1401,36 @@ class PropertiesForm(QWidget):
         self._ai_sec = _Section("Attitude Indicator")
         self._ai_sec.setVisible(False)
 
-        # Viewport (required — defines position and size of the AI)
+        # ── Layout ───────────────────────────────────────────────────────────
+        _ai_layout = _SubSection("Layout", collapsed=False)
+
         self._ai_vp_x = _sb(0, 4096); self._ai_vp_y = _sb(0, 4096)
         for w in (self._ai_vp_x, self._ai_vp_y):
             w.valueChanged.connect(self._emit)
         y_label = "VP X  /  Y top" if is_y_down() else "VP X  /  Y bottom"
-        self._ai_sec.row_pair(y_label, self._ai_vp_x, self._ai_vp_y)
+        _ai_layout.row_pair(y_label, self._ai_vp_x, self._ai_vp_y)
 
         self._ai_vp_w = _sb(0, 4096); self._ai_vp_h = _sb(0, 4096)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
         for w in (self._ai_vp_w, self._ai_vp_h):
             w.valueChanged.connect(self._emit)
-        self._ai_sec.row_pair("VP W  /  H", self._ai_vp_w, self._ai_vp_h)
+        _ai_layout.row_pair("VP W  /  H", self._ai_vp_w, self._ai_vp_h)
 
-        # Datarefs
         self._ai_pitch_dr = QLineEdit()
         self._ai_pitch_dr.setPlaceholderText("pitch dataref")
         self._ai_pitch_dr.editingFinished.connect(self._emit)
-        self._ai_sec.row("Pitch dataref", self._dr_field(self._ai_pitch_dr))
+        _ai_layout.row("Pitch dataref", self._dr_field(self._ai_pitch_dr))
 
         self._ai_roll_dr = QLineEdit()
         self._ai_roll_dr.setPlaceholderText("roll/bank dataref")
         self._ai_roll_dr.editingFinished.connect(self._emit)
-        self._ai_sec.row("Roll dataref", self._dr_field(self._ai_roll_dr))
+        _ai_layout.row("Roll dataref", self._dr_field(self._ai_roll_dr))
 
-        # Pixels per degree
         self._ai_ppu = QDoubleSpinBox()
         self._ai_ppu.setRange(0.5, 50.0); self._ai_ppu.setDecimals(1)
         self._ai_ppu.setValue(8.0)
         self._ai_ppu.valueChanged.connect(self._emit)
-        self._ai_sec.row("Pixels / degree", self._ai_ppu)
+        _ai_layout.row("Pixels / degree", self._ai_ppu)
 
         self._ai_smoothing = QDoubleSpinBox()
         self._ai_smoothing.setRange(0.0, 0.99); self._ai_smoothing.setDecimals(2)
@@ -1389,75 +1441,81 @@ class PropertiesForm(QWidget):
             "Reduces jitter from UDP data at the cost of a small lag."
         )
         self._ai_smoothing.valueChanged.connect(self._emit)
-        self._ai_sec.row("Smoothing", self._ai_smoothing)
+        _ai_layout.row("Smoothing", self._ai_smoothing)
+
+        self._ai_sec.row_widget(_ai_layout)
+
+        # ── Background ───────────────────────────────────────────────────────
+        _ai_bg = _SubSection("Background", collapsed=True)
+
+        self._ai_sky_color = _ColorButton()
+        self._ai_sky_color.set_rgba([0, 100, 180, 255])
+        self._ai_sky_color.color_changed.connect(self._emit)
+        _ai_bg.row("Sky color", self._ai_sky_color)
+
+        self._ai_gnd_color = _ColorButton()
+        self._ai_gnd_color.set_rgba([100, 60, 10, 255])
+        self._ai_gnd_color.color_changed.connect(self._emit)
+        _ai_bg.row("Ground color", self._ai_gnd_color)
+
+        self._ai_hor_color = _ColorButton()
+        self._ai_hor_color.color_changed.connect(self._emit)
+        _ai_bg.row("Horizon color", self._ai_hor_color)
+
+        self._ai_hor_width = QDoubleSpinBox()
+        self._ai_hor_width.setRange(0.5, 20.0); self._ai_hor_width.setDecimals(1)
+        self._ai_hor_width.setValue(3.0)
+        self._ai_hor_width.valueChanged.connect(self._emit)
+        _ai_bg.row("Horizon width", self._ai_hor_width)
+
+        self._ai_sec.row_widget(_ai_bg)
+
+        # ── Pitch Ladder ─────────────────────────────────────────────────────
+        _ai_ladder = _SubSection("Pitch Ladder", collapsed=False)
 
         self._ai_ladder_step = QDoubleSpinBox()
         self._ai_ladder_step.setRange(0.5, 45.0); self._ai_ladder_step.setDecimals(1)
         self._ai_ladder_step.setValue(5.0)
         self._ai_ladder_step.setSuffix(" °")
         self._ai_ladder_step.valueChanged.connect(self._emit)
-        self._ai_sec.row("Ladder step", self._ai_ladder_step)
+        _ai_ladder.row("Step", self._ai_ladder_step)
 
-        # Ladder bar half-widths (fraction of half-viewport; 4th step is also labeled)
         self._ai_ladder_hw_4 = QDoubleSpinBox()
         self._ai_ladder_hw_4.setRange(0.05, 1.0); self._ai_ladder_hw_4.setDecimals(2)
         self._ai_ladder_hw_4.setValue(0.40)
         self._ai_ladder_hw_4.setToolTip("Half-width as fraction of half-viewport — every 4th step (also labeled)")
         self._ai_ladder_hw_4.valueChanged.connect(self._emit)
-        self._ai_sec.row("Bar 4th step (long)", self._ai_ladder_hw_4)
+        _ai_ladder.row("Bar long (4th step)", self._ai_ladder_hw_4)
 
         self._ai_ladder_hw_2 = QDoubleSpinBox()
         self._ai_ladder_hw_2.setRange(0.05, 1.0); self._ai_ladder_hw_2.setDecimals(2)
         self._ai_ladder_hw_2.setValue(0.31)
         self._ai_ladder_hw_2.setToolTip("Half-width as fraction of half-viewport — every 2nd step")
         self._ai_ladder_hw_2.valueChanged.connect(self._emit)
-        self._ai_sec.row("Bar 2nd step (mid)", self._ai_ladder_hw_2)
+        _ai_ladder.row("Bar mid (2nd step)", self._ai_ladder_hw_2)
 
         self._ai_ladder_hw_1 = QDoubleSpinBox()
         self._ai_ladder_hw_1.setRange(0.05, 1.0); self._ai_ladder_hw_1.setDecimals(2)
         self._ai_ladder_hw_1.setValue(0.22)
         self._ai_ladder_hw_1.setToolTip("Half-width as fraction of half-viewport — every step")
         self._ai_ladder_hw_1.valueChanged.connect(self._emit)
-        self._ai_sec.row("Bar 1st step (short)", self._ai_ladder_hw_1)
+        _ai_ladder.row("Bar short (1st step)", self._ai_ladder_hw_1)
 
-        # Sky / ground
-        self._ai_sky_color = _ColorButton()
-        self._ai_sky_color.set_rgba([0, 100, 180, 255])
-        self._ai_sky_color.color_changed.connect(self._emit)
-        self._ai_sec.row("Sky color", self._ai_sky_color)
-
-        self._ai_gnd_color = _ColorButton()
-        self._ai_gnd_color.set_rgba([100, 60, 10, 255])
-        self._ai_gnd_color.color_changed.connect(self._emit)
-        self._ai_sec.row("Ground color", self._ai_gnd_color)
-
-        # Horizon
-        self._ai_hor_color = _ColorButton()
-        self._ai_hor_color.color_changed.connect(self._emit)
-        self._ai_sec.row("Horizon color", self._ai_hor_color)
-
-        self._ai_hor_width = QDoubleSpinBox()
-        self._ai_hor_width.setRange(0.5, 20.0); self._ai_hor_width.setDecimals(1)
-        self._ai_hor_width.setValue(3.0)
-        self._ai_hor_width.valueChanged.connect(self._emit)
-        self._ai_sec.row("Horizon width", self._ai_hor_width)
-
-        # Pitch ladder
         self._ai_ldr_color = _ColorButton()
         self._ai_ldr_color.color_changed.connect(self._emit)
-        self._ai_sec.row("Ladder color", self._ai_ldr_color)
+        _ai_ladder.row("Color", self._ai_ldr_color)
 
         self._ai_ldr_width = QDoubleSpinBox()
         self._ai_ldr_width.setRange(0.5, 20.0); self._ai_ldr_width.setDecimals(1)
         self._ai_ldr_width.setValue(2.0)
         self._ai_ldr_width.valueChanged.connect(self._emit)
-        self._ai_sec.row("Ladder width", self._ai_ldr_width)
+        _ai_ladder.row("Line width", self._ai_ldr_width)
 
         self._ai_font_size = QSpinBox()
         self._ai_font_size.setRange(6, 36); self._ai_font_size.setValue(14)
         self._ai_font_size.setMinimumWidth(64)
         self._ai_font_size.valueChanged.connect(self._emit)
-        self._ai_sec.row("Label font size", self._ai_font_size)
+        _ai_ladder.row("Label font size", self._ai_font_size)
 
         self._ai_ladder_font = QLineEdit()
         self._ai_ladder_font.setPlaceholderText("Arial  (blank = default)")
@@ -1469,7 +1527,7 @@ class PropertiesForm(QWidget):
         _ai_font_hl = QHBoxLayout(_ai_font_row)
         _ai_font_hl.setContentsMargins(0, 0, 0, 0); _ai_font_hl.setSpacing(4)
         _ai_font_hl.addWidget(self._ai_ladder_font); _ai_font_hl.addWidget(_ai_font_btn)
-        self._ai_sec.row("Label font", _ai_font_row)
+        _ai_ladder.row("Label font", _ai_font_row)
 
         _ai_style_row = QWidget()
         _ai_style_hl = QHBoxLayout(_ai_style_row)
@@ -1481,30 +1539,34 @@ class PropertiesForm(QWidget):
         _ai_style_hl.addWidget(self._ai_ladder_bold)
         _ai_style_hl.addWidget(self._ai_ladder_italic)
         _ai_style_hl.addStretch()
-        self._ai_sec.row("Label style", _ai_style_row)
+        _ai_ladder.row("Label style", _ai_style_row)
 
-        # Bank arc
+        self._ai_sec.row_widget(_ai_ladder)
+
+        # ── Bank Arc ─────────────────────────────────────────────────────────
+        _ai_arc = _SubSection("Bank Arc", collapsed=True)
+
         self._ai_arc_color = _ColorButton()
         self._ai_arc_color.color_changed.connect(self._emit)
-        self._ai_sec.row("Arc color", self._ai_arc_color)
+        _ai_arc.row("Color", self._ai_arc_color)
 
         self._ai_arc_width = QDoubleSpinBox()
         self._ai_arc_width.setRange(0.5, 20.0); self._ai_arc_width.setDecimals(1)
         self._ai_arc_width.setValue(2.0)
         self._ai_arc_width.valueChanged.connect(self._emit)
-        self._ai_sec.row("Arc width", self._ai_arc_width)
+        _ai_arc.row("Line width", self._ai_arc_width)
 
         self._ai_arc_r = QDoubleSpinBox()
         self._ai_arc_r.setRange(0.0, 4096.0); self._ai_arc_r.setDecimals(1)
         self._ai_arc_r.setSpecialValueText("(auto)")
         self._ai_arc_r.valueChanged.connect(self._emit)
-        self._ai_sec.row("Arc radius  (0=auto)", self._ai_arc_r)
+        _ai_arc.row("Radius  (0=auto)", self._ai_arc_r)
 
         self._ai_arc_y_offset = QDoubleSpinBox()
         self._ai_arc_y_offset.setRange(-2048.0, 2048.0); self._ai_arc_y_offset.setDecimals(1)
         self._ai_arc_y_offset.setValue(0.0)
         self._ai_arc_y_offset.valueChanged.connect(self._emit)
-        self._ai_sec.row("Arc centre Y offset", self._ai_arc_y_offset)
+        _ai_arc.row("Centre Y offset", self._ai_arc_y_offset)
 
         _ai_arc_vis_row = QWidget()
         _ai_arc_vis_hl  = QHBoxLayout(_ai_arc_vis_row)
@@ -1518,23 +1580,29 @@ class PropertiesForm(QWidget):
         _ai_arc_vis_hl.addWidget(self._ai_show_arc_line)
         _ai_arc_vis_hl.addWidget(self._ai_show_arc_ticks)
         _ai_arc_vis_hl.addStretch()
-        self._ai_sec.row("Show", _ai_arc_vis_row)
+        _ai_arc.row("Show", _ai_arc_vis_row)
 
-        # Roll pointer
+        self._ai_sec.row_widget(_ai_arc)
+
+        # ── Roll Pointer & Reference ──────────────────────────────────────────
+        _ai_ptr = _SubSection("Roll Pointer & Reference", collapsed=True)
+
         self._ai_ptr_color = _ColorButton()
         self._ai_ptr_color.color_changed.connect(self._emit)
-        self._ai_sec.row("Pointer color", self._ai_ptr_color)
+        _ai_ptr.row("Pointer color", self._ai_ptr_color)
 
         self._ai_ptr_size = QDoubleSpinBox()
         self._ai_ptr_size.setRange(1.0, 100.0); self._ai_ptr_size.setDecimals(1)
         self._ai_ptr_size.setValue(12.0)
         self._ai_ptr_size.valueChanged.connect(self._emit)
-        self._ai_sec.row("Pointer size px", self._ai_ptr_size)
+        _ai_ptr.row("Pointer size px", self._ai_ptr_size)
 
         self._ai_show_ref = QCheckBox("Show centre reference bug")
         self._ai_show_ref.setChecked(True)
         self._ai_show_ref.stateChanged.connect(self._emit)
-        self._ai_sec.row("Reference", self._ai_show_ref)
+        _ai_ptr.row("Reference", self._ai_show_ref)
+
+        self._ai_sec.row_widget(_ai_ptr)
 
         self._vbox.addWidget(self._ai_sec)
 
