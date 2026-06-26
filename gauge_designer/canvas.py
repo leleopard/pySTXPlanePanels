@@ -1011,7 +1011,12 @@ class InstrumentCanvas(QWidget):
         arc_y_offset = float(comp.get("bank_arc_y_offset", 0.0))
         show_arc_line  = bool(comp.get("show_arc_line",  comp.get("show_bank_arc", True)))
         show_arc_ticks = bool(comp.get("show_arc_ticks", comp.get("show_bank_arc", True)))
-        ptr_s = float(comp.get("roll_pointer_size", 12.0))
+        _ptr_sz     = float(comp.get("roll_pointer_size", 12.0))
+        ptr_h       = float(comp.get("roll_pointer_height", _ptr_sz))
+        ptr_w       = float(comp.get("roll_pointer_width",  _ptr_sz))
+        ptr_filled  = bool(comp.get("roll_pointer_filled", True))
+        ptr_inward  = bool(comp.get("roll_pointer_inward", True))
+        ptr_line_w  = max(1, int(float(comp.get("roll_pointer_line_width", 2.0))))
         font_sz = max(8, int(comp.get("label_font_size", 14)))
         font  = _pil_font(comp.get("ladder_font_name") or None, font_sz,
                           bold=bool(comp.get("ladder_bold", False)),
@@ -1123,15 +1128,21 @@ class InstrumentCanvas(QWidget):
                         oy = int(arc_cy_c - (arc_r + tick_len) * math.cos(ba_rad))
                     cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)
 
-        # Roll pointer at bank=0: triangle tip pointing inward (down in PIL)
+        # Roll pointer at bank=0: triangle at the top of the arc.
+        # PIL y-down: inward (toward centre) → tip_y > base_y; outward → tip_y < base_y.
         ptr_base_y = int(arc_cy_c - arc_r_i)
-        ptr_tip_y  = ptr_base_y + int(ptr_s)
-        half_ptr   = int(ptr_s * 0.5)
-        cd.polygon([
+        tip_offset = int(ptr_h)
+        ptr_tip_y  = ptr_base_y + tip_offset if ptr_inward else ptr_base_y - tip_offset
+        half_ptr   = int(ptr_w * 0.5)
+        ptr_pts = [
             (int(cx_c), ptr_tip_y),
             (int(cx_c) - half_ptr, ptr_base_y),
             (int(cx_c) + half_ptr, ptr_base_y),
-        ], fill=ptr_c)
+        ]
+        if ptr_filled:
+            cd.polygon(ptr_pts, fill=ptr_c)
+        else:
+            cd.polygon(ptr_pts, outline=ptr_c, width=ptr_line_w)
 
         # Aircraft reference (fixed wing stubs + centre dot)
         if comp.get("show_reference", True):

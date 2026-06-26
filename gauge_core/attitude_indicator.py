@@ -47,8 +47,13 @@ YAML schema
       bank_tick_45:       6     # tick length in px for the ±45° marks
       bank_tick_60:       6     # tick length in px for the ±60° marks
       ticks_inward:       true  # true → ticks point toward centre; false → outward from arc
-      roll_pointer_color: [255, 255, 255]
-      roll_pointer_size:  12    # half-base of the roll-pointer triangle (px)
+      roll_pointer_color:      [255, 255, 255]
+      roll_pointer_size:       12    # legacy single-value shorthand; sets both height and width
+      roll_pointer_height:     12    # height of triangle (base-to-tip, px)
+      roll_pointer_width:      12    # full base width of triangle (px)
+      roll_pointer_filled:     true  # false → outline only
+      roll_pointer_inward:     true  # true → tip toward centre; false → tip outward from arc
+      roll_pointer_line_width: 2     # line width when roll_pointer_filled is false
 """
 
 from __future__ import annotations
@@ -93,7 +98,11 @@ class AttitudeIndicator(_VecBase):
         bank_arc_width: float = 2.0,
         bank_arc_radius: float = 0.0,
         roll_pointer_color: tuple = (255, 255, 255, 255),
-        roll_pointer_size: float = 12.0,
+        roll_pointer_height: float = 12.0,
+        roll_pointer_width: float = 12.0,
+        roll_pointer_filled: bool = True,
+        roll_pointer_inward: bool = True,
+        roll_pointer_line_width: float = 2.0,
         ladder_step: float = 5.0,
         ladder_hw_4: float = 0.40,
         ladder_hw_2: float = 0.31,
@@ -133,7 +142,11 @@ class AttitudeIndicator(_VecBase):
         self._arc_width   = float(bank_arc_width)
         self._arc_r       = float(bank_arc_radius)
         self._ptr_color   = roll_pointer_color
-        self._ptr_size    = float(roll_pointer_size)
+        self._ptr_h       = float(roll_pointer_height)
+        self._ptr_w       = float(roll_pointer_width)
+        self._ptr_filled  = bool(roll_pointer_filled)
+        self._ptr_inward  = bool(roll_pointer_inward)
+        self._ptr_line_w  = float(roll_pointer_line_width)
         self._ladder_step = float(ladder_step)
         self._ladder_hw_4 = float(ladder_hw_4)
         self._ladder_hw_2 = float(ladder_hw_2)
@@ -191,7 +204,9 @@ class AttitudeIndicator(_VecBase):
         self._ppu       *= scale
         self._arc_r        *= scale
         self._arc_y_offset *= scale
-        self._ptr_size     *= scale
+        self._ptr_h        *= scale
+        self._ptr_w        *= scale
+        self._ptr_line_w   *= scale
         self._tick_lens = {a: v * scale for a, v in self._tick_lens.items()}
         self._hor_width    *= scale
         self._ldr_width    *= scale
@@ -405,7 +420,6 @@ class AttitudeIndicator(_VecBase):
                                      self._arc_color, self._arc_width)
 
     def _draw_roll_pointer(self, cx, arc_cy, arc_r) -> None:
-        # Triangle at the current bank position on the arc, tip pointing inward.
         bank_rad = math.radians(-self._bank)
         ux =  math.sin(bank_rad)   # outward radial unit vector
         uy =  math.cos(bank_rad)
@@ -413,11 +427,17 @@ class AttitudeIndicator(_VecBase):
         py_v =  ux
         bx = cx     + arc_r * ux  # base centre on arc
         by = arc_cy + arc_r * uy
-        s  = self._ptr_size
-        tip = (bx - ux * s,          by - uy * s)
-        p1  = (bx + px_v * s * 0.5,  by + py_v * s * 0.5)
-        p2  = (bx - px_v * s * 0.5,  by - py_v * s * 0.5)
-        arcade.draw_polygon_filled([tip, p1, p2], self._ptr_color)
+        half_w = self._ptr_w * 0.5
+        # inward → tip toward centre (−radial); outward → tip away from arc (+radial)
+        sign = -1.0 if self._ptr_inward else 1.0
+        tip = (bx + sign * ux * self._ptr_h, by + sign * uy * self._ptr_h)
+        p1  = (bx + px_v * half_w, by + py_v * half_w)
+        p2  = (bx - px_v * half_w, by - py_v * half_w)
+        pts = [tip, p1, p2]
+        if self._ptr_filled:
+            arcade.draw_polygon_filled(pts, self._ptr_color)
+        else:
+            arcade.draw_polygon_outline(pts, self._ptr_color, self._ptr_line_w)
 
     def _draw_reference(self, cx, cy) -> None:
         # Fixed aircraft reference: two horizontal wing stubs + centre dot.
@@ -450,7 +470,13 @@ def _ai_factory(
         bank_arc_width=float(comp.get("bank_arc_width", 2.0)),
         bank_arc_radius=float(comp.get("bank_arc_radius", 0.0)),
         roll_pointer_color=_as_color(comp.get("roll_pointer_color")),
-        roll_pointer_size=float(comp.get("roll_pointer_size", 12.0)),
+        roll_pointer_height=float(comp.get("roll_pointer_height",
+                                           comp.get("roll_pointer_size", 12.0))),
+        roll_pointer_width=float(comp.get("roll_pointer_width",
+                                          comp.get("roll_pointer_size", 12.0))),
+        roll_pointer_filled=bool(comp.get("roll_pointer_filled", True)),
+        roll_pointer_inward=bool(comp.get("roll_pointer_inward", True)),
+        roll_pointer_line_width=float(comp.get("roll_pointer_line_width", 2.0)),
         ladder_step=float(comp.get("ladder_step", 5.0)),
         ladder_hw_4=float(comp.get("ladder_hw_4", 0.40)),
         ladder_hw_2=float(comp.get("ladder_hw_2", 0.31)),

@@ -1624,11 +1624,42 @@ class PropertiesForm(QWidget):
         self._ai_ptr_color.color_changed.connect(self._emit)
         _ai_ptr.row("Pointer color", self._ai_ptr_color)
 
-        self._ai_ptr_size = QDoubleSpinBox()
-        self._ai_ptr_size.setRange(1.0, 100.0); self._ai_ptr_size.setDecimals(1)
-        self._ai_ptr_size.setValue(12.0)
-        self._ai_ptr_size.valueChanged.connect(self._emit)
-        _ai_ptr.row("Pointer size px", self._ai_ptr_size)
+        _ai_ptr_size_row = QWidget()
+        _ai_ptr_size_hl  = QHBoxLayout(_ai_ptr_size_row)
+        _ai_ptr_size_hl.setContentsMargins(0, 0, 0, 0); _ai_ptr_size_hl.setSpacing(6)
+        self._ai_ptr_height = QDoubleSpinBox()
+        self._ai_ptr_height.setRange(1.0, 200.0); self._ai_ptr_height.setDecimals(1)
+        self._ai_ptr_height.setValue(12.0); self._ai_ptr_height.setSuffix(" H")
+        self._ai_ptr_height.valueChanged.connect(self._emit)
+        self._ai_ptr_width = QDoubleSpinBox()
+        self._ai_ptr_width.setRange(1.0, 200.0); self._ai_ptr_width.setDecimals(1)
+        self._ai_ptr_width.setValue(12.0); self._ai_ptr_width.setSuffix(" W")
+        self._ai_ptr_width.valueChanged.connect(self._emit)
+        _ai_ptr_size_hl.addWidget(self._ai_ptr_height)
+        _ai_ptr_size_hl.addWidget(self._ai_ptr_width)
+        _ai_ptr.row("Height / Width px", _ai_ptr_size_row)
+
+        _ai_ptr_style_row = QWidget()
+        _ai_ptr_style_hl  = QHBoxLayout(_ai_ptr_style_row)
+        _ai_ptr_style_hl.setContentsMargins(0, 0, 0, 0); _ai_ptr_style_hl.setSpacing(6)
+        self._ai_ptr_filled = QCheckBox("Filled")
+        self._ai_ptr_filled.setChecked(True)
+        self._ai_ptr_filled.stateChanged.connect(
+            lambda on: self._ai_ptr_line_w.setEnabled(not bool(on)))
+        self._ai_ptr_filled.stateChanged.connect(self._emit)
+        self._ai_ptr_inward = QCheckBox("Inward")
+        self._ai_ptr_inward.setChecked(True)
+        self._ai_ptr_inward.stateChanged.connect(self._emit)
+        self._ai_ptr_line_w = QDoubleSpinBox()
+        self._ai_ptr_line_w.setRange(0.5, 20.0); self._ai_ptr_line_w.setDecimals(1)
+        self._ai_ptr_line_w.setValue(2.0); self._ai_ptr_line_w.setSuffix(" px")
+        self._ai_ptr_line_w.setEnabled(False)
+        self._ai_ptr_line_w.valueChanged.connect(self._emit)
+        _ai_ptr_style_hl.addWidget(self._ai_ptr_filled)
+        _ai_ptr_style_hl.addWidget(self._ai_ptr_inward)
+        _ai_ptr_style_hl.addWidget(QLabel("outline:"))
+        _ai_ptr_style_hl.addWidget(self._ai_ptr_line_w)
+        _ai_ptr.row("Style / Direction", _ai_ptr_style_row)
 
         self._ai_show_ref = QCheckBox("Show centre reference bug")
         self._ai_show_ref.setChecked(True)
@@ -2017,6 +2048,8 @@ class PropertiesForm(QWidget):
             "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
             "ticks_inward", "show_arc_bg", "arc_bg_color", "arc_bg_inset",
             "roll_pointer_color", "roll_pointer_size",
+            "roll_pointer_height", "roll_pointer_width",
+            "roll_pointer_filled", "roll_pointer_inward", "roll_pointer_line_width",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             # RotaryEncoder
@@ -2302,7 +2335,14 @@ class PropertiesForm(QWidget):
         )
         self._ai_arc_bg_inset.setValue(float(comp.get("arc_bg_inset", 0.0)))
         self._ai_ptr_color.set_rgba(comp.get("roll_pointer_color"))
-        self._ai_ptr_size.setValue(float(comp.get("roll_pointer_size", 12.0)))
+        _ptr_sz = float(comp.get("roll_pointer_size", 12.0))
+        self._ai_ptr_height.setValue(float(comp.get("roll_pointer_height", _ptr_sz)))
+        self._ai_ptr_width.setValue(float(comp.get("roll_pointer_width", _ptr_sz)))
+        _ptr_filled = bool(comp.get("roll_pointer_filled", True))
+        self._ai_ptr_filled.setChecked(_ptr_filled)
+        self._ai_ptr_inward.setChecked(bool(comp.get("roll_pointer_inward", True)))
+        self._ai_ptr_line_w.setValue(float(comp.get("roll_pointer_line_width", 2.0)))
+        self._ai_ptr_line_w.setEnabled(not _ptr_filled)
         self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
 
         # RotaryEncoder
@@ -2581,9 +2621,17 @@ class PropertiesForm(QWidget):
                 if self._ai_arc_bg_inset.value() != 0.0:
                     data["arc_bg_inset"] = self._ai_arc_bg_inset.value()
             data["roll_pointer_color"] = list(self._ai_ptr_color.get_rgba())
-            ps = self._ai_ptr_size.value()
-            if ps != 12.0:
-                data["roll_pointer_size"] = ps
+            ph = self._ai_ptr_height.value()
+            pw = self._ai_ptr_width.value()
+            if ph != 12.0 or pw != ph:
+                data["roll_pointer_height"] = ph
+            if pw != 12.0 or pw != ph:
+                data["roll_pointer_width"] = pw
+            if not self._ai_ptr_filled.isChecked():
+                data["roll_pointer_filled"] = False
+                data["roll_pointer_line_width"] = self._ai_ptr_line_w.value()
+            if not self._ai_ptr_inward.isChecked():
+                data["roll_pointer_inward"] = False
             if not self._ai_show_ref.isChecked():
                 data["show_reference"] = False
             ls = self._ai_ladder_step.value()
@@ -2887,7 +2935,10 @@ class PropertiesForm(QWidget):
         self._ai_show_arc_bg.setChecked(False)
         self._ai_arc_bg_color.set_rgba([0, 100, 180, 255]); self._ai_arc_bg_color.setEnabled(False)
         self._ai_arc_bg_inset.setValue(0.0); self._ai_arc_bg_inset.setEnabled(False)
-        self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
+        self._ai_ptr_color.set_rgba(None)
+        self._ai_ptr_height.setValue(12.0); self._ai_ptr_width.setValue(12.0)
+        self._ai_ptr_filled.setChecked(True); self._ai_ptr_inward.setChecked(True)
+        self._ai_ptr_line_w.setValue(2.0); self._ai_ptr_line_w.setEnabled(False)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
