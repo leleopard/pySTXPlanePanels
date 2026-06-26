@@ -1008,6 +1008,9 @@ class InstrumentCanvas(QWidget):
         ppu   = float(comp.get("pixels_per_degree", 8.0))
         arc_r_raw = float(comp.get("bank_arc_radius", 0.0))
         arc_r = arc_r_raw if arc_r_raw > 0 else 0.45 * min(vw, vh)
+        arc_y_offset = float(comp.get("bank_arc_y_offset", 0.0))
+        show_arc_line  = bool(comp.get("show_arc_line",  comp.get("show_bank_arc", True)))
+        show_arc_ticks = bool(comp.get("show_arc_ticks", comp.get("show_bank_arc", True)))
         ptr_s = float(comp.get("roll_pointer_size", 12.0))
         font_sz = max(8, int(comp.get("label_font_size", 14)))
         font  = _pil_font(comp.get("ladder_font_name") or None, font_sz,
@@ -1061,31 +1064,36 @@ class InstrumentCanvas(QWidget):
         # Horizon line
         cd.line([(0, int(cy_c)), (clip_w - 1, int(cy_c))], fill=hor_c, width=hor_w)
 
-        # Bank arc — upper portion ±60° from vertical
-        # PIL arc CW from 210° to 330° passes through 270° (top) = the upper half ✓
-        arc_r_i = int(arc_r)
-        bbox = [int(cx_c - arc_r_i), int(cy_c - arc_r_i),
-                int(cx_c + arc_r_i), int(cy_c + arc_r_i)]
-        cd.arc(bbox, 210, 330, fill=arc_c, width=arc_w)
+        # arc_cy_c: centre for the arc/ticks/pointer in PIL clip-image coords.
+        # Positive bank_arc_y_offset = up in Arcade = lower y in PIL (y-down).
+        arc_cy_c = cy_c - arc_y_offset
+        arc_r_i  = int(arc_r)
 
-        # 0° reference tick at top
-        ref_outer_y = int(cy_c - arc_r_i)
-        cd.line([(int(cx_c), ref_outer_y - 10), (int(cx_c), ref_outer_y)],
-                fill=arc_c, width=arc_w + 1)
+        if show_arc_line:
+            # Upper portion ±60° from vertical.
+            # PIL arc CW from 210° to 330° passes through 270° (top) ✓
+            bbox = [int(cx_c - arc_r_i), int(arc_cy_c - arc_r_i),
+                    int(cx_c + arc_r_i), int(arc_cy_c + arc_r_i)]
+            cd.arc(bbox, 210, 330, fill=arc_c, width=arc_w)
+            # 0° reference tick at top
+            ref_outer_y = int(arc_cy_c - arc_r_i)
+            cd.line([(int(cx_c), ref_outer_y - 10), (int(cx_c), ref_outer_y)],
+                    fill=arc_c, width=arc_w + 1)
 
-        # Tick marks — position formula same as runtime, y-flipped for PIL
-        for a in [10, 20, 30, 45, 60]:
-            for sign in (-1, 1):
-                ba_rad = math.radians(sign * a)
-                ox = int(cx_c + arc_r * math.sin(ba_rad))
-                oy = int(cy_c - arc_r * math.cos(ba_rad))
-                tick_len = 10 if a == 30 else 6
-                ix = int(cx_c + (arc_r - tick_len) * math.sin(ba_rad))
-                iy = int(cy_c - (arc_r - tick_len) * math.cos(ba_rad))
-                cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)
+        if show_arc_ticks:
+            # Tick marks — same formula as runtime, y-flipped for PIL
+            for a in [10, 20, 30, 45, 60]:
+                for sign in (-1, 1):
+                    ba_rad = math.radians(sign * a)
+                    ox = int(cx_c      + arc_r * math.sin(ba_rad))
+                    oy = int(arc_cy_c  - arc_r * math.cos(ba_rad))
+                    tick_len = 10 if a == 30 else 6
+                    ix = int(cx_c      + (arc_r - tick_len) * math.sin(ba_rad))
+                    iy = int(arc_cy_c  - (arc_r - tick_len) * math.cos(ba_rad))
+                    cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)
 
         # Roll pointer at bank=0: triangle tip pointing inward (down in PIL)
-        ptr_base_y = int(cy_c - arc_r_i)
+        ptr_base_y = int(arc_cy_c - arc_r_i)
         ptr_tip_y  = ptr_base_y + int(ptr_s)
         half_ptr   = int(ptr_s * 0.5)
         cd.polygon([

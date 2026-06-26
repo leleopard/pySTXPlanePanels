@@ -36,7 +36,8 @@ YAML schema
       bank_arc_width:     2
       bank_arc_radius:    0     # 0 → auto: 0.45 * min(viewport_w, viewport_h)
       bank_arc_y_offset:  0     # shift arc centre up (+) or down (−) from viewport centre (px)
-      show_bank_arc:      true  # set false to hide the arc + ticks (roll pointer still drawn)
+      show_arc_line:      true  # set false to hide the arc outline and 0° reference mark
+      show_arc_ticks:     true  # set false to hide the ±10/20/30/45/60° tick marks
       roll_pointer_color: [255, 255, 255]
       roll_pointer_size:  12    # half-base of the roll-pointer triangle (px)
 """
@@ -93,7 +94,8 @@ class AttitudeIndicator(_VecBase):
         ladder_italic: bool = False,
         smoothing: float = 0.0,
         show_reference: bool = True,
-        show_bank_arc: bool = True,
+        show_arc_line: bool = True,
+        show_arc_ticks: bool = True,
         bank_arc_y_offset: float = 0.0,
     ) -> None:
         self.name = name
@@ -124,7 +126,8 @@ class AttitudeIndicator(_VecBase):
         # Clamp to [0, 0.99]: 0 = no smoothing, higher = heavier EMA low-pass.
         self._smooth = max(0.0, min(0.99, float(smoothing)))
         self._show_reference = bool(show_reference)
-        self._show_bank_arc  = bool(show_bank_arc)
+        self._show_arc_line  = bool(show_arc_line)
+        self._show_arc_ticks = bool(show_arc_ticks)
         self._arc_y_offset   = float(bank_arc_y_offset)
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
@@ -213,7 +216,7 @@ class AttitudeIndicator(_VecBase):
         self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
-        if self._show_bank_arc:
+        if self._show_arc_line or self._show_arc_ticks:
             self._draw_bank_arc(cx, arc_cy, arc_r)
         self._draw_roll_pointer(cx, arc_cy, arc_r)
         if self._show_reference:
@@ -311,33 +314,35 @@ class AttitudeIndicator(_VecBase):
                 lbl_idx += 1
 
     def _draw_bank_arc(self, cx, arc_cy, arc_r) -> None:
-        # Arc spans ±60° from vertical (upper portion of circle).
-        # Arcade angle convention: 0=right, CCW positive.
-        # Our ±60° bank arc runs from arcade-angle 30° (upper-right, +60° bank)
-        # to 150° (upper-left, -60° bank).
-        arcade.draw_arc_outline(
-            cx, arc_cy,
-            arc_r * 2, arc_r * 2,
-            self._arc_color,
-            30.0, 150.0,
-            self._arc_width,
-            num_segments=64,
-        )
-        # 0° reference mark at top
-        arcade.draw_line(cx, arc_cy + arc_r - 10,
-                         cx, arc_cy + arc_r,
-                         self._arc_color, self._arc_width + 1)
-        # Tick marks at ±10/20/30/45/60°
-        for a in _BANK_TICKS:
-            for sign in (-1, 1):
-                ba_rad = math.radians(sign * a)
-                ox = cx + arc_r * math.sin(ba_rad)
-                oy = arc_cy + arc_r * math.cos(ba_rad)
-                tick_len = 10.0 if a == 30 else 6.0
-                ix = cx + (arc_r - tick_len) * math.sin(ba_rad)
-                iy = arc_cy + (arc_r - tick_len) * math.cos(ba_rad)
-                arcade.draw_line(ix, iy, ox, oy,
-                                 self._arc_color, self._arc_width)
+        if self._show_arc_line:
+            # Arc spans ±60° from vertical (upper portion of circle).
+            # Arcade angle convention: 0=right, CCW positive.
+            # Our ±60° bank arc runs from arcade-angle 30° (upper-right, +60° bank)
+            # to 150° (upper-left, -60° bank).
+            arcade.draw_arc_outline(
+                cx, arc_cy,
+                arc_r * 2, arc_r * 2,
+                self._arc_color,
+                30.0, 150.0,
+                self._arc_width,
+                num_segments=64,
+            )
+            # 0° reference mark at top
+            arcade.draw_line(cx, arc_cy + arc_r - 10,
+                             cx, arc_cy + arc_r,
+                             self._arc_color, self._arc_width + 1)
+        if self._show_arc_ticks:
+            # Tick marks at ±10/20/30/45/60°
+            for a in _BANK_TICKS:
+                for sign in (-1, 1):
+                    ba_rad = math.radians(sign * a)
+                    ox = cx + arc_r * math.sin(ba_rad)
+                    oy = arc_cy + arc_r * math.cos(ba_rad)
+                    tick_len = 10.0 if a == 30 else 6.0
+                    ix = cx + (arc_r - tick_len) * math.sin(ba_rad)
+                    iy = arc_cy + (arc_r - tick_len) * math.cos(ba_rad)
+                    arcade.draw_line(ix, iy, ox, oy,
+                                     self._arc_color, self._arc_width)
 
     def _draw_roll_pointer(self, cx, arc_cy, arc_r) -> None:
         # Triangle at the current bank position on the arc, tip pointing inward.
@@ -395,7 +400,8 @@ def _ai_factory(
         ladder_italic=bool(comp.get("ladder_italic", False)),
         smoothing=float(comp.get("smoothing", 0.0)),
         show_reference=bool(comp.get("show_reference", True)),
-        show_bank_arc=bool(comp.get("show_bank_arc", True)),
+        show_arc_line=bool(comp.get("show_arc_line", comp.get("show_bank_arc", True))),
+        show_arc_ticks=bool(comp.get("show_arc_ticks", comp.get("show_bank_arc", True))),
         bank_arc_y_offset=float(comp.get("bank_arc_y_offset", 0.0)),
     )
     if "pitch_dataref" in comp:
