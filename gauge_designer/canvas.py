@@ -1173,6 +1173,15 @@ class InstrumentCanvas(QWidget):
             cd.ellipse([int(cx_c) - 4, int(cy_c) - 4,
                         int(cx_c) + 4, int(cy_c) + 4], fill=ptr_c)
 
+        corner_radius = float(comp.get("corner_radius", 0.0))
+        if corner_radius > 0:
+            cr = max(1, min(int(corner_radius), clip_w // 2, clip_h // 2))
+            mask = Image.new("L", (clip_w, clip_h), 0)
+            ImageDraw.Draw(mask).rounded_rectangle(
+                [0, 0, clip_w - 1, clip_h - 1], radius=cr, fill=255
+            )
+            ci.putalpha(mask)
+
         composite.paste(ci, (int(vx), int(py_top)), mask=ci)
         draw.rectangle([int(vx), int(py_top), int(vx + vw - 1), int(py_top + vh - 1)],
                        outline=(80, 80, 150, 255), width=1)

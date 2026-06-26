@@ -1443,6 +1443,23 @@ class PropertiesForm(QWidget):
         self._ai_smoothing.valueChanged.connect(self._emit)
         _ai_layout.row("Smoothing", self._ai_smoothing)
 
+        _ai_cr_row = QWidget()
+        _ai_cr_hl = QHBoxLayout(_ai_cr_row)
+        _ai_cr_hl.setContentsMargins(0, 0, 0, 0); _ai_cr_hl.setSpacing(4)
+        self._ai_corner_radius = QDoubleSpinBox()
+        self._ai_corner_radius.setRange(0.0, 200.0); self._ai_corner_radius.setDecimals(1)
+        self._ai_corner_radius.setValue(0.0); self._ai_corner_radius.setSuffix(" px")
+        self._ai_corner_radius.setToolTip("Corner rounding radius in pixels (0 = sharp)")
+        self._ai_corner_radius.valueChanged.connect(self._emit)
+        self._ai_corner_bg = _ColorButton()
+        self._ai_corner_bg.set_rgba([0, 0, 0, 255])
+        self._ai_corner_bg.setToolTip("Background color used to mask corners in the runtime")
+        self._ai_corner_bg.color_changed.connect(self._emit)
+        _ai_cr_hl.addWidget(self._ai_corner_radius)
+        _ai_cr_hl.addWidget(QLabel("bg"))
+        _ai_cr_hl.addWidget(self._ai_corner_bg)
+        _ai_layout.row("Corner radius", _ai_cr_row)
+
         self._ai_sec.row_widget(_ai_layout)
 
         # ── Background ───────────────────────────────────────────────────────
@@ -2109,6 +2126,7 @@ class PropertiesForm(QWidget):
             "roll_pointer_y_offset",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
+            "corner_radius", "corner_bg_color",
             # RotaryEncoder
             "command_cw", "command_ccw", "drag_px_per_step", "show_touch_zones", "hit_padding",
             "background_texture", "background_origin", "background_cliprect",
@@ -2415,6 +2433,9 @@ class PropertiesForm(QWidget):
         self._ai_ptr_line_w.setEnabled(not _ptr_filled)
         self._ai_ptr_y_off.setValue(float(comp.get("roll_pointer_y_offset", 0.0)))
         self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
+        self._ai_corner_radius.setValue(float(comp.get("corner_radius", 0.0)))
+        _raw_cr_bg = comp.get("corner_bg_color")
+        self._ai_corner_bg.set_rgba(_raw_cr_bg if _raw_cr_bg is not None else [0, 0, 0, 255])
 
         # RotaryEncoder
         re_sz = comp.get("size", [60, 60])
@@ -2720,6 +2741,10 @@ class PropertiesForm(QWidget):
                 data["roll_pointer_y_offset"] = self._ai_ptr_y_off.value()
             if not self._ai_show_ref.isChecked():
                 data["show_reference"] = False
+            _cr = self._ai_corner_radius.value()
+            if _cr > 0.0:
+                data["corner_radius"] = _cr
+                data["corner_bg_color"] = list(self._ai_corner_bg.get_rgba())
             ls = self._ai_ladder_step.value()
             if ls != 5.0:
                 data["ladder_step"] = ls
@@ -3031,6 +3056,8 @@ class PropertiesForm(QWidget):
         self._ai_ptr_filled.setChecked(True); self._ai_ptr_inward.setChecked(True)
         self._ai_ptr_line_w.setValue(2.0); self._ai_ptr_line_w.setEnabled(False)
         self._ai_ptr_y_off.setValue(0.0)
+        self._ai_corner_radius.setValue(0.0)
+        self._ai_corner_bg.set_rgba([0, 0, 0, 255])
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)

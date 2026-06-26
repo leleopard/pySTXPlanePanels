@@ -61,6 +61,8 @@ YAML schema
       roll_pointer_inward:     true  # true → tip toward centre; false → tip outward from arc
       roll_pointer_line_width: 2     # line width when roll_pointer_filled is false
       roll_pointer_y_offset:   0     # radial shift of pointer base from arc (+outward, −inward)
+      corner_radius:           0     # rounded corner radius in px (0 = sharp rectangular viewport)
+      corner_bg_color:         [0, 0, 0, 255]  # color used to mask the corners in the runtime
 """
 
 from __future__ import annotations
@@ -138,6 +140,8 @@ class AttitudeIndicator(_VecBase):
         show_arc_bg: bool = False,
         arc_bg_color: tuple | None = None,
         arc_bg_inset: float = 0.0,
+        corner_radius: float = 0.0,
+        corner_bg_color: tuple = (0, 0, 0, 255),
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -189,9 +193,11 @@ class AttitudeIndicator(_VecBase):
             60: float(bank_tick_60),
         }
         self._ticks_inward = bool(ticks_inward)
-        self._show_arc_bg  = bool(show_arc_bg)
-        self._arc_bg_color = arc_bg_color
-        self._arc_bg_inset = float(arc_bg_inset)
+        self._show_arc_bg    = bool(show_arc_bg)
+        self._arc_bg_color   = arc_bg_color
+        self._arc_bg_inset   = float(arc_bg_inset)
+        self._corner_radius  = float(corner_radius)
+        self._corner_bg_color = corner_bg_color
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -238,6 +244,7 @@ class AttitudeIndicator(_VecBase):
         self._arc_ref_w      *= scale
         self._arc_ref_line_w *= scale
         self._arc_ref_offset *= scale
+        self._corner_radius  *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -295,6 +302,8 @@ class AttitudeIndicator(_VecBase):
         self._draw_roll_pointer(cx, arc_cy, arc_r)
         if self._show_reference:
             self._draw_reference(cx, cy)
+        if self._corner_radius > 0:
+            self._draw_corner_cuts(vx, vy, vw, vh)
 
         ctx.scissor = None  # restore — no scissor for other components
 
@@ -476,6 +485,29 @@ class AttitudeIndicator(_VecBase):
         else:
             arcade.draw_polygon_outline(pts, self._ptr_color, self._ptr_line_w)
 
+    def _draw_corner_cuts(self, vx: float, vy: float, vw: float, vh: float) -> None:
+        """Overdraw the 4 corner regions outside the rounded rectangle with corner_bg_color.
+
+        Each corner polygon is a triangle fan from the viewport corner through the
+        arc that defines the rounded edge (12 segments), overdrawing the sky/ground
+        fill that was already drawn there.
+        """
+        r = min(self._corner_radius, vw * 0.5, vh * 0.5)
+        n = 12
+        # (corner_x, corner_y, arc_cx, arc_cy, a_start_deg, a_end_deg) — CCW
+        corners = [
+            (vx,      vy + vh, vx + r,      vy + vh - r,  90.0, 180.0),  # top-left
+            (vx + vw, vy + vh, vx + vw - r, vy + vh - r,   0.0,  90.0),  # top-right
+            (vx,      vy,      vx + r,      vy + r,        180.0, 270.0),  # bottom-left
+            (vx + vw, vy,      vx + vw - r, vy + r,        270.0, 360.0),  # bottom-right
+        ]
+        for corner_x, corner_y, cx, cy, a0, a1 in corners:
+            pts = [(corner_x, corner_y)]
+            for i in range(n + 1):
+                theta = math.radians(a0 + (a1 - a0) * i / n)
+                pts.append((cx + r * math.cos(theta), cy + r * math.sin(theta)))
+            arcade.draw_polygon_filled(pts, self._corner_bg_color)
+
     def _draw_reference(self, cx, cy) -> None:
         # Fixed aircraft reference: two horizontal wing stubs + centre dot.
         stub = 30.0
@@ -542,6 +574,9 @@ def _ai_factory(
         show_arc_bg=bool(comp.get("show_arc_bg", False)),
         arc_bg_color=(_as_color(comp["arc_bg_color"]) if "arc_bg_color" in comp else None),
         arc_bg_inset=float(comp.get("arc_bg_inset", 0.0)),
+        corner_radius=float(comp.get("corner_radius", 0.0)),
+        corner_bg_color=(_as_color(comp["corner_bg_color"])
+                         if "corner_bg_color" in comp else (0, 0, 0, 255)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],
