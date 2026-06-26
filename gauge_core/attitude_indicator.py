@@ -344,10 +344,21 @@ class AttitudeIndicator(_VecBase):
 
     def _draw_arc_background(self, cx: float, arc_cy: float, arc_r: float) -> None:
         bg_color = self._arc_bg_color if self._arc_bg_color is not None else self._sky_color
-        # Filled pie sector from center to the ±60° arc; drawn before arc/ticks
-        # so the bank scale lines appear on top.  The GL scissor clips to the viewport.
-        arcade.draw_arc_filled(cx, arc_cy, arc_r * 2, arc_r * 2,
-                               bg_color, 30.0, 150.0, num_segments=64)
+        # Fill the region between the arc contour and the top of the viewport
+        # (the "cap" above the arc, not the interior pie sector).
+        # Build a GL_TRIANGLE_FAN polygon anchored at the top-centre of the viewport;
+        # all other vertices lie at or below that edge so the fan is valid.
+        vx_left  = self._vx
+        vx_right = self._vx + self._vw
+        vy_top   = self._vy + self._vh
+        n = 64
+        pts: list[tuple[float, float]] = [(cx, vy_top), (vx_left, vy_top)]
+        for i in range(n + 1):
+            theta = math.radians(150.0 - 120.0 * i / n)  # 150° → 30° left to right
+            pts.append((cx + arc_r * math.cos(theta),
+                        arc_cy + arc_r * math.sin(theta)))
+        pts.append((vx_right, vy_top))
+        arcade.draw_polygon_filled(pts, bg_color)
 
     def _draw_bank_arc(self, cx, arc_cy, arc_r) -> None:
         if self._show_arc_line:
