@@ -43,6 +43,7 @@ YAML schema
       bank_tick_30:       10    # tick length in px for the ±30° marks
       bank_tick_45:       6     # tick length in px for the ±45° marks
       bank_tick_60:       6     # tick length in px for the ±60° marks
+      ticks_inward:       true  # true → ticks point toward centre; false → outward from arc
       roll_pointer_color: [255, 255, 255]
       roll_pointer_size:  12    # half-base of the roll-pointer triangle (px)
 """
@@ -107,6 +108,7 @@ class AttitudeIndicator(_VecBase):
         bank_tick_30: float = 10.0,
         bank_tick_45: float = 6.0,
         bank_tick_60: float = 6.0,
+        ticks_inward: bool = True,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -146,6 +148,7 @@ class AttitudeIndicator(_VecBase):
             45: float(bank_tick_45),
             60: float(bank_tick_60),
         }
+        self._ticks_inward = bool(ticks_inward)
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -354,11 +357,17 @@ class AttitudeIndicator(_VecBase):
             for a in _BANK_TICKS:
                 for sign in (-1, 1):
                     ba_rad = math.radians(sign * a)
-                    ox = cx + arc_r * math.sin(ba_rad)
-                    oy = arc_cy + arc_r * math.cos(ba_rad)
                     tick_len = self._tick_lens[a]
-                    ix = cx + (arc_r - tick_len) * math.sin(ba_rad)
-                    iy = arc_cy + (arc_r - tick_len) * math.cos(ba_rad)
+                    if self._ticks_inward:
+                        ox = cx + arc_r * math.sin(ba_rad)
+                        oy = arc_cy + arc_r * math.cos(ba_rad)
+                        ix = cx + (arc_r - tick_len) * math.sin(ba_rad)
+                        iy = arc_cy + (arc_r - tick_len) * math.cos(ba_rad)
+                    else:
+                        ix = cx + arc_r * math.sin(ba_rad)
+                        iy = arc_cy + arc_r * math.cos(ba_rad)
+                        ox = cx + (arc_r + tick_len) * math.sin(ba_rad)
+                        oy = arc_cy + (arc_r + tick_len) * math.cos(ba_rad)
                     arcade.draw_line(ix, iy, ox, oy,
                                      self._arc_color, self._arc_width)
 
@@ -426,6 +435,7 @@ def _ai_factory(
         bank_tick_30=float(comp.get("bank_tick_30", 10.0)),
         bank_tick_45=float(comp.get("bank_tick_45", 6.0)),
         bank_tick_60=float(comp.get("bank_tick_60", 6.0)),
+        ticks_inward=bool(comp.get("ticks_inward", True)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],

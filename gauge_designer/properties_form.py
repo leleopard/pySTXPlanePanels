@@ -1575,6 +1575,11 @@ class PropertiesForm(QWidget):
             setattr(self, f"_ai_tick_{_deg}", sb)
             _ai_arc.row(f"Tick {_deg}° len", sb)
 
+        self._ai_ticks_inward = QCheckBox("Ticks point inward")
+        self._ai_ticks_inward.setChecked(True)
+        self._ai_ticks_inward.stateChanged.connect(self._emit)
+        _ai_arc.row("Tick direction", self._ai_ticks_inward)
+
         _ai_arc_vis_row = QWidget()
         _ai_arc_vis_hl  = QHBoxLayout(_ai_arc_vis_row)
         _ai_arc_vis_hl.setContentsMargins(0, 0, 0, 0)
@@ -1989,6 +1994,7 @@ class PropertiesForm(QWidget):
             "bank_arc_color", "bank_arc_width", "bank_arc_radius",
             "bank_arc_y_offset", "show_arc_line", "show_arc_ticks",
             "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
+            "ticks_inward",
             "roll_pointer_color", "roll_pointer_size",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
@@ -2258,6 +2264,7 @@ class PropertiesForm(QWidget):
         for _deg, _default in ((10, 6.0), (20, 6.0), (30, 10.0), (45, 6.0), (60, 6.0)):
             getattr(self, f"_ai_tick_{_deg}").setValue(
                 float(comp.get(f"bank_tick_{_deg}", _default)))
+        self._ai_ticks_inward.setChecked(bool(comp.get("ticks_inward", True)))
         _legacy_arc = bool(comp.get("show_bank_arc", True))
         self._ai_show_arc_line.setChecked(bool(comp.get("show_arc_line", _legacy_arc)))
         self._ai_show_arc_ticks.setChecked(bool(comp.get("show_arc_ticks", _legacy_arc)))
@@ -2529,6 +2536,8 @@ class PropertiesForm(QWidget):
                 v = getattr(self, f"_ai_tick_{_deg}").value()
                 if v != _default:
                     data[f"bank_tick_{_deg}"] = v
+            if not self._ai_ticks_inward.isChecked():
+                data["ticks_inward"] = False
             if not self._ai_show_arc_line.isChecked():
                 data["show_arc_line"] = False
             if not self._ai_show_arc_ticks.isChecked():
@@ -2835,6 +2844,7 @@ class PropertiesForm(QWidget):
         self._ai_arc_r.setValue(0.0); self._ai_arc_y_offset.setValue(0.0)
         for _deg, _default in ((10, 6.0), (20, 6.0), (30, 10.0), (45, 6.0), (60, 6.0)):
             getattr(self, f"_ai_tick_{_deg}").setValue(_default)
+        self._ai_ticks_inward.setChecked(True)
         self._ai_show_arc_line.setChecked(True); self._ai_show_arc_ticks.setChecked(True)
         self._ai_ptr_color.set_rgba(None); self._ai_ptr_size.setValue(12.0)
         self._vt_axis.setCurrentIndex(0)

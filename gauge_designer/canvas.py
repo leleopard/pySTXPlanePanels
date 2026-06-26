@@ -1088,15 +1088,22 @@ class InstrumentCanvas(QWidget):
                 45: float(comp.get("bank_tick_45", 6.0)),
                 60: float(comp.get("bank_tick_60", 6.0)),
             }
+            ticks_inward = bool(comp.get("ticks_inward", True))
             # Tick marks — same formula as runtime, y-flipped for PIL
             for a in [10, 20, 30, 45, 60]:
                 for sign in (-1, 1):
                     ba_rad = math.radians(sign * a)
-                    ox = int(cx_c      + arc_r * math.sin(ba_rad))
-                    oy = int(arc_cy_c  - arc_r * math.cos(ba_rad))
                     tick_len = _tick_lens[a]
-                    ix = int(cx_c      + (arc_r - tick_len) * math.sin(ba_rad))
-                    iy = int(arc_cy_c  - (arc_r - tick_len) * math.cos(ba_rad))
+                    if ticks_inward:
+                        ox = int(cx_c     + arc_r * math.sin(ba_rad))
+                        oy = int(arc_cy_c - arc_r * math.cos(ba_rad))
+                        ix = int(cx_c     + (arc_r - tick_len) * math.sin(ba_rad))
+                        iy = int(arc_cy_c - (arc_r - tick_len) * math.cos(ba_rad))
+                    else:
+                        ix = int(cx_c     + arc_r * math.sin(ba_rad))
+                        iy = int(arc_cy_c - arc_r * math.cos(ba_rad))
+                        ox = int(cx_c     + (arc_r + tick_len) * math.sin(ba_rad))
+                        oy = int(arc_cy_c - (arc_r + tick_len) * math.cos(ba_rad))
                     cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)
 
         # Roll pointer at bank=0: triangle tip pointing inward (down in PIL)
