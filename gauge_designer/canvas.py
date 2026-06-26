@@ -1017,6 +1017,7 @@ class InstrumentCanvas(QWidget):
         ptr_filled  = bool(comp.get("roll_pointer_filled", True))
         ptr_inward  = bool(comp.get("roll_pointer_inward", True))
         ptr_line_w  = max(1, int(float(comp.get("roll_pointer_line_width", 2.0))))
+        ptr_y_off   = float(comp.get("roll_pointer_y_offset", 0.0))
         font_sz = max(8, int(comp.get("label_font_size", 14)))
         font  = _pil_font(comp.get("ladder_font_name") or None, font_sz,
                           bold=bool(comp.get("ladder_bold", False)),
@@ -1130,7 +1131,7 @@ class InstrumentCanvas(QWidget):
 
         # Roll pointer at bank=0: triangle at the top of the arc.
         # PIL y-down: inward (toward centre) → tip_y > base_y; outward → tip_y < base_y.
-        ptr_base_y = int(arc_cy_c - arc_r_i)
+        ptr_base_y = int(arc_cy_c - arc_r_i - ptr_y_off)
         tip_offset = int(ptr_h)
         ptr_tip_y  = ptr_base_y + tip_offset if ptr_inward else ptr_base_y - tip_offset
         half_ptr   = int(ptr_w * 0.5)

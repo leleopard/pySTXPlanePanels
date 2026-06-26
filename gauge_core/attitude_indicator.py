@@ -54,6 +54,7 @@ YAML schema
       roll_pointer_filled:     true  # false → outline only
       roll_pointer_inward:     true  # true → tip toward centre; false → tip outward from arc
       roll_pointer_line_width: 2     # line width when roll_pointer_filled is false
+      roll_pointer_y_offset:   0     # radial shift of pointer base from arc (+outward, −inward)
 """
 
 from __future__ import annotations
@@ -103,6 +104,7 @@ class AttitudeIndicator(_VecBase):
         roll_pointer_filled: bool = True,
         roll_pointer_inward: bool = True,
         roll_pointer_line_width: float = 2.0,
+        roll_pointer_y_offset: float = 0.0,
         ladder_step: float = 5.0,
         ladder_hw_4: float = 0.40,
         ladder_hw_2: float = 0.31,
@@ -147,6 +149,7 @@ class AttitudeIndicator(_VecBase):
         self._ptr_filled  = bool(roll_pointer_filled)
         self._ptr_inward  = bool(roll_pointer_inward)
         self._ptr_line_w  = float(roll_pointer_line_width)
+        self._ptr_y_off   = float(roll_pointer_y_offset)
         self._ladder_step = float(ladder_step)
         self._ladder_hw_4 = float(ladder_hw_4)
         self._ladder_hw_2 = float(ladder_hw_2)
@@ -207,6 +210,7 @@ class AttitudeIndicator(_VecBase):
         self._ptr_h        *= scale
         self._ptr_w        *= scale
         self._ptr_line_w   *= scale
+        self._ptr_y_off    *= scale
         self._tick_lens = {a: v * scale for a, v in self._tick_lens.items()}
         self._hor_width    *= scale
         self._ldr_width    *= scale
@@ -425,8 +429,9 @@ class AttitudeIndicator(_VecBase):
         uy =  math.cos(bank_rad)
         px_v = -uy                 # perpendicular (CCW from outward)
         py_v =  ux
-        bx = cx     + arc_r * ux  # base centre on arc
-        by = arc_cy + arc_r * uy
+        r_ptr = arc_r + self._ptr_y_off   # radial offset shifts base outward (+) or inward (−)
+        bx = cx     + r_ptr * ux
+        by = arc_cy + r_ptr * uy
         half_w = self._ptr_w * 0.5
         # inward → tip toward centre (−radial); outward → tip away from arc (+radial)
         sign = -1.0 if self._ptr_inward else 1.0
@@ -477,6 +482,7 @@ def _ai_factory(
         roll_pointer_filled=bool(comp.get("roll_pointer_filled", True)),
         roll_pointer_inward=bool(comp.get("roll_pointer_inward", True)),
         roll_pointer_line_width=float(comp.get("roll_pointer_line_width", 2.0)),
+        roll_pointer_y_offset=float(comp.get("roll_pointer_y_offset", 0.0)),
         ladder_step=float(comp.get("ladder_step", 5.0)),
         ladder_hw_4=float(comp.get("ladder_hw_4", 0.40)),
         ladder_hw_2=float(comp.get("ladder_hw_2", 0.31)),

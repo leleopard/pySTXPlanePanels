@@ -1661,6 +1661,12 @@ class PropertiesForm(QWidget):
         _ai_ptr_style_hl.addWidget(self._ai_ptr_line_w)
         _ai_ptr.row("Style / Direction", _ai_ptr_style_row)
 
+        self._ai_ptr_y_off = QDoubleSpinBox()
+        self._ai_ptr_y_off.setRange(-200.0, 200.0); self._ai_ptr_y_off.setDecimals(1)
+        self._ai_ptr_y_off.setValue(0.0); self._ai_ptr_y_off.setSuffix(" px")
+        self._ai_ptr_y_off.valueChanged.connect(self._emit)
+        _ai_ptr.row("Y offset from arc", self._ai_ptr_y_off)
+
         self._ai_show_ref = QCheckBox("Show centre reference bug")
         self._ai_show_ref.setChecked(True)
         self._ai_show_ref.stateChanged.connect(self._emit)
@@ -2050,6 +2056,7 @@ class PropertiesForm(QWidget):
             "roll_pointer_color", "roll_pointer_size",
             "roll_pointer_height", "roll_pointer_width",
             "roll_pointer_filled", "roll_pointer_inward", "roll_pointer_line_width",
+            "roll_pointer_y_offset",
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             # RotaryEncoder
@@ -2343,6 +2350,7 @@ class PropertiesForm(QWidget):
         self._ai_ptr_inward.setChecked(bool(comp.get("roll_pointer_inward", True)))
         self._ai_ptr_line_w.setValue(float(comp.get("roll_pointer_line_width", 2.0)))
         self._ai_ptr_line_w.setEnabled(not _ptr_filled)
+        self._ai_ptr_y_off.setValue(float(comp.get("roll_pointer_y_offset", 0.0)))
         self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
 
         # RotaryEncoder
@@ -2632,6 +2640,8 @@ class PropertiesForm(QWidget):
                 data["roll_pointer_line_width"] = self._ai_ptr_line_w.value()
             if not self._ai_ptr_inward.isChecked():
                 data["roll_pointer_inward"] = False
+            if self._ai_ptr_y_off.value() != 0.0:
+                data["roll_pointer_y_offset"] = self._ai_ptr_y_off.value()
             if not self._ai_show_ref.isChecked():
                 data["show_reference"] = False
             ls = self._ai_ladder_step.value()
@@ -2939,6 +2949,7 @@ class PropertiesForm(QWidget):
         self._ai_ptr_height.setValue(12.0); self._ai_ptr_width.setValue(12.0)
         self._ai_ptr_filled.setChecked(True); self._ai_ptr_inward.setChecked(True)
         self._ai_ptr_line_w.setValue(2.0); self._ai_ptr_line_w.setEnabled(False)
+        self._ai_ptr_y_off.setValue(0.0)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
