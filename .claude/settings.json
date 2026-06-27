@@ -24,7 +24,11 @@
       "Bash(git commit -m 'fix\\(registry\\): treat '\\\\''\\(none\\)'\\\\'' as null convert function *)",
       "Bash(py -c \"import arcade, inspect; print\\(inspect.getsource\\(arcade.Window.clear\\)\\)\")",
       "Bash(py -c \"import arcade.gl, inspect; print\\(inspect.getsource\\(arcade.gl.Framebuffer.clear\\)\\)\")",
-      "Read(//c/Users/stephane/Desktop/pyxpudpserver/**)"
+      "Read(//c/Users/stephane/Desktop/pyxpudpserver/**)",
+      "Bash(timeout 12 python -m gauge_core.runner \"instruments/B737 PFD/HSI.yaml\" --test)",
+      "Bash(git commit -m 'fix\\(attitude_indicator\\): split show_bank_arc into show_arc_line/show_arc_ticks; fix preview y-offset *)",
+      "Bash(git commit -m 'refactor\\(designer\\): collapsible sub-sections in AttitudeIndicator properties panel *)",
+      "Bash(git commit -m 'feat\\(attitude_indicator\\): configurable per-angle bank tick lengths *)"
     ]
   }
 }

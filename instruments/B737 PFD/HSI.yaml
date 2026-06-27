@@ -54,13 +54,56 @@ components:
   - 255
   - 255
   - 255
+  bank_arc_radius: 139.0
+  bank_arc_y_offset: -14.0
+  bank_tick_10: 18.0
+  bank_tick_20: 12.0
+  bank_tick_30: 18.0
+  bank_tick_45: 12.0
+  bank_tick_60: 12.0
+  ticks_inward: false
+  show_arc_line: false
+  arc_ref_shape: arrow
+  arc_ref_height: 14.0
+  arc_ref_offset: 14.0
+  arc_ref_width: 16.0
+  show_arc_bg: true
+  arc_bg_color:
+  - 10
+  - 136
+  - 194
+  - 255
+  arc_bg_inset: 14.0
   roll_pointer_color:
   - 255
   - 255
   - 255
   - 255
-  roll_pointer_size: 19.0
+  roll_pointer_height: 12.0
+  roll_pointer_width: 24.0
+  roll_pointer_filled: false
+  roll_pointer_line_width: 2.0
+  roll_pointer_inward: false
+  roll_pointer_y_offset: -13.0
   show_reference: false
+  corner_radius: 30.0
+  corner_bg_color:
+  - 0
+  - 0
+  - 0
+  - 255
+  show_slip: true
+  slip_dataref: sim/cockpit2/gauges/indicators/slip_deg
+  slip_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  slip_width: 24.0
+  slip_height: 6.0
+  slip_filled: false
+  slip_line_width: 2.0
+  slip_offset: -17.0
   ladder_step: 2.5
   ladder_hw_2: 0.2
   ladder_hw_1: 0.1
