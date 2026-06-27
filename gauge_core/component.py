@@ -236,8 +236,13 @@ class ImagePanel:
             return
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
-            ctx = arcade.get_window().ctx
-            ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
+            win = arcade.get_window()
+            ctx = win.ctx
+            _, _, fvp_w, fvp_h = ctx.viewport
+            panel_w, panel_h = getattr(win, "_panel_size", (win.width, win.height))
+            sx = fvp_w / panel_w
+            sy = fvp_h / panel_h
+            ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
             arcade.draw_sprite(self.sprite)
             ctx.scissor = None
         else:

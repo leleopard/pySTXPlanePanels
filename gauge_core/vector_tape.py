@@ -256,14 +256,24 @@ class VectorTape:
     def draw(self) -> None:
         if not self._visible:
             return
-        ctx = arcade.get_window().ctx
+        win = arcade.get_window()
+        ctx = win.ctx
         vx, vy, vw, vh = self._vp_x, self._vp_y, self._vp_w, self._vp_h
         val = self._current_value
+
+        # Scale panel-space viewport to framebuffer pixels.  In SSAA mode the
+        # FBO is ssaa× larger than the logical panel, so raw panel coords would
+        # clip to a tiny wrong region near the origin.
+        _, _, fvp_w, fvp_h = ctx.viewport
+        panel_w, panel_h = getattr(win, "_panel_size", (win.width, win.height))
+        sx = fvp_w / panel_w
+        sy = fvp_h / panel_h
+        scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
 
         if self._bg_color is not None:
             arcade.draw_rect_filled(arcade.LBWH(vx, vy, vw, vh), self._bg_color)
 
-        ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
+        ctx.scissor = scissor
         if self._axis == "y":
             self._draw_bands_y(vx, vy, vw, vh, val)
             self._draw_ticks_y(vx, vy, vw, vh, val)
@@ -278,7 +288,7 @@ class VectorTape:
         # text starts at the spine and extends inward) are correctly confined,
         # and labels that sit inside the viewport near one edge are clipped when
         # they scroll off the top or bottom.
-        ctx.scissor = (int(vx), int(vy), int(vw), int(vh))
+        ctx.scissor = scissor
         if self._axis == "y":
             self._draw_labels_y(vx, vy, vw, vh, val)
         else:
