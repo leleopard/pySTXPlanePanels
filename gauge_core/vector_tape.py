@@ -347,12 +347,19 @@ class VectorTape:
         if self._axis == "y":
             self._draw_bands_y(vx, vy, vw, vh, val)
             self._draw_ticks_y(vx, vy, vw, vh, val)
-            self._draw_bugs_y(vx, vy, vw, vh, val)
         else:
             self._draw_bands_x(vx, vy, vw, vh, val)
             self._draw_ticks_x(vx, vy, vw, vh, val)
-            self._draw_bugs_x(vx, vy, vw, vh, val)
         ctx.scissor = None
+
+        # Bugs are drawn without scissor so the polygon extends beyond the tape
+        # edge into the surrounding panel.  Vertical (y-axis) or horizontal
+        # (x-axis) clamping is applied inside the draw methods to keep the bug
+        # at the viewport boundary when the tracked value is out of range.
+        if self._axis == "y":
+            self._draw_bugs_y(vx, vy, vw, vh, val)
+        else:
+            self._draw_bugs_x(vx, vy, vw, vh, val)
 
         # Use the same viewport scissor for labels as for ticks so that labels
         # are clipped to the tape viewport on all four sides.  Labels that are
