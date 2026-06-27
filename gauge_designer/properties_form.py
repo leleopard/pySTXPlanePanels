@@ -1284,6 +1284,11 @@ class PropertiesForm(QWidget):
         _cap_size_hl.addStretch()
         self._vec_sec.row("Cap w / h px", _cap_size_box)
 
+        self._vec_hide_if_short = QCheckBox("Hide if length < cap height")
+        self._vec_hide_if_short.setEnabled(False)
+        self._vec_hide_if_short.toggled.connect(self._emit)
+        self._vec_sec.row("", self._vec_hide_if_short)
+
         self._vbox.addWidget(self._vec_sec)
 
     def _mk_vectortape_sec(self):
@@ -2183,7 +2188,7 @@ class PropertiesForm(QWidget):
             "text", "dataref", "text_format", "convert_function",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # Vector
-            "direction", "length", "cap", "cap_width", "cap_height", "cap_filled",
+            "direction", "length", "cap", "cap_width", "cap_height", "cap_filled", "hide_if_less_than_cap",
             # AttitudeIndicator
             "pitch_dataref", "roll_dataref", "pixels_per_degree",
             "sky_color", "ground_color", "horizon_color", "horizon_width",
@@ -2331,6 +2336,8 @@ class PropertiesForm(QWidget):
         self._vec_cap_height.setEnabled(_cap == "triangle")
         self._vec_cap_filled.setChecked(bool(comp.get("cap_filled", True)))
         self._vec_cap_filled.setEnabled(_cap == "triangle")
+        self._vec_hide_if_short.setChecked(bool(comp.get("hide_if_less_than_cap", False)))
+        self._vec_hide_if_short.setEnabled(_cap == "triangle")
 
         # VectorTape
         self._vt_axis.setCurrentIndex(0 if str(comp.get("scroll_axis", "y")) == "y" else 1)
@@ -2680,6 +2687,8 @@ class PropertiesForm(QWidget):
                     data["cap_height"] = self._vec_cap_height.value()
                     if not self._vec_cap_filled.isChecked():
                         data["cap_filled"] = False
+                    if self._vec_hide_if_short.isChecked():
+                        data["hide_if_less_than_cap"] = True
 
         elif ct == "RotaryEncoder":
             data["size"] = [self._re_w.value(), self._re_h.value()]
@@ -3383,6 +3392,7 @@ class PropertiesForm(QWidget):
         self._vec_cap_width.setEnabled(text != "none")
         self._vec_cap_height.setEnabled(text == "triangle")
         self._vec_cap_filled.setEnabled(text == "triangle")
+        self._vec_hide_if_short.setEnabled(text == "triangle")
 
     def _on_txt_mode_changed(self, idx: int) -> None:
         self._txt_stack.setCurrentIndex(idx)

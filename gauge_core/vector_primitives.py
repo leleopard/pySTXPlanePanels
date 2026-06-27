@@ -338,6 +338,7 @@ class Vector(_VecBase):
         cap_width: float = 10.0,
         cap_height: float = 5.0,
         cap_filled: bool = True,
+        hide_if_less_than_cap: bool = False,
     ) -> None:
         self.name = name
         self._px, self._py = float(position[0]), float(position[1])
@@ -349,6 +350,7 @@ class Vector(_VecBase):
         self._cap_width = float(cap_width)
         self._cap_height = float(cap_height)
         self._cap_filled = bool(cap_filled)
+        self._hide_if_less_than_cap = bool(hide_if_less_than_cap)
         self._dir_dataref: Any | None = None
         self._dir_table: list = []
         self._dir_convert: Callable | None = None
@@ -404,6 +406,8 @@ class Vector(_VecBase):
 
     def draw(self) -> None:
         if not self._visible or self._len == 0:
+            return
+        if self._hide_if_less_than_cap and abs(self._len) < self._cap_height:
             return
         angle_rad = math.radians(self._dir)
         sign = 1.0 if self._len >= 0 else -1.0
@@ -527,6 +531,7 @@ def _vector_factory(comp: dict, base_dir: Path, container_size=None) -> Vector:
         cap_width=float(comp.get("cap_width", 10.0)),
         cap_height=float(comp.get("cap_height", comp.get("cap_width", 10.0) / 2.0)),
         cap_filled=bool(comp.get("cap_filled", True)),
+        hide_if_less_than_cap=bool(comp.get("hide_if_less_than_cap", False)),
     )
     if isinstance(dir_cfg, dict):
         vec.set_direction_dataref(

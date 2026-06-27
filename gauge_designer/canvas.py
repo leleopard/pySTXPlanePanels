@@ -769,6 +769,8 @@ class InstrumentCanvas(QWidget):
         cap = comp.get("cap", "none")
         _cap_w = float(comp.get("cap_width", 10.0))
         _cap_h = float(comp.get("cap_height", _cap_w / 2.0))
+        if comp.get("hide_if_less_than_cap", False) and abs(length) < _cap_h:
+            return
         # Shaft endpoint: shorten by cap height for triangle so total length is preserved
         if cap == "triangle":
             shaft_len = length - sign * _cap_h
