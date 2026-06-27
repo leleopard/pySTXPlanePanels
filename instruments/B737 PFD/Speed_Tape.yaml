@@ -75,7 +75,12 @@ components:
   bands:
   - range:
     - 0.0
-    - 60.0
+    - dataref: laminar/B738/pfd/min_speed
+      table:
+      - - 0
+        - 0
+      - - 999
+        - 999
     color:
     - 233
     - 18
@@ -95,10 +100,56 @@ components:
     width: 8.0
     side: right
     dash: 8.0
+  - range:
+    - dataref: laminar/B738/pfd/min_speed
+      table:
+      - - 0
+        - 0
+      - - 999
+        - 999
+    - dataref: laminar/B738/pfd/min_maneuver_speed
+      table:
+      - - 0
+        - 0
+      - - 999
+        - 999
+    color:
+    - 238
+    - 159
+    - 32
+    - 255
+    width: 4.0
+    side: right
+  bugs:
+  - value:
+      dataref: sim/cockpit2/autopilot/airspeed_dial_kts
+      table:
+      - - 0
+        - 0
+      - - 999
+        - 999
+    color:
+    - 244
+    - 146
+    - 245
+    - 255
+    points:
+    - - -20
+      - 0
+    - - -11
+      - 8
+    - - 14
+      - 8
+    - - 14
+      - -8
+    - - -11
+      - -8
+    filled: false
+    width: 2.0
   viewport:
   - 9
   - 114
-  - 83
+  - 84
   - 382
 - name: speed_acceleration
   type: Vector
@@ -125,6 +176,7 @@ components:
   cap_width: 14.0
   cap_height: 10.0
   cap_filled: false
+  hide_if_less_than_cap: true
 - name: alt_tape_window
   type: Polygon
   points:
@@ -193,6 +245,7 @@ components:
   - 307
   scroll_axis: y
   pixels_per_unit: 24.0
+  wrap: 10.0
   tick_side: left
   tick_color:
   - 255
@@ -204,11 +257,9 @@ components:
     table:
     - - 0
       - 0
-    - - 9
-      - 9
     - - 10
-      - 0
-    convert_function: return_tens_digit_int
+      - 10
+    convert_function: return_tens_digit
   labels:
     interval: 1.0
     font_size: 22.0

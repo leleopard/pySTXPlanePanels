@@ -106,6 +106,25 @@ def return_tens_digit_int(value: float, _get: GetData) -> float:
     return float((int(value) // 10) % 10)
 
 
+def return_tens_digit(value: float, _get: GetData) -> float:
+    """Tens digit with smooth rollover as the units digit crosses 9 → 0.
+
+    Returns a value in [0, 10): the integer tens digit when units < 9,
+    blending fractionally toward the next tens digit as units rises from
+    9 to 10 (the rollover point).  Combine with table [[0,0],[10,10]] and
+    wrap: 10.0 on the VectorTape so labels cycle 0–9.
+
+    Example: speed 249.6 → units=9.6, tens_int=4, result=4.6
+             speed 250.0 → units=0.0, tens_int=5, result=5.0
+    """
+    units = value % 10.0
+    tens_int = (int(value) // 10) % 10
+    if units >= 9.0:
+        frac = units - 9.0          # 0.0 → 1.0 as units goes 9 → 10
+        return (tens_int + frac) % 10.0
+    return float(tens_int)
+
+
 def return_hundreds_digit_int(value: float, _get: GetData) -> float:
     """Hundreds digit only (0–9), no fractional part.  Input 1234.7 → 2."""
     return float((int(value) // 100) % 10)
@@ -208,6 +227,7 @@ for _name, _func in {
     "nav_gsflg_visible": nav_gsflg_visible,
     "return_units_decimal": return_units_decimal,
     "return_tens_digit_int": return_tens_digit_int,
+    "return_tens_digit": return_tens_digit,
     "return_hundreds_digit_int": return_hundreds_digit_int,
     "return_thousands_digit_int": return_thousands_digit_int,
     "identity": identity,
