@@ -268,9 +268,9 @@ components:
     side: right
   viewport:
   - 27
-  - 295
+  - 288
   - 17
-  - 23
+  - 37
 - name: hundreds_speed_tape
   type: VectorTape
   position:
@@ -278,6 +278,7 @@ components:
   - 307
   scroll_axis: y
   pixels_per_unit: 24.0
+  wrap: 10.0
   tick_side: left
   tick_color:
   - 255
@@ -289,11 +290,9 @@ components:
     table:
     - - 0
       - 0
-    - - 9
-      - 9
     - - 10
-      - 0
-    convert_function: return_hundreds_digit_int
+      - 10
+    convert_function: return_hundreds_digit
   labels:
     interval: 1.0
     font_size: 22.0
@@ -302,9 +301,9 @@ components:
     side: right
   viewport:
   - 10
-  - 295
+  - 288
   - 17
-  - 23
+  - 37
 - name: GS_static_text
   type: Text
   position:

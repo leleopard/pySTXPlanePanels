@@ -130,6 +130,24 @@ def return_hundreds_digit_int(value: float, _get: GetData) -> float:
     return float((int(value) // 100) % 10)
 
 
+def return_hundreds_digit(value: float, _get: GetData) -> float:
+    """Hundreds digit with smooth rollover as the tens+units cross 99 → 100.
+
+    Returns a value in [0, 10): integer hundreds digit when tens_units < 99,
+    blending fractionally toward the next hundreds digit as tens_units rises
+    from 99 to 100.  Combine with table [[0,0],[10,10]] and wrap: 10.0.
+
+    Example: speed 299.6 → tens_units=99.6, hundreds_int=2, result=2.6
+             speed 300.0 → tens_units=0.0,  hundreds_int=3, result=3.0
+    """
+    tens_units = value % 100.0
+    hundreds_int = (int(value) // 100) % 10
+    if tens_units >= 99.0:
+        frac = tens_units - 99.0        # 0.0 → 1.0 as value crosses X99 → X00
+        return (hundreds_int + frac) % 10.0
+    return float(hundreds_int)
+
+
 def return_thousands_digit_int(value: float, _get: GetData) -> float:
     """Thousands digit only (0–9), no fractional part.  Input 12345.6 → 2."""
     return float((int(value) // 1000) % 10)
@@ -229,6 +247,7 @@ for _name, _func in {
     "return_tens_digit_int": return_tens_digit_int,
     "return_tens_digit": return_tens_digit,
     "return_hundreds_digit_int": return_hundreds_digit_int,
+    "return_hundreds_digit": return_hundreds_digit,
     "return_thousands_digit_int": return_thousands_digit_int,
     "identity": identity,
 }.items():
