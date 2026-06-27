@@ -584,6 +584,174 @@ class _BandsEditor(QWidget):
         return result
 
 
+# ── Bug list editor ───────────────────────────────────────────────────────────
+
+class _BugsEditor(QWidget):
+    """Edits the list of VectorTape bug markers."""
+    changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bugs: list[dict] = []
+        self._loading = False
+
+        self._list = QListWidget()
+        self._list.setFixedHeight(80)
+        self._list.currentRowChanged.connect(self._on_row_changed)
+
+        add_btn = QPushButton("+"); add_btn.setFixedWidth(26)
+        add_btn.setToolTip("Add bug"); add_btn.clicked.connect(self._add)
+        rm_btn = QPushButton("−"); rm_btn.setFixedWidth(26)
+        rm_btn.setToolTip("Remove bug"); rm_btn.clicked.connect(self._remove)
+        list_bar = QHBoxLayout()
+        list_bar.setContentsMargins(0, 0, 0, 0); list_bar.setSpacing(2)
+        list_bar.addWidget(add_btn); list_bar.addWidget(rm_btn); list_bar.addStretch()
+
+        self._edit_panel = QFrame()
+        self._edit_panel.setFrameShape(QFrame.StyledPanel)
+        self._edit_panel.setVisible(False)
+        ep = QVBoxLayout(self._edit_panel)
+        ep.setContentsMargins(6, 6, 6, 6); ep.setSpacing(4)
+
+        self._bug_value = _BandEndpointWidget("Value:")
+        self._bug_value.changed.connect(self._on_field_changed)
+        ep.addWidget(self._bug_value)
+
+        color_row = QHBoxLayout()
+        color_row.setContentsMargins(0, 0, 0, 0); color_row.setSpacing(6)
+        color_row.addWidget(QLabel("Color:"))
+        self._bug_color = _ColorButton()
+        self._bug_color.color_changed.connect(self._on_field_changed)
+        color_row.addWidget(self._bug_color, 1)
+        ep.addLayout(color_row)
+
+        style_row = QHBoxLayout()
+        style_row.setContentsMargins(0, 0, 0, 0); style_row.setSpacing(8)
+        self._bug_filled = QCheckBox("Filled")
+        self._bug_filled.setChecked(True)
+        self._bug_filled.toggled.connect(lambda on: self._bug_width.setEnabled(not on))
+        self._bug_filled.toggled.connect(self._on_field_changed)
+        self._bug_width = QDoubleSpinBox()
+        self._bug_width.setRange(1.0, 20.0); self._bug_width.setDecimals(1)
+        self._bug_width.setValue(2.0); self._bug_width.setEnabled(False)
+        self._bug_width.setPrefix("w: "); self._bug_width.setSuffix(" px")
+        self._bug_width.valueChanged.connect(self._on_field_changed)
+        style_row.addWidget(self._bug_filled)
+        style_row.addWidget(self._bug_width)
+        style_row.addStretch()
+        ep.addLayout(style_row)
+
+        ep.addWidget(QLabel("Points relative to spine anchor (Arcade y-up):"))
+        self._bug_points = _PointsTableEditor()
+        self._bug_points.changed.connect(self._on_field_changed)
+        ep.addWidget(self._bug_points)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(2)
+        layout.addWidget(self._list)
+        layout.addLayout(list_bar)
+        layout.addWidget(self._edit_panel)
+
+    def _bug_label(self, bug: dict) -> str:
+        val = bug.get("value", 0.0)
+        val_str = f"DR:{str(val.get('dataref','?')).split('/')[-1]}" \
+            if isinstance(val, dict) else str(float(val))
+        pts = len(bug.get("points", []))
+        style = "filled" if bug.get("filled", True) else "outline"
+        return f"{val_str}   ({pts} pts, {style})"
+
+    def _refresh_list(self):
+        self._list.blockSignals(True)
+        current = self._list.currentRow()
+        self._list.clear()
+        for bug in self._bugs:
+            item = QListWidgetItem(self._bug_label(bug))
+            c = bug.get("color", [255, 200, 0, 255])
+            item.setForeground(QColor(int(c[0]), int(c[1]), int(c[2])))
+            self._list.addItem(item)
+        self._list.setCurrentRow(current)
+        self._list.blockSignals(False)
+
+    def _on_row_changed(self, row: int):
+        if row < 0 or row >= len(self._bugs):
+            self._edit_panel.setVisible(False)
+            return
+        self._loading = True
+        bug = self._bugs[row]
+        self._bug_value.load(bug.get("value", 0.0))
+        self._bug_color.set_rgba(bug.get("color"))
+        filled = bool(bug.get("filled", True))
+        self._bug_filled.setChecked(filled)
+        self._bug_width.setEnabled(not filled)
+        self._bug_width.setValue(float(bug.get("width", 2.0)))
+        self._bug_points.load(bug.get("points", []))
+        self._edit_panel.setVisible(True)
+        self._loading = False
+
+    def _on_field_changed(self):
+        if self._loading:
+            return
+        row = self._list.currentRow()
+        if row < 0 or row >= len(self._bugs):
+            return
+        self._bugs[row]["value"] = self._bug_value.get_data()
+        self._bugs[row]["color"] = list(self._bug_color.get_rgba())
+        self._bugs[row]["filled"] = self._bug_filled.isChecked()
+        self._bugs[row]["width"] = self._bug_width.value()
+        self._bugs[row]["points"] = self._bug_points.get_data()
+        self._refresh_list()
+        self.changed.emit()
+
+    def _add(self):
+        self._bugs.append({
+            "value": 0.0,
+            "color": [255, 200, 0, 255],
+            "filled": True,
+            "width": 2.0,
+            "points": [[0, 0], [10, 5], [10, -5]],
+        })
+        self._refresh_list()
+        self._list.setCurrentRow(len(self._bugs) - 1)
+        self.changed.emit()
+
+    def _remove(self):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        self._bugs.pop(row)
+        self._refresh_list()
+        self.changed.emit()
+
+    def load(self, bugs: list):
+        self._loading = True
+        self._bugs = []
+        for b in bugs:
+            self._bugs.append({
+                "value": b.get("value", 0.0),
+                "color": b.get("color", [255, 200, 0, 255]),
+                "filled": bool(b.get("filled", True)),
+                "width": float(b.get("width", 2.0)),
+                "points": [list(p) for p in b.get("points", [])],
+            })
+        self._refresh_list()
+        self._edit_panel.setVisible(False)
+        self._loading = False
+
+    def get_data(self) -> list:
+        result = []
+        for b in self._bugs:
+            entry: dict = {
+                "value": b["value"],
+                "color": list(b["color"]),
+                "points": [list(p) for p in b["points"]],
+            }
+            if not b.get("filled", True):
+                entry["filled"] = False
+                entry["width"] = b["width"]
+            result.append(entry)
+        return result
+
+
 # ── Collapsible section ───────────────────────────────────────────────────────
 
 class _Section(QWidget):
@@ -1400,6 +1568,10 @@ class PropertiesForm(QWidget):
         self._vt_bands.changed.connect(self._emit)
         self._vt_sec.row("Bands", self._vt_bands)
 
+        self._vt_bugs = _BugsEditor()
+        self._vt_bugs.changed.connect(self._emit)
+        self._vt_sec.row("Bugs", self._vt_bugs)
+
         self._vbox.addWidget(self._vt_sec)
 
     def _mk_ai_sec(self):
@@ -2183,7 +2355,7 @@ class PropertiesForm(QWidget):
             "color", "width",
             "outline_color", "outline_width",
             # VectorTape (all form-managed)
-            "pixels_per_unit", "wrap", "tick_side", "tick_color", "bg_color", "ticks", "labels", "bands",
+            "pixels_per_unit", "wrap", "tick_side", "tick_color", "bg_color", "ticks", "labels", "bands", "bugs",
             # Text
             "text", "dataref", "text_format", "convert_function",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
@@ -2373,6 +2545,7 @@ class PropertiesForm(QWidget):
         self._vt_label_bold.setChecked(bool(lbl.get("bold", False)))
         self._vt_label_italic.setChecked(bool(lbl.get("italic", False)))
         self._vt_bands.load(comp.get("bands", []))
+        self._vt_bugs.load(comp.get("bugs", []))
 
         # Text component
         has_dr = "dataref" in comp
@@ -3048,6 +3221,9 @@ class PropertiesForm(QWidget):
             bands = self._vt_bands.get_data()
             if bands:
                 data["bands"] = bands
+            bugs = self._vt_bugs.get_data()
+            if bugs:
+                data["bugs"] = bugs
 
         if self._vp_sec.active:
             vh = self._vp_h.value()
@@ -3206,6 +3382,7 @@ class PropertiesForm(QWidget):
         self._vt_label_bold.setChecked(False)
         self._vt_label_italic.setChecked(False)
         self._vt_bands.load([])
+        self._vt_bugs.load([])
         self._txt_mode.setCurrentIndex(0)
         self._txt_stack.setCurrentIndex(0)
         self._txt_static.clear()

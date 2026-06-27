@@ -84,6 +84,60 @@ def _col(raw) -> tuple[int, int, int, int]:
     return (int(raw[0]), int(raw[1]), int(raw[2]), int(raw[3]))
 
 
+class _Bug:
+    """Polygon marker pinned to a value on the tape, moves with the tape scroll.
+
+    Points are defined in instrument pixel coordinates relative to the anchor
+    point on the tape spine (0, 0 = spine at the bug value).  Y is Arcade
+    y-up: positive Y is above the anchor.
+
+    When the bug value is outside the visible range the anchor is clamped to
+    the top or bottom (y-tape) / left or right (x-tape) edge of the viewport
+    so the bug remains visible at the boundary.
+    """
+    __slots__ = (
+        "_value_static", "_dataref", "_table", "_convert",
+        "_points", "_color", "_filled", "_width", "_current_value",
+    )
+
+    def __init__(
+        self,
+        value_raw: Any,
+        points: list,
+        color: tuple,
+        filled: bool,
+        width: float,
+    ) -> None:
+        if isinstance(value_raw, dict):
+            self._value_static: float | None = None
+            self._dataref: Any = _as_dataref(value_raw["dataref"])
+            self._table: list = value_raw.get("table", [[0, 0], [1, 1]])
+            self._convert: Callable | None = get_convert(value_raw.get("convert_function"))
+        else:
+            self._value_static = float(value_raw)
+            self._dataref = None
+            self._table = []
+            self._convert = None
+        self._points: list[tuple[float, float]] = [
+            (float(p[0]), float(p[1])) for p in points
+        ]
+        self._color: tuple = _col(color)
+        self._filled: bool = bool(filled)
+        self._width: float = max(1.0, float(width))
+        self._current_value: float = self._value_static or 0.0
+
+    def update(self, get_data: Callable) -> None:
+        if self._dataref is not None:
+            raw = float(get_data(self._dataref))
+            if self._convert is not None:
+                raw = float(self._convert(raw, get_data))
+            self._current_value = lookup_piecewise(self._table, raw) if self._table else raw
+
+    def scale(self, factor: float) -> None:
+        self._points = [(x * factor, y * factor) for x, y in self._points]
+        self._width = max(1.0, self._width * factor)
+
+
 def _as_dataref(raw: Any) -> Any:
     return tuple(raw) if isinstance(raw, list) else raw
 
@@ -140,6 +194,7 @@ class VectorTape:
         label_bold: bool = False,
         label_italic: bool = False,
         bands: list[dict] | None = None,
+        bugs: list[dict] | None = None,
         wrap: float | None = None,
         bg_color: tuple | None = None,
     ) -> None:
@@ -178,6 +233,17 @@ class VectorTape:
                 "side": b.get("side"),  # None → follow tick_side
                 "dash": float(b["dash"]) if b.get("dash") else 0.0,
             })
+
+        self._bugs: list[_Bug] = [
+            _Bug(
+                value_raw=b.get("value", 0.0),
+                points=b.get("points", []),
+                color=b.get("color", [255, 200, 0, 255]),
+                filled=bool(b.get("filled", True)),
+                width=float(b.get("width", 2.0)),
+            )
+            for b in (bugs or [])
+        ]
 
         self._current_value: float = 0.0
         self._scroll_dataref: Any = None
@@ -226,6 +292,8 @@ class VectorTape:
         self._label_pool.clear()  # font size changed; pool objects are stale
         for band in self._bands:
             band["width"] *= scale
+        for bug in self._bugs:
+            bug.scale(scale)
 
     def _label_text(self, v: float) -> str:
         display = v % self._wrap if self._wrap is not None else v
@@ -252,6 +320,8 @@ class VectorTape:
                 band["lo_val"] = band["lo"].resolve(get_data)
             if isinstance(band["hi"], _BandEndpoint):
                 band["hi_val"] = band["hi"].resolve(get_data)
+        for bug in self._bugs:
+            bug.update(get_data)
 
     def draw(self) -> None:
         if not self._visible:
@@ -277,9 +347,11 @@ class VectorTape:
         if self._axis == "y":
             self._draw_bands_y(vx, vy, vw, vh, val)
             self._draw_ticks_y(vx, vy, vw, vh, val)
+            self._draw_bugs_y(vx, vy, vw, vh, val)
         else:
             self._draw_bands_x(vx, vy, vw, vh, val)
             self._draw_ticks_x(vx, vy, vw, vh, val)
+            self._draw_bugs_x(vx, vy, vw, vh, val)
         ctx.scissor = None
 
         # Use the same viewport scissor for labels as for ticks so that labels
@@ -380,6 +452,21 @@ class VectorTape:
             idx += 1
             v += self._label_interval
 
+    def _draw_bugs_y(self, vx, vy, vw, vh, val):
+        if not self._bugs:
+            return
+        spine_x = vx if self._tick_side == "left" else vx + vw
+        for bug in self._bugs:
+            anchor_y = self._cy + (bug._current_value - val) * self._ppu
+            anchor_y = max(vy, min(vy + vh, anchor_y))
+            pts = [(spine_x + px, anchor_y + py) for px, py in bug._points]
+            if len(pts) < 3:
+                continue
+            if bug._filled:
+                arcade.draw_polygon_filled(pts, bug._color)
+            else:
+                arcade.draw_polygon_outline(pts, bug._color, bug._width)
+
     # -- horizontal tape ------------------------------------------------------
 
     def _draw_bands_x(self, vx, vy, vw, vh, val):
@@ -426,6 +513,21 @@ class VectorTape:
                 x = self._cx + (v - val) * self._ppu
                 arcade.draw_line(x, y0, x, y1, color, width)
                 v += interval
+
+    def _draw_bugs_x(self, vx, vy, vw, vh, val):
+        if not self._bugs:
+            return
+        spine_y = (vy + vh) if self._tick_side == "top" else vy
+        for bug in self._bugs:
+            anchor_x = self._cx + (bug._current_value - val) * self._ppu
+            anchor_x = max(vx, min(vx + vw, anchor_x))
+            pts = [(anchor_x + px, spine_y + py) for px, py in bug._points]
+            if len(pts) < 3:
+                continue
+            if bug._filled:
+                arcade.draw_polygon_filled(pts, bug._color)
+            else:
+                arcade.draw_polygon_outline(pts, bug._color, bug._width)
 
     def _draw_labels_x(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
@@ -514,6 +616,7 @@ def _vector_tape_factory(
         label_bold=bool(lbl.get("bold", False)),
         label_italic=bool(lbl.get("italic", False)),
         bands=bands,
+        bugs=comp.get("bugs") or [],
         wrap=float(comp["wrap"]) if comp.get("wrap") is not None else None,
         bg_color=comp.get("bg_color"),
     )

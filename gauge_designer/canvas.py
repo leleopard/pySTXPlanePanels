@@ -908,6 +908,33 @@ class InstrumentCanvas(QWidget):
                         draw.line([(x, y0), (x, y1)], fill=tc_col, width=tw)
                     v += interval
 
+        # Bugs — shown at their static value; dataref bugs shown at value 0 (unknown in preview)
+        for bug in comp.get("bugs", []):
+            val_cfg = bug.get("value", 0.0)
+            bug_val = float(val_cfg) if not isinstance(val_cfg, dict) else 0.0
+            bc = _rgba(bug.get("color", [255, 200, 0, 255]))
+            bug_filled = bool(bug.get("filled", True))
+            bug_lw = max(1, int(round(float(bug.get("width", 2.0)))))
+            pts_raw = bug.get("points", [])
+            if len(pts_raw) < 3:
+                continue
+            if axis == "y":
+                sp_x = int(vx) if tick_side == "left" else int(vx + vw)
+                anchor_y = int(round(cy_pil - bug_val * ppu))
+                anchor_y = max(int(py_top), min(int(py_top + vh), anchor_y))
+                pts = [(int(round(sp_x + p[0])), int(round(anchor_y - p[1])))
+                       for p in pts_raw]
+            else:
+                sp_y = int(py_top) if tick_side == "top" else int(py_top + vh)
+                anchor_x = int(round(cx_pil + bug_val * ppu))
+                anchor_x = max(int(vx), min(int(vx + vw), anchor_x))
+                pts = [(int(round(anchor_x + p[0])), int(round(sp_y - p[1])))
+                       for p in pts_raw]
+            if bug_filled:
+                draw.polygon(pts, fill=bc)
+            else:
+                draw.polygon(pts, outline=bc, width=bug_lw)
+
         # Labels
         labels = comp.get("labels") or {}
         label_interval = float(labels.get("interval", 0))
