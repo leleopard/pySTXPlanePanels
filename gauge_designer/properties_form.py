@@ -1739,6 +1739,80 @@ class PropertiesForm(QWidget):
 
         self._ai_sec.row_widget(_ai_ptr)
 
+        # ── Slip Indicator ───────────────────────────────────────────────────
+        _ai_slip = _SubSection("Slip Indicator", collapsed=True)
+
+        self._ai_show_slip = QCheckBox("Show slip indicator")
+        self._ai_show_slip.setChecked(False)
+        self._ai_show_slip.stateChanged.connect(self._on_slip_toggle)
+        self._ai_show_slip.stateChanged.connect(self._emit)
+        _ai_slip.row("Show", self._ai_show_slip)
+
+        self._ai_slip_dr = QLineEdit()
+        self._ai_slip_dr.setPlaceholderText("slip/skid dataref")
+        self._ai_slip_dr.setText("sim/cockpit2/gauges/indicators/slip_deg")
+        self._ai_slip_dr.editingFinished.connect(self._emit)
+        _ai_slip.row("Slip dataref", self._dr_field(self._ai_slip_dr))
+
+        self._ai_slip_color = _ColorButton()
+        self._ai_slip_color.set_rgba([255, 255, 255, 255])
+        self._ai_slip_color.color_changed.connect(self._emit)
+        _ai_slip.row("Color", self._ai_slip_color)
+
+        _ai_slip_sz_row = QWidget(); _ai_slip_sz_hl = QHBoxLayout(_ai_slip_sz_row)
+        _ai_slip_sz_hl.setContentsMargins(0, 0, 0, 0); _ai_slip_sz_hl.setSpacing(4)
+        self._ai_slip_w = QDoubleSpinBox()
+        self._ai_slip_w.setRange(1.0, 200.0); self._ai_slip_w.setDecimals(1)
+        self._ai_slip_w.setValue(20.0); self._ai_slip_w.setSuffix(" W")
+        self._ai_slip_w.valueChanged.connect(self._emit)
+        self._ai_slip_h = QDoubleSpinBox()
+        self._ai_slip_h.setRange(1.0, 200.0); self._ai_slip_h.setDecimals(1)
+        self._ai_slip_h.setValue(8.0); self._ai_slip_h.setSuffix(" H")
+        self._ai_slip_h.valueChanged.connect(self._emit)
+        _ai_slip_sz_hl.addWidget(self._ai_slip_w)
+        _ai_slip_sz_hl.addWidget(self._ai_slip_h)
+        _ai_slip.row("Width / Height px", _ai_slip_sz_row)
+
+        _ai_slip_style_row = QWidget(); _ai_slip_style_hl = QHBoxLayout(_ai_slip_style_row)
+        _ai_slip_style_hl.setContentsMargins(0, 0, 0, 0); _ai_slip_style_hl.setSpacing(4)
+        self._ai_slip_filled = QCheckBox("Filled")
+        self._ai_slip_filled.setChecked(True)
+        self._ai_slip_filled.stateChanged.connect(self._on_slip_style_toggle)
+        self._ai_slip_filled.stateChanged.connect(self._emit)
+        self._ai_slip_line_w = QDoubleSpinBox()
+        self._ai_slip_line_w.setRange(0.5, 20.0); self._ai_slip_line_w.setDecimals(1)
+        self._ai_slip_line_w.setValue(2.0); self._ai_slip_line_w.setSuffix(" px")
+        self._ai_slip_line_w.setEnabled(False)
+        self._ai_slip_line_w.valueChanged.connect(self._emit)
+        _ai_slip_style_hl.addWidget(self._ai_slip_filled)
+        _ai_slip_style_hl.addWidget(QLabel("outline:"))
+        _ai_slip_style_hl.addWidget(self._ai_slip_line_w)
+        _ai_slip.row("Style", _ai_slip_style_row)
+
+        self._ai_slip_offset = QDoubleSpinBox()
+        self._ai_slip_offset.setRange(-200.0, 200.0); self._ai_slip_offset.setDecimals(1)
+        self._ai_slip_offset.setValue(0.0); self._ai_slip_offset.setSuffix(" px")
+        self._ai_slip_offset.valueChanged.connect(self._emit)
+        _ai_slip.row("Arc offset", self._ai_slip_offset)
+
+        self._ai_slip_scale = QDoubleSpinBox()
+        self._ai_slip_scale.setRange(0.1, 50.0); self._ai_slip_scale.setDecimals(2)
+        self._ai_slip_scale.setValue(2.0); self._ai_slip_scale.setSuffix(" px/unit")
+        self._ai_slip_scale.setToolTip("Lateral displacement in pixels per dataref unit")
+        self._ai_slip_scale.valueChanged.connect(self._emit)
+        _ai_slip.row("Scale", self._ai_slip_scale)
+
+        self._ai_slip_controls = [
+            self._ai_slip_dr, self._ai_slip_color,
+            self._ai_slip_w, self._ai_slip_h,
+            self._ai_slip_filled, self._ai_slip_line_w,
+            self._ai_slip_offset, self._ai_slip_scale,
+        ]
+        for w in self._ai_slip_controls:
+            w.setEnabled(False)
+
+        self._ai_sec.row_widget(_ai_slip)
+
         self._vbox.addWidget(self._ai_sec)
 
     def _mk_circulargauge_sec(self):
@@ -2127,6 +2201,9 @@ class PropertiesForm(QWidget):
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             "corner_radius", "corner_bg_color",
+            "show_slip", "slip_dataref", "slip_color",
+            "slip_width", "slip_height", "slip_filled", "slip_line_width",
+            "slip_offset", "slip_scale", "slip_convert_function",
             # RotaryEncoder
             "command_cw", "command_ccw", "drag_px_per_step", "show_touch_zones", "hit_padding",
             "background_texture", "background_origin", "background_cliprect",
@@ -2436,6 +2513,24 @@ class PropertiesForm(QWidget):
         self._ai_corner_radius.setValue(float(comp.get("corner_radius", 0.0)))
         _raw_cr_bg = comp.get("corner_bg_color")
         self._ai_corner_bg.set_rgba(_raw_cr_bg if _raw_cr_bg is not None else [0, 0, 0, 255])
+        _show_slip = bool(comp.get("show_slip", False))
+        self._ai_show_slip.blockSignals(True)
+        self._ai_show_slip.setChecked(_show_slip)
+        self._ai_show_slip.blockSignals(False)
+        self._ai_slip_dr.setText(str(comp.get("slip_dataref",
+                                               "sim/cockpit2/gauges/indicators/slip_deg")))
+        self._ai_slip_color.set_rgba(comp.get("slip_color", [255, 255, 255, 255]))
+        self._ai_slip_w.setValue(float(comp.get("slip_width", 20.0)))
+        self._ai_slip_h.setValue(float(comp.get("slip_height", 8.0)))
+        _slip_filled = bool(comp.get("slip_filled", True))
+        self._ai_slip_filled.setChecked(_slip_filled)
+        self._ai_slip_line_w.setValue(float(comp.get("slip_line_width", 2.0)))
+        self._ai_slip_offset.setValue(float(comp.get("slip_offset", 0.0)))
+        self._ai_slip_scale.setValue(float(comp.get("slip_scale", 2.0)))
+        for w in self._ai_slip_controls:
+            w.setEnabled(_show_slip)
+        if _show_slip:
+            self._ai_slip_line_w.setEnabled(not _slip_filled)
 
         # RotaryEncoder
         re_sz = comp.get("size", [60, 60])
@@ -2745,6 +2840,23 @@ class PropertiesForm(QWidget):
             if _cr > 0.0:
                 data["corner_radius"] = _cr
                 data["corner_bg_color"] = list(self._ai_corner_bg.get_rgba())
+            if self._ai_show_slip.isChecked():
+                data["show_slip"] = True
+                _sdr = self._ai_slip_dr.text().strip()
+                if _sdr:
+                    data["slip_dataref"] = _sdr
+                data["slip_color"]   = list(self._ai_slip_color.get_rgba())
+                if self._ai_slip_w.value() != 20.0:
+                    data["slip_width"] = self._ai_slip_w.value()
+                if self._ai_slip_h.value() != 8.0:
+                    data["slip_height"] = self._ai_slip_h.value()
+                if not self._ai_slip_filled.isChecked():
+                    data["slip_filled"]     = False
+                    data["slip_line_width"] = self._ai_slip_line_w.value()
+                if self._ai_slip_offset.value() != 0.0:
+                    data["slip_offset"] = self._ai_slip_offset.value()
+                if self._ai_slip_scale.value() != 2.0:
+                    data["slip_scale"] = self._ai_slip_scale.value()
             ls = self._ai_ladder_step.value()
             if ls != 5.0:
                 data["ladder_step"] = ls
@@ -3058,6 +3170,15 @@ class PropertiesForm(QWidget):
         self._ai_ptr_y_off.setValue(0.0)
         self._ai_corner_radius.setValue(0.0)
         self._ai_corner_bg.set_rgba([0, 0, 0, 255])
+        self._ai_show_slip.setChecked(False)
+        self._ai_slip_dr.setText("sim/cockpit2/gauges/indicators/slip_deg")
+        self._ai_slip_color.set_rgba([255, 255, 255, 255])
+        self._ai_slip_w.setValue(20.0); self._ai_slip_h.setValue(8.0)
+        self._ai_slip_filled.setChecked(True)
+        self._ai_slip_line_w.setValue(2.0)
+        self._ai_slip_offset.setValue(0.0); self._ai_slip_scale.setValue(2.0)
+        for w in self._ai_slip_controls:
+            w.setEnabled(False)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
@@ -3107,6 +3228,19 @@ class PropertiesForm(QWidget):
         enabled = bool(on)
         self._ai_arc_bg_color.setEnabled(enabled)
         self._ai_arc_bg_inset.setEnabled(enabled)
+
+    def _on_slip_toggle(self, on: int) -> None:
+        enabled = bool(on)
+        for w in self._ai_slip_controls:
+            w.setEnabled(enabled)
+        if enabled:
+            self._on_slip_style_toggle(self._ai_slip_filled.isChecked())
+
+    def _on_slip_style_toggle(self, checked) -> None:
+        filled = bool(checked) if isinstance(checked, bool) else bool(checked)
+        self._ai_slip_line_w.setEnabled(
+            not filled and self._ai_show_slip.isChecked()
+        )
 
     def _emit(self):
         if not self._loading:

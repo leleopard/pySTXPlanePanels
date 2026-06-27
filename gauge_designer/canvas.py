@@ -1147,6 +1147,25 @@ class InstrumentCanvas(QWidget):
                         oy = int(arc_cy_c - (arc_r + tick_len) * math.cos(ba_rad))
                     cd.line([(ix, iy), (ox, oy)], fill=arc_c, width=arc_w)
 
+        # Slip indicator (static preview: bank=0, slip=0 — centred at top of arc)
+        if comp.get("show_slip", False):
+            slip_c_raw  = comp.get("slip_color")
+            slip_c      = _rgba(slip_c_raw) if slip_c_raw else _rgba(None)
+            slip_w_f    = float(comp.get("slip_width",  20.0))
+            slip_h_f    = float(comp.get("slip_height",  8.0))
+            slip_fld    = bool(comp.get("slip_filled", True))
+            slip_lw     = max(1, int(float(comp.get("slip_line_width", 2.0))))
+            slip_off    = float(comp.get("slip_offset", 0.0))
+            s_cx  = int(cx_c)
+            s_cy  = int(arc_cy_c - arc_r_i - slip_off)
+            s_hw  = int(slip_w_f / 2)
+            s_hh  = int(slip_h_f / 2)
+            s_box = [s_cx - s_hw, s_cy - s_hh, s_cx + s_hw, s_cy + s_hh]
+            if slip_fld:
+                cd.rectangle(s_box, fill=slip_c)
+            else:
+                cd.rectangle(s_box, outline=slip_c, width=slip_lw)
+
         # Roll pointer at bank=0: triangle at the top of the arc.
         # PIL y-down: inward (toward centre) → tip_y > base_y; outward → tip_y < base_y.
         ptr_base_y = int(arc_cy_c - arc_r_i - ptr_y_off)

@@ -63,6 +63,15 @@ YAML schema
       roll_pointer_y_offset:   0     # radial shift of pointer base from arc (+outward, −inward)
       corner_radius:           0     # rounded corner radius in px (0 = sharp rectangular viewport)
       corner_bg_color:         [0, 0, 0, 255]  # color used to mask the corners in the runtime
+      show_slip:               false # enable the slip/skid rectangle indicator
+      slip_dataref:            sim/cockpit2/gauges/indicators/slip_deg
+      slip_color:              [255, 255, 255, 255]
+      slip_width:              20    # width of rectangle along the arc (px)
+      slip_height:             8     # height of rectangle along the radial direction (px)
+      slip_filled:             true  # false → outline only
+      slip_line_width:         2     # outline width when slip_filled is false
+      slip_offset:             0     # radial shift of rectangle base from arc (+outward, −inward)
+      slip_scale:              2.0   # pixels of lateral displacement per unit of the slip dataref
 """
 
 from __future__ import annotations
@@ -142,6 +151,14 @@ class AttitudeIndicator(_VecBase):
         arc_bg_inset: float = 0.0,
         corner_radius: float = 0.0,
         corner_bg_color: tuple = (0, 0, 0, 255),
+        show_slip: bool = False,
+        slip_color: tuple = (255, 255, 255, 255),
+        slip_width: float = 20.0,
+        slip_height: float = 8.0,
+        slip_filled: bool = True,
+        slip_line_width: float = 2.0,
+        slip_offset: float = 0.0,
+        slip_scale: float = 2.0,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -196,8 +213,19 @@ class AttitudeIndicator(_VecBase):
         self._show_arc_bg    = bool(show_arc_bg)
         self._arc_bg_color   = arc_bg_color
         self._arc_bg_inset   = float(arc_bg_inset)
-        self._corner_radius  = float(corner_radius)
+        self._corner_radius   = float(corner_radius)
         self._corner_bg_color = corner_bg_color
+        self._show_slip       = bool(show_slip)
+        self._slip_color      = slip_color
+        self._slip_w          = float(slip_width)
+        self._slip_h          = float(slip_height)
+        self._slip_filled     = bool(slip_filled)
+        self._slip_line_w     = float(slip_line_width)
+        self._slip_offset     = float(slip_offset)
+        self._slip_scale      = float(slip_scale)
+        self._slip:  float    = 0.0
+        self._slip_dr:   Any | None      = None
+        self._slip_conv: Callable | None = None
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -223,6 +251,12 @@ class AttitudeIndicator(_VecBase):
         if convert_fn:
             self._bank_conv = get_convert(convert_fn)
 
+    def set_slip_dataref(self, dataref: Any,
+                         convert_fn: str | None = None) -> None:
+        self._slip_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._slip_conv = get_convert(convert_fn)
+
     # ── panel composition ───────────────────────────────────────────────────
 
     def apply_scale(self, scale: float) -> None:
@@ -245,6 +279,11 @@ class AttitudeIndicator(_VecBase):
         self._arc_ref_line_w *= scale
         self._arc_ref_offset *= scale
         self._corner_radius  *= scale
+        self._slip_w         *= scale
+        self._slip_h         *= scale
+        self._slip_line_w    *= scale
+        self._slip_offset    *= scale
+        self._slip_scale     *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -265,6 +304,11 @@ class AttitudeIndicator(_VecBase):
             if self._bank_conv is not None:
                 raw = float(self._bank_conv(raw, get_data))
             self._bank = raw if self._smooth == 0.0 else self._bank + alpha * (raw - self._bank)
+        if self._slip_dr is not None:
+            raw = float(get_data(self._slip_dr))
+            if self._slip_conv is not None:
+                raw = float(self._slip_conv(raw, get_data))
+            self._slip = raw
 
     # ── draw ────────────────────────────────────────────────────────────────
 
@@ -299,6 +343,8 @@ class AttitudeIndicator(_VecBase):
             self._draw_arc_background(cx, arc_cy, arc_r)
         if self._show_arc_line or self._show_arc_ticks:
             self._draw_bank_arc(cx, arc_cy, arc_r)
+        if self._show_slip:
+            self._draw_slip_indicator(cx, arc_cy, arc_r)
         self._draw_roll_pointer(cx, arc_cy, arc_r)
         if self._show_reference:
             self._draw_reference(cx, cy)
@@ -485,6 +531,40 @@ class AttitudeIndicator(_VecBase):
         else:
             arcade.draw_polygon_outline(pts, self._ptr_color, self._ptr_line_w)
 
+    def _draw_slip_indicator(self, cx: float, arc_cy: float, arc_r: float) -> None:
+        """Draw the slip/skid rectangle.
+
+        Rotates with the roll pointer and displaces laterally (along the arc)
+        by slip_scale × slip_dataref_value pixels.
+        Positive slip_deg (nose right of relative wind) moves the indicator
+        in the −perpendicular direction (left at bank=0, matching ball convention).
+        """
+        bank_rad = math.radians(-self._bank)
+        ux =  math.sin(bank_rad)   # radial outward unit vector (same as roll pointer)
+        uy =  math.cos(bank_rad)
+        px_v = -uy                 # perpendicular, CCW from outward
+        py_v =  ux
+
+        r_slip = arc_r + self._slip_offset
+        disp   = self._slip * self._slip_scale
+        ctr_x  = cx     + r_slip * ux + disp * px_v
+        ctr_y  = arc_cy + r_slip * uy + disp * py_v
+
+        hw, hh = self._slip_w * 0.5, self._slip_h * 0.5
+        pts = [
+            (ctr_x + hw * px_v + hh * ux, ctr_y + hw * py_v + hh * uy),
+            (ctr_x - hw * px_v + hh * ux, ctr_y - hw * py_v + hh * uy),
+            (ctr_x - hw * px_v - hh * ux, ctr_y - hw * py_v - hh * uy),
+            (ctr_x + hw * px_v - hh * ux, ctr_y + hw * py_v - hh * uy),
+        ]
+        if self._slip_filled:
+            arcade.draw_polygon_filled(pts, self._slip_color)
+        else:
+            for i in range(4):
+                x1, y1 = pts[i]
+                x2, y2 = pts[(i + 1) % 4]
+                arcade.draw_line(x1, y1, x2, y2, self._slip_color, self._slip_line_w)
+
     def _draw_corner_cuts(self, vx: float, vy: float, vw: float, vh: float) -> None:
         """Overdraw the 4 corner regions outside the rounded rectangle with corner_bg_color.
 
@@ -582,6 +662,14 @@ def _ai_factory(
         corner_radius=float(comp.get("corner_radius", 0.0)),
         corner_bg_color=(_as_color(comp["corner_bg_color"])
                          if "corner_bg_color" in comp else (0, 0, 0, 255)),
+        show_slip=bool(comp.get("show_slip", False)),
+        slip_color=_as_color(comp.get("slip_color")),
+        slip_width=float(comp.get("slip_width", 20.0)),
+        slip_height=float(comp.get("slip_height", 8.0)),
+        slip_filled=bool(comp.get("slip_filled", True)),
+        slip_line_width=float(comp.get("slip_line_width", 2.0)),
+        slip_offset=float(comp.get("slip_offset", 0.0)),
+        slip_scale=float(comp.get("slip_scale", 2.0)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],
@@ -589,6 +677,9 @@ def _ai_factory(
     if "roll_dataref" in comp:
         ai.set_roll_dataref(comp["roll_dataref"],
                             comp.get("roll_convert_function"))
+    if "slip_dataref" in comp:
+        ai.set_slip_dataref(comp["slip_dataref"],
+                            comp.get("slip_convert_function"))
     if "visibility" in comp:
         v = comp["visibility"]
         ai.set_visibility(v["dataref"], v["predicate"])
