@@ -488,25 +488,30 @@ class AttitudeIndicator(_VecBase):
     def _draw_corner_cuts(self, vx: float, vy: float, vw: float, vh: float) -> None:
         """Overdraw the 4 corner regions outside the rounded rectangle with corner_bg_color.
 
-        Each corner polygon is a triangle fan from the viewport corner through the
-        arc that defines the rounded edge (12 segments), overdrawing the sky/ground
-        fill that was already drawn there.
+        Each corner is drawn as a fan of individual triangles (corner → arc[i] → arc[i+1])
+        rather than a single polygon call, which avoids Arcade's earclip winding issues.
         """
         r = min(self._corner_radius, vw * 0.5, vh * 0.5)
-        n = 12
-        # (corner_x, corner_y, arc_cx, arc_cy, a_start_deg, a_end_deg) — CCW
+        n = 32
+        # (corner_x, corner_y, arc_cx, arc_cy, a_start_deg, a_end_deg)
         corners = [
             (vx,      vy + vh, vx + r,      vy + vh - r,  90.0, 180.0),  # top-left
             (vx + vw, vy + vh, vx + vw - r, vy + vh - r,   0.0,  90.0),  # top-right
             (vx,      vy,      vx + r,      vy + r,        180.0, 270.0),  # bottom-left
             (vx + vw, vy,      vx + vw - r, vy + r,        270.0, 360.0),  # bottom-right
         ]
+        c = self._corner_bg_color
         for corner_x, corner_y, cx, cy, a0, a1 in corners:
-            pts = [(corner_x, corner_y)]
-            for i in range(n + 1):
+            prev_x = cx + r * math.cos(math.radians(a0))
+            prev_y = cy + r * math.sin(math.radians(a0))
+            for i in range(1, n + 1):
                 theta = math.radians(a0 + (a1 - a0) * i / n)
-                pts.append((cx + r * math.cos(theta), cy + r * math.sin(theta)))
-            arcade.draw_polygon_filled(pts, self._corner_bg_color)
+                next_x = cx + r * math.cos(theta)
+                next_y = cy + r * math.sin(theta)
+                arcade.draw_triangle_filled(corner_x, corner_y,
+                                            prev_x, prev_y,
+                                            next_x, next_y, c)
+                prev_x, prev_y = next_x, next_y
 
     def _draw_reference(self, cx, cy) -> None:
         # Fixed aircraft reference: two horizontal wing stubs + centre dot.
