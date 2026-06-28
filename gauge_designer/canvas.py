@@ -1211,34 +1211,24 @@ class InstrumentCanvas(QWidget):
         else:
             cd.polygon(ptr_pts, outline=ptr_c, width=ptr_line_w)
 
-        # Aircraft reference — drawn above pitch ladder, below FD bars.
-        # PIL y is down, AI coords are y-up, so negate y for PIL.
+        # PIL y is down, AI coords are y-up, so negate y when converting points.
+        # Legacy stubs/dot only when NEITHER polygon is configured.
+        _bug_pts_raw  = comp.get("centre_bug_points", [])
+        _wing_pts_raw = comp.get("wing_points", [])
+
+        # Wing bars — below FD bars
         if comp.get("show_reference", True):
-            bug_pts_raw = comp.get("centre_bug_points", [])
-            wing_pts_raw = comp.get("wing_points", [])
-            if bug_pts_raw:
-                bug_fill_c = _rgba(comp.get("centre_bug_fill_color", [0, 0, 0]))
-                bug_out_c  = _rgba(comp.get("centre_bug_outline_color", [255, 255, 255]))
-                bug_out_w  = max(1, int(float(comp.get("centre_bug_outline_width", 2.0))))
-                bug_pts = [(int(cx_c + p[0]), int(cy_c - p[1])) for p in bug_pts_raw]
-                if comp.get("centre_bug_filled", True):
-                    cd.polygon(bug_pts, fill=bug_fill_c, outline=bug_out_c)
-                else:
-                    cd.polygon(bug_pts, outline=bug_out_c, width=bug_out_w)
-            else:
-                cd.ellipse([int(cx_c) - 4, int(cy_c) - 4,
-                            int(cx_c) + 4, int(cy_c) + 4], fill=ptr_c)
-            if wing_pts_raw:
+            if _wing_pts_raw:
                 wing_fill_c = _rgba(comp.get("wing_fill_color", [0, 0, 0]))
                 wing_out_c  = _rgba(comp.get("wing_outline_color", [255, 255, 255]))
                 wing_out_w  = max(1, int(float(comp.get("wing_outline_width", 2.0))))
                 for sign in (1, -1):
-                    w_pts = [(int(cx_c + sign * p[0]), int(cy_c - p[1])) for p in wing_pts_raw]
+                    w_pts = [(int(cx_c + sign * p[0]), int(cy_c - p[1])) for p in _wing_pts_raw]
                     if comp.get("wing_filled", True):
                         cd.polygon(w_pts, fill=wing_fill_c, outline=wing_out_c)
                     else:
                         cd.polygon(w_pts, outline=wing_out_c, width=wing_out_w)
-            else:
+            elif not _bug_pts_raw:
                 stub = 30; gap = 6
                 cd.line([(int(cx_c) - stub - gap, int(cy_c)),
                          (int(cx_c) - gap, int(cy_c))], fill=ptr_c, width=3)
@@ -1262,6 +1252,21 @@ class InstrumentCanvas(QWidget):
             cd.line([(int(cx_c), int(cy_c) - half_v),
                      (int(cx_c), int(cy_c) + half_v)],
                     fill=fd_v_c, width=fd_v_w)
+
+        # Centre bug — above FD bars
+        if comp.get("show_reference", True):
+            if _bug_pts_raw:
+                bug_fill_c = _rgba(comp.get("centre_bug_fill_color", [0, 0, 0]))
+                bug_out_c  = _rgba(comp.get("centre_bug_outline_color", [255, 255, 255]))
+                bug_out_w  = max(1, int(float(comp.get("centre_bug_outline_width", 2.0))))
+                bug_pts = [(int(cx_c + p[0]), int(cy_c - p[1])) for p in _bug_pts_raw]
+                if comp.get("centre_bug_filled", True):
+                    cd.polygon(bug_pts, fill=bug_fill_c, outline=bug_out_c)
+                else:
+                    cd.polygon(bug_pts, outline=bug_out_c, width=bug_out_w)
+            elif not _wing_pts_raw:
+                cd.ellipse([int(cx_c) - 4, int(cy_c) - 4,
+                            int(cx_c) + 4, int(cy_c) + 4], fill=ptr_c)
 
         corner_radius = float(comp.get("corner_radius", 0.0))
         if corner_radius > 0:

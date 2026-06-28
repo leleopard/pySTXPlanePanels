@@ -481,7 +481,7 @@ class AttitudeIndicator(_VecBase):
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
         if self._show_reference:
-            self._draw_reference(cx, cy)
+            self._draw_reference_wings(cx, cy)   # wings render below FD bars
         if self._show_fd_h or self._show_fd_v:
             self._draw_flight_director(cx, cy)
         if self._show_arc_bg:
@@ -491,6 +491,8 @@ class AttitudeIndicator(_VecBase):
         if self._show_slip:
             self._draw_slip_indicator(cx, arc_cy, arc_r)
         self._draw_roll_pointer(cx, arc_cy, arc_r)
+        if self._show_reference:
+            self._draw_reference_bug(cx, cy)     # centre bug renders above FD bars
         if self._corner_radius > 0:
             self._draw_corner_cuts(vx, vy, vw, vh)
 
@@ -749,24 +751,28 @@ class AttitudeIndicator(_VecBase):
                                             next_x, next_y, c)
                 prev_x, prev_y = next_x, next_y
 
-    def _draw_reference(self, cx, cy) -> None:
-        if self._bug_pts:
-            pts = [(cx + x, cy + y) for x, y in self._bug_pts]
-            if self._bug_filled:
-                arcade.draw_polygon_filled(pts, self._bug_fill)
-            arcade.draw_polygon_outline(pts, self._bug_outline, self._bug_outline_w)
-        else:
-            arcade.draw_circle_filled(cx, cy, 4, self._ptr_color)
+    def _draw_reference_wings(self, cx, cy) -> None:
+        """Wing bars — drawn below FD bars.  Legacy stubs only if neither polygon is configured."""
         if self._wing_pts:
             for sign in (1.0, -1.0):
                 pts = [(cx + sign * x, cy + y) for x, y in self._wing_pts]
                 if self._wing_filled:
                     arcade.draw_polygon_filled(pts, self._wing_fill)
                 arcade.draw_polygon_outline(pts, self._wing_outline, self._wing_outline_w)
-        else:
+        elif not self._bug_pts:
             stub = 30.0; gap = 6.0
             arcade.draw_line(cx - stub - gap, cy, cx - gap, cy, self._ptr_color, 3)
             arcade.draw_line(cx + gap, cy, cx + stub + gap, cy, self._ptr_color, 3)
+
+    def _draw_reference_bug(self, cx, cy) -> None:
+        """Centre bug — drawn above FD bars.  Legacy dot only if neither polygon is configured."""
+        if self._bug_pts:
+            pts = [(cx + x, cy + y) for x, y in self._bug_pts]
+            if self._bug_filled:
+                arcade.draw_polygon_filled(pts, self._bug_fill)
+            arcade.draw_polygon_outline(pts, self._bug_outline, self._bug_outline_w)
+        elif not self._wing_pts:
+            arcade.draw_circle_filled(cx, cy, 4, self._ptr_color)
 
 
 # ── Factory + registration ────────────────────────────────────────────────────
