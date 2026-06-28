@@ -212,6 +212,21 @@ def nav_gsflg_visible(value: float, _get: GetData) -> bool:
     return int(value) != 10
 
 
+# -- Rounding helpers ----------------------------------------------------
+
+def round_int(value: float, _get: GetData) -> float:
+    """Round to nearest integer."""
+    return float(round(value))
+
+def round_1dp(value: float, _get: GetData) -> float:
+    """Round to 1 decimal place."""
+    return round(value, 1)
+
+def round_2dp(value: float, _get: GetData) -> float:
+    """Round to 2 decimal places."""
+    return round(value, 2)
+
+
 # -- Identity (default) --------------------------------------------------
 
 def identity(value: float, _get: GetData) -> float:
@@ -243,6 +258,9 @@ for _name, _func in {
     "convert_kgps_to_gph_avgas": convert_kgps_to_gph_avgas,
     "convert_suction": convert_suction,
     "nav_gsflg_visible": nav_gsflg_visible,
+    "round_int": round_int,
+    "round_1dp": round_1dp,
+    "round_2dp": round_2dp,
     "return_units_decimal": return_units_decimal,
     "return_tens_digit_int": return_tens_digit_int,
     "return_tens_digit": return_tens_digit,
