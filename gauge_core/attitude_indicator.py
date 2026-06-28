@@ -443,7 +443,7 @@ class AttitudeIndicator(_VecBase):
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
         if self._show_fd_h or self._show_fd_v:
-            self._draw_flight_director(cx, cy, cos_b, sin_b)
+            self._draw_flight_director(cx, cy)
         if self._show_arc_bg:
             self._draw_arc_background(cx, arc_cy, arc_r)
         if self._show_arc_line or self._show_arc_ticks:
@@ -670,21 +670,18 @@ class AttitudeIndicator(_VecBase):
                 x2, y2 = pts[(i + 1) % 4]
                 arcade.draw_line(x1, y1, x2, y2, self._slip_color, self._slip_line_w)
 
-    def _draw_flight_director(self, cx: float, cy: float,
-                              cos_b: float, sin_b: float) -> None:
-        """Draw FD cross-pointer bars in the bank-rotated frame, centred at cx,cy."""
+    def _draw_flight_director(self, cx: float, cy: float) -> None:
+        """Draw FD cross-pointer bars in screen space (no bank rotation)."""
         if self._show_fd_h and self._fd_h_vis:
             half = self._fd_h_len / 2.0
-            dy   = self._fd_h_defl
-            x1, y1 = _rot(-half, dy, cos_b, sin_b, cx, cy)
-            x2, y2 = _rot( half, dy, cos_b, sin_b, cx, cy)
-            arcade.draw_line(x1, y1, x2, y2, self._fd_h_color, self._fd_h_w)
+            bar_y = cy + self._fd_h_defl
+            arcade.draw_line(cx - half, bar_y, cx + half, bar_y,
+                             self._fd_h_color, self._fd_h_w)
         if self._show_fd_v and self._fd_v_vis:
             half = self._fd_v_len / 2.0
-            dx   = self._fd_v_defl
-            x1, y1 = _rot(dx, -half, cos_b, sin_b, cx, cy)
-            x2, y2 = _rot(dx,  half, cos_b, sin_b, cx, cy)
-            arcade.draw_line(x1, y1, x2, y2, self._fd_v_color, self._fd_v_w)
+            bar_x = cx + self._fd_v_defl
+            arcade.draw_line(bar_x, cy - half, bar_x, cy + half,
+                             self._fd_v_color, self._fd_v_w)
 
     def _draw_corner_cuts(self, vx: float, vy: float, vw: float, vh: float) -> None:
         """Overdraw the 4 corner regions outside the rounded rectangle with corner_bg_color.
