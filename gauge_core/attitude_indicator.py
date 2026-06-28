@@ -72,6 +72,27 @@ YAML schema
       slip_line_width:         2     # outline width when slip_filled is false
       slip_offset:             0     # radial shift of rectangle base from arc (+outward, −inward)
       slip_scale:              2.0   # pixels of lateral displacement per unit of the slip dataref
+
+Flight director (cross-pointer / dual-cue):
+      show_fd_h_bar:           false # horizontal bar (pitch command)
+      fd_pitch_dataref:        sim/cockpit/autopilot/flight_director_pitch
+      fd_pitch_convert_function: ~  # optional
+      fd_pitch_scale:          8.0  # pixels per dataref unit (matches pixels_per_degree by default)
+      fd_h_vis_dataref:        ~    # visibility control dataref (omit → always visible)
+      fd_h_vis_predicate:      true_if_over_zero
+      fd_h_color:              [255, 200, 0, 255]
+      fd_h_length:             200  # full bar length in px
+      fd_h_width:              3
+
+      show_fd_v_bar:           false # vertical bar (roll command)
+      fd_roll_dataref:         sim/cockpit/autopilot/flight_director_roll
+      fd_roll_convert_function: ~
+      fd_roll_scale:           4.0
+      fd_v_vis_dataref:        ~
+      fd_v_vis_predicate:      true_if_over_zero
+      fd_v_color:              [255, 200, 0, 255]
+      fd_v_length:             200
+      fd_v_width:              3
 """
 
 from __future__ import annotations
@@ -159,6 +180,16 @@ class AttitudeIndicator(_VecBase):
         slip_line_width: float = 2.0,
         slip_offset: float = 0.0,
         slip_scale: float = 2.0,
+        show_fd_h_bar: bool = False,
+        fd_h_color: tuple = (255, 200, 0, 255),
+        fd_h_length: float = 200.0,
+        fd_h_width: float = 3.0,
+        fd_h_scale: float = 8.0,
+        show_fd_v_bar: bool = False,
+        fd_v_color: tuple = (255, 200, 0, 255),
+        fd_v_length: float = 200.0,
+        fd_v_width: float = 3.0,
+        fd_v_scale: float = 4.0,
     ) -> None:
         self.name = name
         self._vx = float(viewport[0])
@@ -226,6 +257,30 @@ class AttitudeIndicator(_VecBase):
         self._slip:  float    = 0.0
         self._slip_dr:   Any | None      = None
         self._slip_conv: Callable | None = None
+        # Flight director — horizontal bar (pitch command)
+        self._show_fd_h   = bool(show_fd_h_bar)
+        self._fd_h_color  = fd_h_color
+        self._fd_h_len    = float(fd_h_length)
+        self._fd_h_w      = float(fd_h_width)
+        self._fd_h_scale  = float(fd_h_scale)
+        self._fd_h_defl:  float          = 0.0
+        self._fd_h_vis:   bool           = True
+        self._fd_h_dr:    Any | None     = None
+        self._fd_h_conv:  Callable | None = None
+        self._fd_h_vis_dr: Any | None    = None
+        self._fd_h_vis_pred: Callable | None = None
+        # Flight director — vertical bar (roll command)
+        self._show_fd_v   = bool(show_fd_v_bar)
+        self._fd_v_color  = fd_v_color
+        self._fd_v_len    = float(fd_v_length)
+        self._fd_v_w      = float(fd_v_width)
+        self._fd_v_scale  = float(fd_v_scale)
+        self._fd_v_defl:  float          = 0.0
+        self._fd_v_vis:   bool           = True
+        self._fd_v_dr:    Any | None     = None
+        self._fd_v_conv:  Callable | None = None
+        self._fd_v_vis_dr: Any | None    = None
+        self._fd_v_vis_pred: Callable | None = None
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
@@ -257,6 +312,26 @@ class AttitudeIndicator(_VecBase):
         if convert_fn:
             self._slip_conv = get_convert(convert_fn)
 
+    def set_fd_h_dataref(self, dataref: Any, convert_fn: str | None = None,
+                         vis_dataref: Any = None, vis_predicate: str | None = None) -> None:
+        self._fd_h_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._fd_h_conv = get_convert(convert_fn)
+        if vis_dataref:
+            self._fd_h_vis_dr = _as_dataref(vis_dataref)
+        if vis_predicate:
+            self._fd_h_vis_pred = get_convert(vis_predicate)
+
+    def set_fd_v_dataref(self, dataref: Any, convert_fn: str | None = None,
+                         vis_dataref: Any = None, vis_predicate: str | None = None) -> None:
+        self._fd_v_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._fd_v_conv = get_convert(convert_fn)
+        if vis_dataref:
+            self._fd_v_vis_dr = _as_dataref(vis_dataref)
+        if vis_predicate:
+            self._fd_v_vis_pred = get_convert(vis_predicate)
+
     # ── panel composition ───────────────────────────────────────────────────
 
     def apply_scale(self, scale: float) -> None:
@@ -284,6 +359,12 @@ class AttitudeIndicator(_VecBase):
         self._slip_line_w    *= scale
         self._slip_offset    *= scale
         self._slip_scale     *= scale
+        self._fd_h_len   *= scale
+        self._fd_h_w     *= scale
+        self._fd_h_scale *= scale
+        self._fd_v_len   *= scale
+        self._fd_v_w     *= scale
+        self._fd_v_scale *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -309,6 +390,28 @@ class AttitudeIndicator(_VecBase):
             if self._slip_conv is not None:
                 raw = float(self._slip_conv(raw, get_data))
             self._slip = raw
+        if self._show_fd_h and self._fd_h_dr is not None:
+            raw = float(get_data(self._fd_h_dr))
+            if self._fd_h_conv is not None:
+                raw = float(self._fd_h_conv(raw, get_data))
+            self._fd_h_defl = raw * self._fd_h_scale
+            if self._fd_h_vis_dr is not None:
+                vis_raw = float(get_data(self._fd_h_vis_dr))
+                self._fd_h_vis = bool(
+                    self._fd_h_vis_pred(vis_raw, get_data)
+                    if self._fd_h_vis_pred else vis_raw
+                )
+        if self._show_fd_v and self._fd_v_dr is not None:
+            raw = float(get_data(self._fd_v_dr))
+            if self._fd_v_conv is not None:
+                raw = float(self._fd_v_conv(raw, get_data))
+            self._fd_v_defl = raw * self._fd_v_scale
+            if self._fd_v_vis_dr is not None:
+                vis_raw = float(get_data(self._fd_v_vis_dr))
+                self._fd_v_vis = bool(
+                    self._fd_v_vis_pred(vis_raw, get_data)
+                    if self._fd_v_vis_pred else vis_raw
+                )
 
     # ── draw ────────────────────────────────────────────────────────────────
 
@@ -339,6 +442,8 @@ class AttitudeIndicator(_VecBase):
         self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
+        if self._show_fd_h or self._show_fd_v:
+            self._draw_flight_director(cx, cy, cos_b, sin_b)
         if self._show_arc_bg:
             self._draw_arc_background(cx, arc_cy, arc_r)
         if self._show_arc_line or self._show_arc_ticks:
@@ -565,6 +670,22 @@ class AttitudeIndicator(_VecBase):
                 x2, y2 = pts[(i + 1) % 4]
                 arcade.draw_line(x1, y1, x2, y2, self._slip_color, self._slip_line_w)
 
+    def _draw_flight_director(self, cx: float, cy: float,
+                              cos_b: float, sin_b: float) -> None:
+        """Draw FD cross-pointer bars in the bank-rotated frame, centred at cx,cy."""
+        if self._show_fd_h and self._fd_h_vis:
+            half = self._fd_h_len / 2.0
+            dy   = self._fd_h_defl
+            x1, y1 = _rot(-half, dy, cos_b, sin_b, cx, cy)
+            x2, y2 = _rot( half, dy, cos_b, sin_b, cx, cy)
+            arcade.draw_line(x1, y1, x2, y2, self._fd_h_color, self._fd_h_w)
+        if self._show_fd_v and self._fd_v_vis:
+            half = self._fd_v_len / 2.0
+            dx   = self._fd_v_defl
+            x1, y1 = _rot(dx, -half, cos_b, sin_b, cx, cy)
+            x2, y2 = _rot(dx,  half, cos_b, sin_b, cx, cy)
+            arcade.draw_line(x1, y1, x2, y2, self._fd_v_color, self._fd_v_w)
+
     def _draw_corner_cuts(self, vx: float, vy: float, vw: float, vh: float) -> None:
         """Overdraw the 4 corner regions outside the rounded rectangle with corner_bg_color.
 
@@ -670,6 +791,16 @@ def _ai_factory(
         slip_line_width=float(comp.get("slip_line_width", 2.0)),
         slip_offset=float(comp.get("slip_offset", 0.0)),
         slip_scale=float(comp.get("slip_scale", 2.0)),
+        show_fd_h_bar=bool(comp.get("show_fd_h_bar", False)),
+        fd_h_color=_as_color(comp.get("fd_h_color", [255, 200, 0])),
+        fd_h_length=float(comp.get("fd_h_length", 200.0)),
+        fd_h_width=float(comp.get("fd_h_width", 3.0)),
+        fd_h_scale=float(comp.get("fd_h_scale", 8.0)),
+        show_fd_v_bar=bool(comp.get("show_fd_v_bar", False)),
+        fd_v_color=_as_color(comp.get("fd_v_color", [255, 200, 0])),
+        fd_v_length=float(comp.get("fd_v_length", 200.0)),
+        fd_v_width=float(comp.get("fd_v_width", 3.0)),
+        fd_v_scale=float(comp.get("fd_v_scale", 4.0)),
     )
     if "pitch_dataref" in comp:
         ai.set_pitch_dataref(comp["pitch_dataref"],
@@ -680,6 +811,20 @@ def _ai_factory(
     if "slip_dataref" in comp:
         ai.set_slip_dataref(comp["slip_dataref"],
                             comp.get("slip_convert_function"))
+    if "fd_pitch_dataref" in comp:
+        ai.set_fd_h_dataref(
+            comp["fd_pitch_dataref"],
+            comp.get("fd_pitch_convert_function"),
+            comp.get("fd_h_vis_dataref"),
+            comp.get("fd_h_vis_predicate"),
+        )
+    if "fd_roll_dataref" in comp:
+        ai.set_fd_v_dataref(
+            comp["fd_roll_dataref"],
+            comp.get("fd_roll_convert_function"),
+            comp.get("fd_v_vis_dataref"),
+            comp.get("fd_v_vis_predicate"),
+        )
     if "visibility" in comp:
         v = comp["visibility"]
         ai.set_visibility(v["dataref"], v["predicate"])

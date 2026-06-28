@@ -1211,6 +1211,24 @@ class InstrumentCanvas(QWidget):
         else:
             cd.polygon(ptr_pts, outline=ptr_c, width=ptr_line_w)
 
+        # Flight director — static preview at zero deflection (bars centred)
+        if comp.get("show_fd_h_bar", False):
+            fd_h_c   = _rgba(comp.get("fd_h_color", [255, 200, 0]))
+            fd_h_len = int(float(comp.get("fd_h_length", 200.0)))
+            fd_h_w   = max(1, int(float(comp.get("fd_h_width", 3.0))))
+            half_h   = fd_h_len // 2
+            cd.line([(int(cx_c) - half_h, int(cy_c)),
+                     (int(cx_c) + half_h, int(cy_c))],
+                    fill=fd_h_c, width=fd_h_w)
+        if comp.get("show_fd_v_bar", False):
+            fd_v_c   = _rgba(comp.get("fd_v_color", [255, 200, 0]))
+            fd_v_len = int(float(comp.get("fd_v_length", 200.0)))
+            fd_v_w   = max(1, int(float(comp.get("fd_v_width", 3.0))))
+            half_v   = fd_v_len // 2
+            cd.line([(int(cx_c), int(cy_c) - half_v),
+                     (int(cx_c), int(cy_c) + half_v)],
+                    fill=fd_v_c, width=fd_v_w)
+
         # Aircraft reference (fixed wing stubs + centre dot)
         if comp.get("show_reference", True):
             stub = 30; gap = 6

@@ -1990,6 +1990,121 @@ class PropertiesForm(QWidget):
 
         self._ai_sec.row_widget(_ai_slip)
 
+        # ── Flight Director ──────────────────────────────────────────────────
+        _ai_fd = _SubSection("Flight Director", collapsed=True)
+
+        # Horizontal bar (pitch command)
+        self._ai_fd_h_show = QCheckBox("Show horizontal bar  (pitch command)")
+        self._ai_fd_h_show.setChecked(False)
+        self._ai_fd_h_show.stateChanged.connect(self._on_fd_h_toggle)
+        self._ai_fd_h_show.stateChanged.connect(self._emit)
+        _ai_fd.row("H bar", self._ai_fd_h_show)
+
+        self._ai_fd_h_dr = QLineEdit()
+        self._ai_fd_h_dr.setPlaceholderText("pitch FD dataref")
+        self._ai_fd_h_dr.editingFinished.connect(self._emit)
+        _ai_fd.row("H deflect dataref", self._dr_field(self._ai_fd_h_dr))
+
+        self._ai_fd_h_vis_dr = QLineEdit()
+        self._ai_fd_h_vis_dr.setPlaceholderText("visibility dataref  (blank = always visible)")
+        self._ai_fd_h_vis_dr.editingFinished.connect(self._emit)
+        _ai_fd.row("H vis dataref", self._dr_field(self._ai_fd_h_vis_dr))
+
+        self._ai_fd_h_vis_pred = QLineEdit()
+        self._ai_fd_h_vis_pred.setPlaceholderText("e.g. true_if_over_zero")
+        self._ai_fd_h_vis_pred.editingFinished.connect(self._emit)
+        _ai_fd.row("H vis predicate", self._ai_fd_h_vis_pred)
+
+        _fd_h_style_row = QWidget(); _fd_h_style_hl = QHBoxLayout(_fd_h_style_row)
+        _fd_h_style_hl.setContentsMargins(0, 0, 0, 0); _fd_h_style_hl.setSpacing(4)
+        self._ai_fd_h_color = _ColorButton()
+        self._ai_fd_h_color.set_rgba([255, 200, 0, 255])
+        self._ai_fd_h_color.color_changed.connect(self._emit)
+        self._ai_fd_h_len = QDoubleSpinBox()
+        self._ai_fd_h_len.setRange(10.0, 4096.0); self._ai_fd_h_len.setDecimals(0)
+        self._ai_fd_h_len.setValue(200.0); self._ai_fd_h_len.setSuffix(" L")
+        self._ai_fd_h_len.valueChanged.connect(self._emit)
+        self._ai_fd_h_width = QDoubleSpinBox()
+        self._ai_fd_h_width.setRange(0.5, 20.0); self._ai_fd_h_width.setDecimals(1)
+        self._ai_fd_h_width.setValue(3.0); self._ai_fd_h_width.setSuffix(" W")
+        self._ai_fd_h_width.valueChanged.connect(self._emit)
+        _fd_h_style_hl.addWidget(self._ai_fd_h_color)
+        _fd_h_style_hl.addWidget(self._ai_fd_h_len)
+        _fd_h_style_hl.addWidget(self._ai_fd_h_width)
+        _ai_fd.row("H color / size", _fd_h_style_row)
+
+        self._ai_fd_h_scale = QDoubleSpinBox()
+        self._ai_fd_h_scale.setRange(0.1, 200.0); self._ai_fd_h_scale.setDecimals(2)
+        self._ai_fd_h_scale.setValue(8.0); self._ai_fd_h_scale.setSuffix(" px/unit")
+        self._ai_fd_h_scale.setToolTip("Pixels of vertical deflection per dataref unit")
+        self._ai_fd_h_scale.valueChanged.connect(self._emit)
+        _ai_fd.row("H scale", self._ai_fd_h_scale)
+
+        self._ai_fd_h_controls = [
+            self._ai_fd_h_dr, self._ai_fd_h_vis_dr, self._ai_fd_h_vis_pred,
+            self._ai_fd_h_color, self._ai_fd_h_len, self._ai_fd_h_width,
+            self._ai_fd_h_scale,
+        ]
+        for w in self._ai_fd_h_controls:
+            w.setEnabled(False)
+
+        # Vertical bar (roll command)
+        self._ai_fd_v_show = QCheckBox("Show vertical bar  (roll command)")
+        self._ai_fd_v_show.setChecked(False)
+        self._ai_fd_v_show.stateChanged.connect(self._on_fd_v_toggle)
+        self._ai_fd_v_show.stateChanged.connect(self._emit)
+        _ai_fd.row("V bar", self._ai_fd_v_show)
+
+        self._ai_fd_v_dr = QLineEdit()
+        self._ai_fd_v_dr.setPlaceholderText("roll FD dataref")
+        self._ai_fd_v_dr.editingFinished.connect(self._emit)
+        _ai_fd.row("V deflect dataref", self._dr_field(self._ai_fd_v_dr))
+
+        self._ai_fd_v_vis_dr = QLineEdit()
+        self._ai_fd_v_vis_dr.setPlaceholderText("visibility dataref  (blank = always visible)")
+        self._ai_fd_v_vis_dr.editingFinished.connect(self._emit)
+        _ai_fd.row("V vis dataref", self._dr_field(self._ai_fd_v_vis_dr))
+
+        self._ai_fd_v_vis_pred = QLineEdit()
+        self._ai_fd_v_vis_pred.setPlaceholderText("e.g. true_if_over_zero")
+        self._ai_fd_v_vis_pred.editingFinished.connect(self._emit)
+        _ai_fd.row("V vis predicate", self._ai_fd_v_vis_pred)
+
+        _fd_v_style_row = QWidget(); _fd_v_style_hl = QHBoxLayout(_fd_v_style_row)
+        _fd_v_style_hl.setContentsMargins(0, 0, 0, 0); _fd_v_style_hl.setSpacing(4)
+        self._ai_fd_v_color = _ColorButton()
+        self._ai_fd_v_color.set_rgba([255, 200, 0, 255])
+        self._ai_fd_v_color.color_changed.connect(self._emit)
+        self._ai_fd_v_len = QDoubleSpinBox()
+        self._ai_fd_v_len.setRange(10.0, 4096.0); self._ai_fd_v_len.setDecimals(0)
+        self._ai_fd_v_len.setValue(200.0); self._ai_fd_v_len.setSuffix(" L")
+        self._ai_fd_v_len.valueChanged.connect(self._emit)
+        self._ai_fd_v_width = QDoubleSpinBox()
+        self._ai_fd_v_width.setRange(0.5, 20.0); self._ai_fd_v_width.setDecimals(1)
+        self._ai_fd_v_width.setValue(3.0); self._ai_fd_v_width.setSuffix(" W")
+        self._ai_fd_v_width.valueChanged.connect(self._emit)
+        _fd_v_style_hl.addWidget(self._ai_fd_v_color)
+        _fd_v_style_hl.addWidget(self._ai_fd_v_len)
+        _fd_v_style_hl.addWidget(self._ai_fd_v_width)
+        _ai_fd.row("V color / size", _fd_v_style_row)
+
+        self._ai_fd_v_scale = QDoubleSpinBox()
+        self._ai_fd_v_scale.setRange(0.1, 200.0); self._ai_fd_v_scale.setDecimals(2)
+        self._ai_fd_v_scale.setValue(4.0); self._ai_fd_v_scale.setSuffix(" px/unit")
+        self._ai_fd_v_scale.setToolTip("Pixels of horizontal deflection per dataref unit")
+        self._ai_fd_v_scale.valueChanged.connect(self._emit)
+        _ai_fd.row("V scale", self._ai_fd_v_scale)
+
+        self._ai_fd_v_controls = [
+            self._ai_fd_v_dr, self._ai_fd_v_vis_dr, self._ai_fd_v_vis_pred,
+            self._ai_fd_v_color, self._ai_fd_v_len, self._ai_fd_v_width,
+            self._ai_fd_v_scale,
+        ]
+        for w in self._ai_fd_v_controls:
+            w.setEnabled(False)
+
+        self._ai_sec.row_widget(_ai_fd)
+
         self._vbox.addWidget(self._ai_sec)
 
     def _mk_circulargauge_sec(self):
@@ -2381,6 +2496,12 @@ class PropertiesForm(QWidget):
             "show_slip", "slip_dataref", "slip_color",
             "slip_width", "slip_height", "slip_filled", "slip_line_width",
             "slip_offset", "slip_scale", "slip_convert_function",
+            "show_fd_h_bar", "fd_pitch_dataref", "fd_pitch_convert_function",
+            "fd_h_vis_dataref", "fd_h_vis_predicate",
+            "fd_h_color", "fd_h_length", "fd_h_width", "fd_h_scale",
+            "show_fd_v_bar", "fd_roll_dataref", "fd_roll_convert_function",
+            "fd_v_vis_dataref", "fd_v_vis_predicate",
+            "fd_v_color", "fd_v_length", "fd_v_width", "fd_v_scale",
             # RotaryEncoder
             "command_cw", "command_ccw", "drag_px_per_step", "show_touch_zones", "hit_padding",
             "background_texture", "background_origin", "background_cliprect",
@@ -2711,6 +2832,32 @@ class PropertiesForm(QWidget):
             w.setEnabled(_show_slip)
         if _show_slip:
             self._ai_slip_line_w.setEnabled(not _slip_filled)
+        _show_fd_h = bool(comp.get("show_fd_h_bar", False))
+        self._ai_fd_h_show.blockSignals(True)
+        self._ai_fd_h_show.setChecked(_show_fd_h)
+        self._ai_fd_h_show.blockSignals(False)
+        self._ai_fd_h_dr.setText(str(comp.get("fd_pitch_dataref", "")))
+        self._ai_fd_h_vis_dr.setText(str(comp.get("fd_h_vis_dataref", "")))
+        self._ai_fd_h_vis_pred.setText(str(comp.get("fd_h_vis_predicate", "")))
+        self._ai_fd_h_color.set_rgba(comp.get("fd_h_color", [255, 200, 0, 255]))
+        self._ai_fd_h_len.setValue(float(comp.get("fd_h_length", 200.0)))
+        self._ai_fd_h_width.setValue(float(comp.get("fd_h_width", 3.0)))
+        self._ai_fd_h_scale.setValue(float(comp.get("fd_h_scale", 8.0)))
+        for w in self._ai_fd_h_controls:
+            w.setEnabled(_show_fd_h)
+        _show_fd_v = bool(comp.get("show_fd_v_bar", False))
+        self._ai_fd_v_show.blockSignals(True)
+        self._ai_fd_v_show.setChecked(_show_fd_v)
+        self._ai_fd_v_show.blockSignals(False)
+        self._ai_fd_v_dr.setText(str(comp.get("fd_roll_dataref", "")))
+        self._ai_fd_v_vis_dr.setText(str(comp.get("fd_v_vis_dataref", "")))
+        self._ai_fd_v_vis_pred.setText(str(comp.get("fd_v_vis_predicate", "")))
+        self._ai_fd_v_color.set_rgba(comp.get("fd_v_color", [255, 200, 0, 255]))
+        self._ai_fd_v_len.setValue(float(comp.get("fd_v_length", 200.0)))
+        self._ai_fd_v_width.setValue(float(comp.get("fd_v_width", 3.0)))
+        self._ai_fd_v_scale.setValue(float(comp.get("fd_v_scale", 4.0)))
+        for w in self._ai_fd_v_controls:
+            w.setEnabled(_show_fd_v)
 
         # RotaryEncoder
         re_sz = comp.get("size", [60, 60])
@@ -3039,6 +3186,42 @@ class PropertiesForm(QWidget):
                     data["slip_offset"] = self._ai_slip_offset.value()
                 if self._ai_slip_scale.value() != 2.0:
                     data["slip_scale"] = self._ai_slip_scale.value()
+            if self._ai_fd_h_show.isChecked():
+                data["show_fd_h_bar"] = True
+                _fdr = self._ai_fd_h_dr.text().strip()
+                if _fdr:
+                    data["fd_pitch_dataref"] = _fdr
+                _fvdr = self._ai_fd_h_vis_dr.text().strip()
+                if _fvdr:
+                    data["fd_h_vis_dataref"] = _fvdr
+                _fvp = self._ai_fd_h_vis_pred.text().strip()
+                if _fvp:
+                    data["fd_h_vis_predicate"] = _fvp
+                data["fd_h_color"] = list(self._ai_fd_h_color.get_rgba())
+                if self._ai_fd_h_len.value() != 200.0:
+                    data["fd_h_length"] = self._ai_fd_h_len.value()
+                if self._ai_fd_h_width.value() != 3.0:
+                    data["fd_h_width"] = self._ai_fd_h_width.value()
+                if self._ai_fd_h_scale.value() != 8.0:
+                    data["fd_h_scale"] = self._ai_fd_h_scale.value()
+            if self._ai_fd_v_show.isChecked():
+                data["show_fd_v_bar"] = True
+                _fdr = self._ai_fd_v_dr.text().strip()
+                if _fdr:
+                    data["fd_roll_dataref"] = _fdr
+                _fvdr = self._ai_fd_v_vis_dr.text().strip()
+                if _fvdr:
+                    data["fd_v_vis_dataref"] = _fvdr
+                _fvp = self._ai_fd_v_vis_pred.text().strip()
+                if _fvp:
+                    data["fd_v_vis_predicate"] = _fvp
+                data["fd_v_color"] = list(self._ai_fd_v_color.get_rgba())
+                if self._ai_fd_v_len.value() != 200.0:
+                    data["fd_v_length"] = self._ai_fd_v_len.value()
+                if self._ai_fd_v_width.value() != 3.0:
+                    data["fd_v_width"] = self._ai_fd_v_width.value()
+                if self._ai_fd_v_scale.value() != 4.0:
+                    data["fd_v_scale"] = self._ai_fd_v_scale.value()
             ls = self._ai_ladder_step.value()
             if ls != 5.0:
                 data["ladder_step"] = ls
@@ -3364,6 +3547,20 @@ class PropertiesForm(QWidget):
         self._ai_slip_offset.setValue(0.0); self._ai_slip_scale.setValue(2.0)
         for w in self._ai_slip_controls:
             w.setEnabled(False)
+        self._ai_fd_h_show.setChecked(False)
+        self._ai_fd_h_dr.clear(); self._ai_fd_h_vis_dr.clear(); self._ai_fd_h_vis_pred.clear()
+        self._ai_fd_h_color.set_rgba([255, 200, 0, 255])
+        self._ai_fd_h_len.setValue(200.0); self._ai_fd_h_width.setValue(3.0)
+        self._ai_fd_h_scale.setValue(8.0)
+        for w in self._ai_fd_h_controls:
+            w.setEnabled(False)
+        self._ai_fd_v_show.setChecked(False)
+        self._ai_fd_v_dr.clear(); self._ai_fd_v_vis_dr.clear(); self._ai_fd_v_vis_pred.clear()
+        self._ai_fd_v_color.set_rgba([255, 200, 0, 255])
+        self._ai_fd_v_len.setValue(200.0); self._ai_fd_v_width.setValue(3.0)
+        self._ai_fd_v_scale.setValue(4.0)
+        for w in self._ai_fd_v_controls:
+            w.setEnabled(False)
         self._vt_axis.setCurrentIndex(0)
         self._vt_ppu.setValue(5.0)
         self._vt_wrap.setValue(0.0)
@@ -3421,6 +3618,14 @@ class PropertiesForm(QWidget):
             w.setEnabled(enabled)
         if enabled:
             self._on_slip_style_toggle(self._ai_slip_filled.isChecked())
+
+    def _on_fd_h_toggle(self, on: int) -> None:
+        for w in self._ai_fd_h_controls:
+            w.setEnabled(bool(on))
+
+    def _on_fd_v_toggle(self, on: int) -> None:
+        for w in self._ai_fd_v_controls:
+            w.setEnabled(bool(on))
 
     def _on_slip_style_toggle(self, checked) -> None:
         filled = bool(checked) if isinstance(checked, bool) else bool(checked)
