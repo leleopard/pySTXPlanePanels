@@ -97,6 +97,27 @@ def _build_func_lists() -> tuple[list[str], list[str]]:
 
 _VALUE_FUNCS, _PREDICATES = _build_func_lists()
 
+
+def _pts_to_str(pts: list) -> str:
+    """Convert [[x,y],...] list to 'x1,y1  x2,y2  ...' string for display."""
+    if not pts:
+        return ""
+    return "  ".join(f"{p[0]},{p[1]}" for p in pts)
+
+
+def _str_to_pts(s: str) -> list:
+    """Parse 'x1,y1  x2,y2  ...' string back to [[x,y],...] list."""
+    pts = []
+    for tok in s.strip().split():
+        parts = tok.split(",")
+        if len(parts) == 2:
+            try:
+                pts.append([float(parts[0]), float(parts[1])])
+            except ValueError:
+                pass
+    return pts
+
+
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
                "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector",
                "AttitudeIndicator", "CircularGauge",
@@ -1909,11 +1930,6 @@ class PropertiesForm(QWidget):
         self._ai_ptr_y_off.valueChanged.connect(self._emit)
         _ai_ptr.row("Y offset from arc", self._ai_ptr_y_off)
 
-        self._ai_show_ref = QCheckBox("Show centre reference bug")
-        self._ai_show_ref.setChecked(True)
-        self._ai_show_ref.stateChanged.connect(self._emit)
-        _ai_ptr.row("Reference", self._ai_show_ref)
-
         self._ai_sec.row_widget(_ai_ptr)
 
         # ── Slip Indicator ───────────────────────────────────────────────────
@@ -1989,6 +2005,82 @@ class PropertiesForm(QWidget):
             w.setEnabled(False)
 
         self._ai_sec.row_widget(_ai_slip)
+
+        # ── Aircraft Reference ────────────────────────────────────────────────
+        _ai_ref = _SubSection("Aircraft Reference", collapsed=True)
+
+        self._ai_show_ref = QCheckBox("Show aircraft reference")
+        self._ai_show_ref.setChecked(True)
+        self._ai_show_ref.stateChanged.connect(self._on_ref_toggle)
+        self._ai_show_ref.stateChanged.connect(self._emit)
+        _ai_ref.row("Show", self._ai_show_ref)
+
+        _ai_ref.row("", QLabel("── Centre bug ──────────────────────"))
+        self._ai_bug_pts = QLineEdit()
+        self._ai_bug_pts.setPlaceholderText("x1,y1  x2,y2  …  (empty = legacy dot)")
+        self._ai_bug_pts.editingFinished.connect(self._emit)
+        _ai_ref.row("Points", self._ai_bug_pts)
+
+        _ai_bug_style_row = QWidget(); _ai_bug_style_hl = QHBoxLayout(_ai_bug_style_row)
+        _ai_bug_style_hl.setContentsMargins(0, 0, 0, 0); _ai_bug_style_hl.setSpacing(4)
+        self._ai_bug_filled = QCheckBox("Filled")
+        self._ai_bug_filled.setChecked(True)
+        self._ai_bug_filled.stateChanged.connect(self._emit)
+        self._ai_bug_fill_c = _ColorButton()
+        self._ai_bug_fill_c.set_rgba([0, 0, 0, 255])
+        self._ai_bug_fill_c.color_changed.connect(self._emit)
+        self._ai_bug_outline_c = _ColorButton()
+        self._ai_bug_outline_c.set_rgba([255, 255, 255, 255])
+        self._ai_bug_outline_c.color_changed.connect(self._emit)
+        self._ai_bug_outline_w = QDoubleSpinBox()
+        self._ai_bug_outline_w.setRange(0.5, 20.0); self._ai_bug_outline_w.setDecimals(1)
+        self._ai_bug_outline_w.setValue(2.0); self._ai_bug_outline_w.setSuffix(" px")
+        self._ai_bug_outline_w.valueChanged.connect(self._emit)
+        _ai_bug_style_hl.addWidget(self._ai_bug_filled)
+        _ai_bug_style_hl.addWidget(QLabel("fill:"))
+        _ai_bug_style_hl.addWidget(self._ai_bug_fill_c)
+        _ai_bug_style_hl.addWidget(QLabel("outline:"))
+        _ai_bug_style_hl.addWidget(self._ai_bug_outline_c)
+        _ai_bug_style_hl.addWidget(self._ai_bug_outline_w)
+        _ai_ref.row("Style", _ai_bug_style_row)
+
+        _ai_ref.row("", QLabel("── Left wing (right auto-mirrored) ──"))
+        self._ai_wing_pts = QLineEdit()
+        self._ai_wing_pts.setPlaceholderText("x1,y1  x2,y2  …  (empty = legacy stubs)")
+        self._ai_wing_pts.editingFinished.connect(self._emit)
+        _ai_ref.row("Points", self._ai_wing_pts)
+
+        _ai_wing_style_row = QWidget(); _ai_wing_style_hl = QHBoxLayout(_ai_wing_style_row)
+        _ai_wing_style_hl.setContentsMargins(0, 0, 0, 0); _ai_wing_style_hl.setSpacing(4)
+        self._ai_wing_filled = QCheckBox("Filled")
+        self._ai_wing_filled.setChecked(True)
+        self._ai_wing_filled.stateChanged.connect(self._emit)
+        self._ai_wing_fill_c = _ColorButton()
+        self._ai_wing_fill_c.set_rgba([0, 0, 0, 255])
+        self._ai_wing_fill_c.color_changed.connect(self._emit)
+        self._ai_wing_outline_c = _ColorButton()
+        self._ai_wing_outline_c.set_rgba([255, 255, 255, 255])
+        self._ai_wing_outline_c.color_changed.connect(self._emit)
+        self._ai_wing_outline_w = QDoubleSpinBox()
+        self._ai_wing_outline_w.setRange(0.5, 20.0); self._ai_wing_outline_w.setDecimals(1)
+        self._ai_wing_outline_w.setValue(2.0); self._ai_wing_outline_w.setSuffix(" px")
+        self._ai_wing_outline_w.valueChanged.connect(self._emit)
+        _ai_wing_style_hl.addWidget(self._ai_wing_filled)
+        _ai_wing_style_hl.addWidget(QLabel("fill:"))
+        _ai_wing_style_hl.addWidget(self._ai_wing_fill_c)
+        _ai_wing_style_hl.addWidget(QLabel("outline:"))
+        _ai_wing_style_hl.addWidget(self._ai_wing_outline_c)
+        _ai_wing_style_hl.addWidget(self._ai_wing_outline_w)
+        _ai_ref.row("Style", _ai_wing_style_row)
+
+        self._ai_ref_controls = [
+            self._ai_bug_pts, self._ai_bug_filled, self._ai_bug_fill_c,
+            self._ai_bug_outline_c, self._ai_bug_outline_w,
+            self._ai_wing_pts, self._ai_wing_filled, self._ai_wing_fill_c,
+            self._ai_wing_outline_c, self._ai_wing_outline_w,
+        ]
+
+        self._ai_sec.row_widget(_ai_ref)
 
         # ── Flight Director ──────────────────────────────────────────────────
         _ai_fd = _SubSection("Flight Director", collapsed=True)
@@ -2505,6 +2597,10 @@ class PropertiesForm(QWidget):
             "ladder_step", "ladder_hw_1", "ladder_hw_2", "ladder_hw_4",
             "ladder_font_name", "ladder_bold", "ladder_italic", "smoothing", "show_reference",
             "corner_radius", "corner_bg_color",
+            "centre_bug_points", "centre_bug_filled", "centre_bug_fill_color",
+            "centre_bug_outline_color", "centre_bug_outline_width",
+            "wing_points", "wing_filled", "wing_fill_color",
+            "wing_outline_color", "wing_outline_width",
             "show_slip", "slip_dataref", "slip_color",
             "slip_width", "slip_height", "slip_filled", "slip_line_width",
             "slip_offset", "slip_scale", "slip_convert_function",
@@ -2822,7 +2918,20 @@ class PropertiesForm(QWidget):
         self._ai_ptr_line_w.setValue(float(comp.get("roll_pointer_line_width", 2.0)))
         self._ai_ptr_line_w.setEnabled(not _ptr_filled)
         self._ai_ptr_y_off.setValue(float(comp.get("roll_pointer_y_offset", 0.0)))
-        self._ai_show_ref.setChecked(bool(comp.get("show_reference", True)))
+        _show_ref = bool(comp.get("show_reference", True))
+        self._ai_show_ref.setChecked(_show_ref)
+        self._ai_bug_pts.setText(_pts_to_str(comp.get("centre_bug_points", [])))
+        self._ai_bug_filled.setChecked(bool(comp.get("centre_bug_filled", True)))
+        self._ai_bug_fill_c.set_rgba(comp.get("centre_bug_fill_color", [0, 0, 0, 255]))
+        self._ai_bug_outline_c.set_rgba(comp.get("centre_bug_outline_color", [255, 255, 255, 255]))
+        self._ai_bug_outline_w.setValue(float(comp.get("centre_bug_outline_width", 2.0)))
+        self._ai_wing_pts.setText(_pts_to_str(comp.get("wing_points", [])))
+        self._ai_wing_filled.setChecked(bool(comp.get("wing_filled", True)))
+        self._ai_wing_fill_c.set_rgba(comp.get("wing_fill_color", [0, 0, 0, 255]))
+        self._ai_wing_outline_c.set_rgba(comp.get("wing_outline_color", [255, 255, 255, 255]))
+        self._ai_wing_outline_w.setValue(float(comp.get("wing_outline_width", 2.0)))
+        for w in self._ai_ref_controls:
+            w.setEnabled(_show_ref)
         self._ai_corner_radius.setValue(float(comp.get("corner_radius", 0.0)))
         _raw_cr_bg = comp.get("corner_bg_color")
         self._ai_corner_bg.set_rgba(_raw_cr_bg if _raw_cr_bg is not None else [0, 0, 0, 255])
@@ -3181,6 +3290,24 @@ class PropertiesForm(QWidget):
                 data["roll_pointer_y_offset"] = self._ai_ptr_y_off.value()
             if not self._ai_show_ref.isChecked():
                 data["show_reference"] = False
+            _bug_pts = _str_to_pts(self._ai_bug_pts.text())
+            if _bug_pts:
+                data["centre_bug_points"] = _bug_pts
+                if not self._ai_bug_filled.isChecked():
+                    data["centre_bug_filled"] = False
+                data["centre_bug_fill_color"] = list(self._ai_bug_fill_c.get_rgba())
+                data["centre_bug_outline_color"] = list(self._ai_bug_outline_c.get_rgba())
+                if self._ai_bug_outline_w.value() != 2.0:
+                    data["centre_bug_outline_width"] = self._ai_bug_outline_w.value()
+            _wing_pts = _str_to_pts(self._ai_wing_pts.text())
+            if _wing_pts:
+                data["wing_points"] = _wing_pts
+                if not self._ai_wing_filled.isChecked():
+                    data["wing_filled"] = False
+                data["wing_fill_color"] = list(self._ai_wing_fill_c.get_rgba())
+                data["wing_outline_color"] = list(self._ai_wing_outline_c.get_rgba())
+                if self._ai_wing_outline_w.value() != 2.0:
+                    data["wing_outline_width"] = self._ai_wing_outline_w.value()
             _cr = self._ai_corner_radius.value()
             if _cr > 0.0:
                 data["corner_radius"] = _cr
@@ -3558,6 +3685,19 @@ class PropertiesForm(QWidget):
         self._ai_ptr_filled.setChecked(True); self._ai_ptr_inward.setChecked(True)
         self._ai_ptr_line_w.setValue(2.0); self._ai_ptr_line_w.setEnabled(False)
         self._ai_ptr_y_off.setValue(0.0)
+        self._ai_show_ref.setChecked(True)
+        self._ai_bug_pts.clear()
+        self._ai_bug_filled.setChecked(True)
+        self._ai_bug_fill_c.set_rgba([0, 0, 0, 255])
+        self._ai_bug_outline_c.set_rgba([255, 255, 255, 255])
+        self._ai_bug_outline_w.setValue(2.0)
+        self._ai_wing_pts.clear()
+        self._ai_wing_filled.setChecked(True)
+        self._ai_wing_fill_c.set_rgba([0, 0, 0, 255])
+        self._ai_wing_outline_c.set_rgba([255, 255, 255, 255])
+        self._ai_wing_outline_w.setValue(2.0)
+        for w in self._ai_ref_controls:
+            w.setEnabled(True)
         self._ai_corner_radius.setValue(0.0)
         self._ai_corner_bg.set_rgba([0, 0, 0, 255])
         self._ai_show_slip.setChecked(False)
@@ -3635,6 +3775,11 @@ class PropertiesForm(QWidget):
         enabled = bool(on)
         self._ai_arc_bg_color.setEnabled(enabled)
         self._ai_arc_bg_inset.setEnabled(enabled)
+
+    def _on_ref_toggle(self, on: int) -> None:
+        enabled = bool(on)
+        for w in self._ai_ref_controls:
+            w.setEnabled(enabled)
 
     def _on_slip_toggle(self, on: int) -> None:
         enabled = bool(on)

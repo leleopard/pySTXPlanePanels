@@ -73,6 +73,19 @@ YAML schema
       slip_offset:             0     # radial shift of rectangle base from arc (+outward, −inward)
       slip_scale:              2.0   # pixels of lateral displacement per unit of the slip dataref
 
+Aircraft reference (centre bug + wing bars):
+      show_reference:          true
+      centre_bug_points:       []          # list of [x,y] pairs relative to AI centre (empty → legacy dot)
+      centre_bug_filled:       true
+      centre_bug_fill_color:   [0, 0, 0, 255]
+      centre_bug_outline_color: [255, 255, 255, 255]
+      centre_bug_outline_width: 2.0
+      wing_points:             []          # left wing points; right wing is auto-mirrored (empty → legacy stubs)
+      wing_filled:             true
+      wing_fill_color:         [0, 0, 0, 255]
+      wing_outline_color:      [255, 255, 255, 255]
+      wing_outline_width:      2.0
+
 Flight director (cross-pointer / dual-cue):
       show_fd_h_bar:           false # horizontal bar (pitch command)
       fd_pitch_dataref:        sim/cockpit/autopilot/flight_director_pitch
@@ -180,6 +193,16 @@ class AttitudeIndicator(_VecBase):
         slip_line_width: float = 2.0,
         slip_offset: float = 0.0,
         slip_scale: float = 2.0,
+        centre_bug_points: list = (),
+        centre_bug_filled: bool = True,
+        centre_bug_fill_color: tuple = (0, 0, 0, 255),
+        centre_bug_outline_color: tuple = (255, 255, 255, 255),
+        centre_bug_outline_width: float = 2.0,
+        wing_points: list = (),
+        wing_filled: bool = True,
+        wing_fill_color: tuple = (0, 0, 0, 255),
+        wing_outline_color: tuple = (255, 255, 255, 255),
+        wing_outline_width: float = 2.0,
         show_fd_h_bar: bool = False,
         fd_h_color: tuple = (255, 200, 0, 255),
         fd_h_length: float = 200.0,
@@ -257,6 +280,17 @@ class AttitudeIndicator(_VecBase):
         self._slip:  float    = 0.0
         self._slip_dr:   Any | None      = None
         self._slip_conv: Callable | None = None
+        # Aircraft reference polygons
+        self._bug_pts = [(float(p[0]), float(p[1])) for p in (centre_bug_points or [])]
+        self._bug_filled = bool(centre_bug_filled)
+        self._bug_fill = centre_bug_fill_color
+        self._bug_outline = centre_bug_outline_color
+        self._bug_outline_w = float(centre_bug_outline_width)
+        self._wing_pts = [(float(p[0]), float(p[1])) for p in (wing_points or [])]
+        self._wing_filled = bool(wing_filled)
+        self._wing_fill = wing_fill_color
+        self._wing_outline = wing_outline_color
+        self._wing_outline_w = float(wing_outline_width)
         # Flight director — horizontal bar (pitch command)
         self._show_fd_h   = bool(show_fd_h_bar)
         self._fd_h_color  = fd_h_color
@@ -365,6 +399,10 @@ class AttitudeIndicator(_VecBase):
         self._fd_v_len   *= scale
         self._fd_v_w     *= scale
         self._fd_v_scale *= scale
+        self._bug_pts = [(x * scale, y * scale) for x, y in self._bug_pts]
+        self._bug_outline_w *= scale
+        self._wing_pts = [(x * scale, y * scale) for x, y in self._wing_pts]
+        self._wing_outline_w *= scale
         self._font_size  = max(6, int(self._font_size * scale))
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -442,6 +480,8 @@ class AttitudeIndicator(_VecBase):
         self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
         self._draw_horizon(cx, cy, pitch_y, cos_b, sin_b)
         self._draw_ladder(cx, cy, pitch_y, cos_b, sin_b, vw, lines=True, labels=True)
+        if self._show_reference:
+            self._draw_reference(cx, cy)
         if self._show_fd_h or self._show_fd_v:
             self._draw_flight_director(cx, cy)
         if self._show_arc_bg:
@@ -451,8 +491,6 @@ class AttitudeIndicator(_VecBase):
         if self._show_slip:
             self._draw_slip_indicator(cx, arc_cy, arc_r)
         self._draw_roll_pointer(cx, arc_cy, arc_r)
-        if self._show_reference:
-            self._draw_reference(cx, cy)
         if self._corner_radius > 0:
             self._draw_corner_cuts(vx, vy, vw, vh)
 
@@ -712,12 +750,23 @@ class AttitudeIndicator(_VecBase):
                 prev_x, prev_y = next_x, next_y
 
     def _draw_reference(self, cx, cy) -> None:
-        # Fixed aircraft reference: two horizontal wing stubs + centre dot.
-        stub = 30.0
-        gap  =  6.0
-        arcade.draw_line(cx - stub - gap, cy, cx - gap, cy, self._ptr_color, 3)
-        arcade.draw_line(cx + gap, cy, cx + stub + gap, cy, self._ptr_color, 3)
-        arcade.draw_circle_filled(cx, cy, 4, self._ptr_color)
+        if self._bug_pts:
+            pts = [(cx + x, cy + y) for x, y in self._bug_pts]
+            if self._bug_filled:
+                arcade.draw_polygon_filled(pts, self._bug_fill)
+            arcade.draw_polygon_outline(pts, self._bug_outline, self._bug_outline_w)
+        else:
+            arcade.draw_circle_filled(cx, cy, 4, self._ptr_color)
+        if self._wing_pts:
+            for sign in (1.0, -1.0):
+                pts = [(cx + sign * x, cy + y) for x, y in self._wing_pts]
+                if self._wing_filled:
+                    arcade.draw_polygon_filled(pts, self._wing_fill)
+                arcade.draw_polygon_outline(pts, self._wing_outline, self._wing_outline_w)
+        else:
+            stub = 30.0; gap = 6.0
+            arcade.draw_line(cx - stub - gap, cy, cx - gap, cy, self._ptr_color, 3)
+            arcade.draw_line(cx + gap, cy, cx + stub + gap, cy, self._ptr_color, 3)
 
 
 # ── Factory + registration ────────────────────────────────────────────────────
@@ -788,6 +837,16 @@ def _ai_factory(
         slip_line_width=float(comp.get("slip_line_width", 2.0)),
         slip_offset=float(comp.get("slip_offset", 0.0)),
         slip_scale=float(comp.get("slip_scale", 2.0)),
+        centre_bug_points=comp.get("centre_bug_points", []),
+        centre_bug_filled=bool(comp.get("centre_bug_filled", True)),
+        centre_bug_fill_color=_as_color(comp.get("centre_bug_fill_color", [0, 0, 0])),
+        centre_bug_outline_color=_as_color(comp.get("centre_bug_outline_color", [255, 255, 255])),
+        centre_bug_outline_width=float(comp.get("centre_bug_outline_width", 2.0)),
+        wing_points=comp.get("wing_points", []),
+        wing_filled=bool(comp.get("wing_filled", True)),
+        wing_fill_color=_as_color(comp.get("wing_fill_color", [0, 0, 0])),
+        wing_outline_color=_as_color(comp.get("wing_outline_color", [255, 255, 255])),
+        wing_outline_width=float(comp.get("wing_outline_width", 2.0)),
         show_fd_h_bar=bool(comp.get("show_fd_h_bar", False)),
         fd_h_color=_as_color(comp.get("fd_h_color", [255, 200, 0])),
         fd_h_length=float(comp.get("fd_h_length", 200.0)),
