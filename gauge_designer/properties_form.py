@@ -2005,9 +2005,9 @@ class PropertiesForm(QWidget):
         self._ai_fd_h_dr.editingFinished.connect(self._emit)
         _ai_fd.row("H deflect dataref", self._dr_field(self._ai_fd_h_dr))
 
-        self._ai_fd_h_fn = QLineEdit()
-        self._ai_fd_h_fn.setPlaceholderText("convert fn  (e.g. round_1dp, round_2dp)")
-        self._ai_fd_h_fn.editingFinished.connect(self._emit)
+        self._ai_fd_h_fn = _NoScrollComboBox()
+        self._ai_fd_h_fn.addItems(_VALUE_FUNCS)
+        self._ai_fd_h_fn.currentTextChanged.connect(self._emit)
         _ai_fd.row("H convert fn", self._ai_fd_h_fn)
 
         self._ai_fd_h_vis_dr = QLineEdit()
@@ -2066,9 +2066,9 @@ class PropertiesForm(QWidget):
         self._ai_fd_v_dr.editingFinished.connect(self._emit)
         _ai_fd.row("V deflect dataref", self._dr_field(self._ai_fd_v_dr))
 
-        self._ai_fd_v_fn = QLineEdit()
-        self._ai_fd_v_fn.setPlaceholderText("convert fn  (e.g. round_1dp, round_2dp)")
-        self._ai_fd_v_fn.editingFinished.connect(self._emit)
+        self._ai_fd_v_fn = _NoScrollComboBox()
+        self._ai_fd_v_fn.addItems(_VALUE_FUNCS)
+        self._ai_fd_v_fn.currentTextChanged.connect(self._emit)
         _ai_fd.row("V convert fn", self._ai_fd_v_fn)
 
         self._ai_fd_v_vis_dr = QLineEdit()
@@ -2849,7 +2849,8 @@ class PropertiesForm(QWidget):
         self._ai_fd_h_show.setChecked(_show_fd_h)
         self._ai_fd_h_show.blockSignals(False)
         self._ai_fd_h_dr.setText(str(comp.get("fd_pitch_dataref", "")))
-        self._ai_fd_h_fn.setText(str(comp.get("fd_pitch_convert_function", "")))
+        self._ai_fd_h_fn.setCurrentIndex(
+            max(self._ai_fd_h_fn.findText(str(comp.get("fd_pitch_convert_function") or _NONE)), 0))
         self._ai_fd_h_vis_dr.setText(str(comp.get("fd_h_vis_dataref", "")))
         self._ai_fd_h_vis_pred.setText(str(comp.get("fd_h_vis_predicate", "")))
         self._ai_fd_h_color.set_rgba(comp.get("fd_h_color", [255, 200, 0, 255]))
@@ -2863,7 +2864,8 @@ class PropertiesForm(QWidget):
         self._ai_fd_v_show.setChecked(_show_fd_v)
         self._ai_fd_v_show.blockSignals(False)
         self._ai_fd_v_dr.setText(str(comp.get("fd_roll_dataref", "")))
-        self._ai_fd_v_fn.setText(str(comp.get("fd_roll_convert_function", "")))
+        self._ai_fd_v_fn.setCurrentIndex(
+            max(self._ai_fd_v_fn.findText(str(comp.get("fd_roll_convert_function") or _NONE)), 0))
         self._ai_fd_v_vis_dr.setText(str(comp.get("fd_v_vis_dataref", "")))
         self._ai_fd_v_vis_pred.setText(str(comp.get("fd_v_vis_predicate", "")))
         self._ai_fd_v_color.set_rgba(comp.get("fd_v_color", [255, 200, 0, 255]))
@@ -3205,8 +3207,8 @@ class PropertiesForm(QWidget):
                 _fdr = self._ai_fd_h_dr.text().strip()
                 if _fdr:
                     data["fd_pitch_dataref"] = _fdr
-                _ffn = self._ai_fd_h_fn.text().strip()
-                if _ffn:
+                _ffn = self._ai_fd_h_fn.currentText()
+                if _ffn != _NONE:
                     data["fd_pitch_convert_function"] = _ffn
                 _fvdr = self._ai_fd_h_vis_dr.text().strip()
                 if _fvdr:
@@ -3226,8 +3228,8 @@ class PropertiesForm(QWidget):
                 _fdr = self._ai_fd_v_dr.text().strip()
                 if _fdr:
                     data["fd_roll_dataref"] = _fdr
-                _ffn = self._ai_fd_v_fn.text().strip()
-                if _ffn:
+                _ffn = self._ai_fd_v_fn.currentText()
+                if _ffn != _NONE:
                     data["fd_roll_convert_function"] = _ffn
                 _fvdr = self._ai_fd_v_vis_dr.text().strip()
                 if _fvdr:
@@ -3568,7 +3570,7 @@ class PropertiesForm(QWidget):
         for w in self._ai_slip_controls:
             w.setEnabled(False)
         self._ai_fd_h_show.setChecked(False)
-        self._ai_fd_h_dr.clear(); self._ai_fd_h_fn.clear()
+        self._ai_fd_h_dr.clear(); self._ai_fd_h_fn.setCurrentIndex(0)
         self._ai_fd_h_vis_dr.clear(); self._ai_fd_h_vis_pred.clear()
         self._ai_fd_h_color.set_rgba([255, 200, 0, 255])
         self._ai_fd_h_len.setValue(200.0); self._ai_fd_h_width.setValue(3.0)
@@ -3576,7 +3578,7 @@ class PropertiesForm(QWidget):
         for w in self._ai_fd_h_controls:
             w.setEnabled(False)
         self._ai_fd_v_show.setChecked(False)
-        self._ai_fd_v_dr.clear(); self._ai_fd_v_fn.clear()
+        self._ai_fd_v_dr.clear(); self._ai_fd_v_fn.setCurrentIndex(0)
         self._ai_fd_v_vis_dr.clear(); self._ai_fd_v_vis_pred.clear()
         self._ai_fd_v_color.set_rgba([255, 200, 0, 255])
         self._ai_fd_v_len.setValue(200.0); self._ai_fd_v_width.setValue(3.0)
