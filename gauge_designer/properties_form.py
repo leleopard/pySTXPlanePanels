@@ -2524,7 +2524,12 @@ class PropertiesForm(QWidget):
         for w in (self._vp_x, self._vp_y):
             w.valueChanged.connect(self._emit)
         y_label = "X  /  Y top" if is_y_down() else "X  /  Y bottom"
-        self._vp_sec.row_pair(y_label, self._vp_x, self._vp_y)
+        _vp_xy_box = QWidget()
+        _vp_xy_hl = QHBoxLayout(_vp_xy_box)
+        _vp_xy_hl.setContentsMargins(0, 0, 0, 0); _vp_xy_hl.setSpacing(4)
+        _vp_xy_hl.addWidget(self._vp_x); _vp_xy_hl.addWidget(self._vp_y)
+        self._vp_sec._form.addRow(y_label, _vp_xy_box)
+        self._vp_xy_row = _vp_xy_box
 
         self._vp_w = _sb(0, 4096); self._vp_h = _sb(0, 4096)
         for w in (self._vp_w, self._vp_h):
@@ -2632,6 +2637,13 @@ class PropertiesForm(QWidget):
         pos = comp.get("position", [0, 0])
         self._px.setValue(int(pos[0]))
         self._py.setValue(flip_y(int(pos[1]), self._ref_height))
+
+        # VectorTape: "Position" means viewport origin, not the YAML position field
+        if ct == "VectorTape":
+            vp = comp.get("viewport", [0, 0, 100, 200])
+            self._px.setValue(int(vp[0]))
+            vy_bot, vh_val = int(vp[1]), int(vp[3])
+            self._py.setValue((self._ref_height - vy_bot - vh_val) if is_y_down() else vy_bot)
 
         # Texture file (all image-based types)
         self._tex.setText(str(comp.get("texture", "")))
@@ -3073,7 +3085,8 @@ class PropertiesForm(QWidget):
         data["type"] = ct
 
         # Position only for types that use a single centre point
-        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "CircularGauge"):
+        # VectorTape uses position spinboxes for viewport origin (written below with viewport)
+        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "CircularGauge", "VectorTape"):
             data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
         if ct == "Line":
@@ -3559,10 +3572,16 @@ class PropertiesForm(QWidget):
 
         if self._vp_sec.active:
             vh = self._vp_h.value()
-            vy_display = self._vp_y.value()
-            # Convert display Y back to y-up bottom edge for the YAML.
-            vy_yaml = (self._ref_height - vy_display - vh) if is_y_down() else vy_display
-            data["viewport"] = [self._vp_x.value(), vy_yaml, self._vp_w.value(), vh]
+            if ct == "VectorTape":
+                # x/y origin comes from Position spinboxes, not the viewport x/y row
+                vy_display = self._py.value()
+                vy_yaml = (self._ref_height - vy_display - vh) if is_y_down() else vy_display
+                data["viewport"] = [self._px.value(), vy_yaml, self._vp_w.value(), vh]
+            else:
+                vy_display = self._vp_y.value()
+                # Convert display Y back to y-up bottom edge for the YAML.
+                vy_yaml = (self._ref_height - vy_display - vh) if is_y_down() else vy_display
+                data["viewport"] = [self._vp_x.value(), vy_yaml, self._vp_w.value(), vh]
 
         if self._vis_sec.active:
             data["visibility"] = {
@@ -3855,6 +3874,8 @@ class PropertiesForm(QWidget):
         self._vp_sec.setVisible(is_img or is_vt)
         if is_vt:
             self._vp_sec.set_active(True)
+        # VectorTape: x/y comes from Position section; only W/H shown in Viewport Clip
+        self._vp_sec._form.setRowVisible(self._vp_xy_row, not is_vt)
 
     def _on_frt_outline_toggled(self, on: bool):
         self._frt_outline_color.setEnabled(on)
