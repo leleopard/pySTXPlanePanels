@@ -614,7 +614,7 @@ def _vector_tape_factory(
     label_side_raw = lbl.get("side")
     tape = VectorTape(
         name=comp["name"],
-        position_xy=tuple(comp["position"]),
+        position_xy=tuple(comp.get("position", [0, 0])),
         viewport=tuple(comp["viewport"]),
         axis=str(comp.get("scroll_axis", "y")),
         pixels_per_unit=float(comp.get("pixels_per_unit", 5.0)),

@@ -104,10 +104,10 @@ components:
 - name: alt_tape_window_copy
   type: Polygon
   origin:
-  - 21
+  - 470
   - 306
   points:
-  - - 66
+  - - 92
     - 26
   - - 12
     - 26
@@ -119,13 +119,13 @@ components:
     - -9
   - - 12
     - -26
-  - - 66
+  - - 92
     - -26
   color:
   - 0
   - 0
   - 0
-  - 255
+  - 20
   outline_color:
   - 255
   - 255
