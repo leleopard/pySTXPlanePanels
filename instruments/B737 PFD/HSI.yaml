@@ -17,7 +17,7 @@ components:
   - 765
   resize_to_container: true
   hidden: true
-- name: pitch_ladder
+- name: attitude_indicator
   type: AttitudeIndicator
   viewport:
   - 118
@@ -85,7 +85,49 @@ components:
   roll_pointer_line_width: 2.0
   roll_pointer_inward: false
   roll_pointer_y_offset: -13.0
-  show_reference: false
+  centre_bug_points:
+  - - 5.0
+    - 5.0
+  - - 5.0
+    - -5.0
+  - - -5.0
+    - -5.0
+  - - -5.0
+    - 5.0
+  centre_bug_filled: false
+  centre_bug_fill_color:
+  - 0
+  - 0
+  - 0
+  - 255
+  centre_bug_outline_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  wing_points:
+  - - -55.0
+    - 4.0
+  - - -120.0
+    - 4.0
+  - - -120.0
+    - -4.0
+  - - -63.0
+    - -4.0
+  - - -63.0
+    - -23.0
+  - - -55.0
+    - -23.0
+  wing_fill_color:
+  - 0
+  - 0
+  - 0
+  - 255
+  wing_outline_color:
+  - 255
+  - 255
+  - 255
+  - 255
   corner_radius: 30.0
   corner_bg_color:
   - 0
@@ -104,77 +146,60 @@ components:
   slip_filled: false
   slip_line_width: 2.0
   slip_offset: -17.0
+  show_fd_h_bar: true
+  fd_pitch_dataref: laminar/B738/pfd/flight_director_pitch_pilot
+  fd_pitch_convert_function: round_1dp
+  fd_h_color:
+  - 242
+  - 161
+  - 239
+  - 255
+  fd_h_length: 150.0
+  fd_h_scale: 5.0
+  show_fd_v_bar: true
+  fd_roll_dataref: laminar/B738/pfd/flight_director_roll_pilot
+  fd_roll_convert_function: round_1dp
+  fd_v_color:
+  - 242
+  - 161
+  - 239
+  - 255
+  fd_v_length: 150.0
+  fd_v_scale: 2.0
   ladder_step: 2.5
   ladder_hw_2: 0.2
   ladder_hw_1: 0.1
-- name: plane_bug_centre
-  type: FilledRect
+- name: CMD status text
+  type: Text
   position:
-  - 265
-  - 311
-  size:
-  - 10
-  - 10
+  - 264
+  - 454
+  text: CMD
+  font_name: ST_Boeing_PFD
+  font_size: 24.0
   color:
-  - 0
-  - 0
-  - 0
-  - 0
-  outline_color:
+  - 46
+  - 227
+  - 92
   - 255
-  - 255
-  - 255
-  - 255
-  outline_width: 2.0
-- name: plane_bug_left
-  type: Polygon
-  points:
-  - - 210
-    - 314
-  - - 142
-    - 314
-  - - 142
-    - 307
-  - - 202
-    - 307
-  - - 202
-    - 288
-  - - 210
-    - 288
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/cmd_a_status
+    predicate: true_if_equals_1
+- name: FD status text
+  type: Text
+  position:
+  - 264
+  - 454
+  text: FD
+  font_name: ST_Boeing_PFD
+  font_size: 24.0
   color:
-  - 0
-  - 0
-  - 0
+  - 46
+  - 227
+  - 92
   - 255
-  outline_color:
-  - 255
-  - 255
-  - 255
-  - 255
-  outline_width: 2.0
-- name: plane_bug_right
-  type: Polygon
-  points:
-  - - 320
-    - 314
-  - - 388
-    - 314
-  - - 388
-    - 307
-  - - 328
-    - 307
-  - - 328
-    - 288
-  - - 320
-    - 288
-  color:
-  - 0
-  - 0
-  - 0
-  - 255
-  outline_color:
-  - 255
-  - 255
-  - 255
-  - 255
-  outline_width: 2.0
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/cmd_a_status
+    predicate: true_if_equals_1

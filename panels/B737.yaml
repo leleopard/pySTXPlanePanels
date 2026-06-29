@@ -1,5 +1,17 @@
-name: B737
+name: B737_PFD
 size:
-- 1540
-- 920
-instruments: []
+- 600
+- 600
+instruments:
+- file: instruments/B737 PFD/Speed_Tape.yaml
+  position:
+  - 0
+  - 0
+- file: instruments/B737 PFD/HSI.yaml
+  position:
+  - 0
+  - 0
+background_color:
+- 0.0
+- 0.0
+- 0.0
