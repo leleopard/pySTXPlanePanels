@@ -377,11 +377,12 @@ class VectorTape:
     # -- vertical tape --------------------------------------------------------
 
     def _draw_bands_y(self, vx, vy, vw, vh, val):
+        cy = vy + vh * 0.5
         for band in self._bands:
             bv_min, bv_max = band["lo_val"], band["hi_val"]
             bw = band["width"]
-            y_bot = self._cy + (bv_min - val) * self._ppu
-            y_top = self._cy + (bv_max - val) * self._ppu
+            y_bot = cy + (bv_min - val) * self._ppu
+            y_top = cy + (bv_max - val) * self._ppu
             y_bot = max(y_bot, vy)
             y_top = min(y_top, vy + vh)
             if y_top <= y_bot:
@@ -402,6 +403,7 @@ class VectorTape:
                 arcade.draw_rect_filled(arcade.LBWH(bx, y_bot, bw, y_top - y_bot), band["color"])
 
     def _draw_ticks_y(self, vx, vy, vw, vh, val):
+        cy = vy + vh * 0.5
         spine_x  = vx if self._tick_side == "left" else vx + vw
         tick_dir = 1  if self._tick_side == "left" else -1
         half_range = vh / 2 / self._ppu
@@ -417,13 +419,14 @@ class VectorTape:
             x1 = spine_x + tick_dir * (offset + length)
             v = math.floor(v_min / interval) * interval
             while v <= v_max + interval * 0.001:
-                y = self._cy + (v - val) * self._ppu
+                y = cy + (v - val) * self._ppu
                 arcade.draw_line(x0, y, x1, y, color, width)
                 v += interval
 
     def _draw_labels_y(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
             return
+        cy = vy + vh * 0.5
         # offset is measured from the spine outward so the user can set it to 0
         # and have labels sit flush against the spine, regardless of viewport width.
         spine_x = vx if self._tick_side == "left" else vx + vw
@@ -438,7 +441,7 @@ class VectorTape:
         v = math.floor(v_min / self._label_interval) * self._label_interval
         idx = 0
         while v <= v_max + self._label_interval * 0.001:
-            y = self._cy + (v - val) * self._ppu
+            y = cy + (v - val) * self._ppu
             if idx >= len(self._label_pool):
                 kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
                 if self._label_font:
@@ -462,9 +465,10 @@ class VectorTape:
     def _draw_bugs_y(self, vx, vy, vw, vh, val):
         if not self._bugs:
             return
+        cy = vy + vh * 0.5
         spine_x = vx if self._tick_side == "left" else vx + vw
         for bug in self._bugs:
-            anchor_y = self._cy + (bug._current_value - val) * self._ppu
+            anchor_y = cy + (bug._current_value - val) * self._ppu
             anchor_y = max(vy, min(vy + vh, anchor_y))
             pts = [(spine_x + px, anchor_y + py) for px, py in bug._points]
             if len(pts) < 3:
@@ -477,11 +481,12 @@ class VectorTape:
     # -- horizontal tape ------------------------------------------------------
 
     def _draw_bands_x(self, vx, vy, vw, vh, val):
+        cx = vx + vw * 0.5
         for band in self._bands:
             bv_min, bv_max = band["lo_val"], band["hi_val"]
             bh = band["width"]
-            x_left  = self._cx + (bv_min - val) * self._ppu
-            x_right = self._cx + (bv_max - val) * self._ppu
+            x_left  = cx + (bv_min - val) * self._ppu
+            x_right = cx + (bv_max - val) * self._ppu
             x_left  = max(x_left,  vx)
             x_right = min(x_right, vx + vw)
             if x_right <= x_left:
@@ -502,6 +507,7 @@ class VectorTape:
                 arcade.draw_rect_filled(arcade.LBWH(x_left, by, x_right - x_left, bh), band["color"])
 
     def _draw_ticks_x(self, vx, vy, vw, vh, val):
+        cx = vx + vw * 0.5
         spine_y  = (vy + vh) if self._tick_side == "top" else vy
         tick_dir = -1 if self._tick_side == "top" else 1
         half_range = vw / 2 / self._ppu
@@ -517,16 +523,17 @@ class VectorTape:
             y1 = spine_y + tick_dir * (offset + length)
             v = math.floor(v_min / interval) * interval
             while v <= v_max + interval * 0.001:
-                x = self._cx + (v - val) * self._ppu
+                x = cx + (v - val) * self._ppu
                 arcade.draw_line(x, y0, x, y1, color, width)
                 v += interval
 
     def _draw_bugs_x(self, vx, vy, vw, vh, val):
         if not self._bugs:
             return
+        cx = vx + vw * 0.5
         spine_y = (vy + vh) if self._tick_side == "top" else vy
         for bug in self._bugs:
-            anchor_x = self._cx + (bug._current_value - val) * self._ppu
+            anchor_x = cx + (bug._current_value - val) * self._ppu
             anchor_x = max(vx, min(vx + vw, anchor_x))
             pts = [(anchor_x + px, spine_y + py) for px, py in bug._points]
             if len(pts) < 3:
@@ -539,6 +546,7 @@ class VectorTape:
     def _draw_labels_x(self, vx, vy, vw, vh, val):
         if self._label_interval <= 0:
             return
+        cx = vx + vw * 0.5
         spine_y = (vy + vh) if self._tick_side == "top" else vy
         side = self._label_side if self._label_side is not None else self._tick_side
         if side == "top":
@@ -551,7 +559,7 @@ class VectorTape:
         v = math.floor(v_min / self._label_interval) * self._label_interval
         idx = 0
         while v <= v_max + self._label_interval * 0.001:
-            x = self._cx + (v - val) * self._ppu
+            x = cx + (v - val) * self._ppu
             if idx >= len(self._label_pool):
                 kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
                 if self._label_font:

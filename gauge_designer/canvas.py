@@ -828,10 +828,9 @@ class InstrumentCanvas(QWidget):
         ppu = float(comp.get("pixels_per_unit", 5.0))
         ticks = comp.get("ticks", [])
 
-        # Component position in PIL coords — anchor point for value=0
-        pos = comp.get("position", [vx + vw / 2, vy_bottom + vh / 2])
-        cy_pil = canvas_h - pos[1]   # y-axis anchor (PIL)
-        cx_pil = pos[0]              # x-axis anchor
+        # Anchor = viewport centre (matches runtime behaviour)
+        cy_pil = canvas_h - vy_bottom - vh / 2
+        cx_pil = vx + vw / 2
 
         if axis == "y":
             spine_x = int(vx) if tick_side == "left" else int(vx + vw)
