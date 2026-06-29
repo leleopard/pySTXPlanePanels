@@ -1373,10 +1373,16 @@ class PropertiesForm(QWidget):
         self._poly_sec = _Section("Polygon")
         self._poly_sec.setVisible(False)
 
+        self._poly_ox = _sb(); self._poly_oy = _sb()
+        for w in (self._poly_ox, self._poly_oy):
+            w.valueChanged.connect(self._emit)
+        y_label = "Origin X  /  Y top" if is_y_down() else "Origin X  /  Y"
+        self._poly_sec.row_pair(y_label, self._poly_ox, self._poly_oy)
+
         self._poly_pts = _PointsTableEditor()
         self._poly_pts.changed.connect(self._emit)
         self._poly_pts.point_selected.connect(self.point_selected)
-        self._poly_sec.row("Points", self._poly_pts)
+        self._poly_sec.row("Points (relative to origin)", self._poly_pts)
 
         self._poly_color = _ColorButton()
         self._poly_color.color_changed.connect(self._emit)
@@ -2574,7 +2580,7 @@ class PropertiesForm(QWidget):
             # FilledRect
             "size",
             # Polygon
-            "points", "filled",
+            "origin", "points", "filled",
             # shared across vector types
             "color", "width",
             "outline_color", "outline_width",
@@ -2712,6 +2718,9 @@ class PropertiesForm(QWidget):
         self._frt_outline_width.setValue(float(comp.get("outline_width", 1.0)))
 
         # Polygon
+        poly_orig = comp.get("origin", [0, 0])
+        self._poly_ox.setValue(int(poly_orig[0]))
+        self._poly_oy.setValue(flip_y(int(poly_orig[1]), self._ref_height))
         pts = comp.get("points", [])
         self._poly_pts.load([[p[0], p[1]] for p in pts])
         self._poly_color.set_rgba(comp.get("color"))
@@ -3121,6 +3130,7 @@ class PropertiesForm(QWidget):
                 data["outline_width"] = self._frt_outline_width.value()
 
         elif ct == "Polygon":
+            data["origin"] = [self._poly_ox.value(), flip_y(self._poly_oy.value(), self._ref_height)]
             data["points"] = [[row[0], row[1]] for row in self._poly_pts.get_data()]
             data["color"]  = list(self._poly_color.get_rgba())
             if not self._poly_filled.isChecked():
@@ -3628,6 +3638,7 @@ class PropertiesForm(QWidget):
         self._frt_color.set_rgba(None)
         self._frt_outline_chk.setChecked(False)
         self._frt_outline_color.set_rgba(None); self._frt_outline_width.setValue(1.0)
+        self._poly_ox.setValue(0); self._poly_oy.setValue(0)
         self._poly_pts.load([])
         self._poly_color.set_rgba(None)
         self._poly_filled.setChecked(True); self._poly_width.setValue(1.0)

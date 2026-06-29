@@ -262,8 +262,7 @@ class InstrumentCanvas(QWidget):
         elif ctype == "Arc":
             ref = comp.get("center", [0, 0])
         elif ctype == "Polygon":
-            pts = comp.get("points", [])
-            ref = pts[0] if pts else [0, 0]
+            ref = comp.get("origin", [0, 0])
         elif ctype == "AttitudeIndicator":
             vp = comp.get("viewport", [0, 0, 200, 200])
             ref = [int(vp[0]), int(vp[1])]
@@ -297,8 +296,8 @@ class InstrumentCanvas(QWidget):
                 comp["start"] = [int(round(os_[0] + dx_yaml)), int(round(os_[1] + dy_yaml))]
                 comp["end"]   = [int(round(oe[0]  + dx_yaml)), int(round(oe[1]  + dy_yaml))]
             elif ctype == "Polygon":
-                comp["points"] = [[int(round(p[0] + dx_yaml)), int(round(p[1] + dy_yaml))]
-                                  for p in orig.get("points", [])]
+                oo = orig.get("origin", [0, 0])
+                comp["origin"] = [int(round(oo[0] + dx_yaml)), int(round(oo[1] + dy_yaml))]
             elif ctype == "Arc":
                 oc = orig.get("center", [0, 0])
                 comp["center"] = [int(round(oc[0] + dx_yaml)), int(round(oc[1] + dy_yaml))]
@@ -329,8 +328,7 @@ class InstrumentCanvas(QWidget):
             elif ctype == "Arc":
                 ref = comp.get("center", [0, 0])
             elif ctype == "Polygon":
-                pts = comp.get("points", [[0, 0]])
-                ref = pts[0] if pts else [0, 0]
+                ref = comp.get("origin", [0, 0])
             elif ctype == "AttitudeIndicator":
                 vp = comp.get("viewport", [0, 0, 200, 200])
                 ref = [int(vp[0]), int(vp[1])]
@@ -385,10 +383,11 @@ class InstrumentCanvas(QWidget):
                     if (fx - hw) <= cx <= (fx + hw) and (fy - hh) <= cy <= (fy + hh):
                         result.append(comp.get("name"))
                 elif ctype == "Polygon":
+                    orig_xy = comp.get("origin", [0, 0])
                     pts = comp.get("points", [])
                     if pts:
-                        xs = [int(p[0]) for p in pts]
-                        ys = [h - int(p[1]) for p in pts]
+                        xs = [int(orig_xy[0] + p[0]) for p in pts]
+                        ys = [h - int(orig_xy[1] + p[1]) for p in pts]
                         pad = 4
                         if (min(xs) - pad <= cx <= max(xs) + pad and
                                 min(ys) - pad <= cy <= max(ys) + pad):
@@ -536,7 +535,9 @@ class InstrumentCanvas(QWidget):
                     draw.rectangle([cx_p - hw, cy_p - hh, cx_p + hw, cy_p + hh],
                                    outline=SEL, width=2)
                 elif ctype == "Polygon":
-                    pts = [(int(p[0]), h - int(p[1])) for p in comp.get("points", [])]
+                    orig_xy = comp.get("origin", [0, 0])
+                    pts = [(int(orig_xy[0] + p[0]), h - int(orig_xy[1] + p[1]))
+                           for p in comp.get("points", [])]
                     if len(pts) >= 2:
                         draw.polygon(pts, outline=SEL)
                 elif ctype == "Vector":
@@ -617,7 +618,9 @@ class InstrumentCanvas(QWidget):
         pts_raw = comp.get("points", [])
         if len(pts_raw) < 2:
             return
-        pts = [(int(p[0]), canvas_h - int(p[1])) for p in pts_raw]
+        orig_xy = comp.get("origin", [0, 0])
+        ox, oy = int(orig_xy[0]), int(orig_xy[1])
+        pts = [(ox + int(p[0]), canvas_h - (oy + int(p[1]))) for p in pts_raw]
         color = _rgba(comp.get("color"))
         if comp.get("filled", True):
             draw.polygon(pts, fill=color)
@@ -629,11 +632,8 @@ class InstrumentCanvas(QWidget):
             width = max(1, int(round(float(comp.get("width", 1.0)))))
             draw.line(pts + [pts[0]], fill=color, width=width)
 
-        # Crosshair on the selected point
-        if (comp.get("name") == self._selected_name
-                and 0 <= self._selected_point_idx < len(pts)):
-            px, py = pts[self._selected_point_idx]
-            self._crosshair(draw, px, py)
+        # Crosshair on origin
+        self._crosshair(draw, ox, canvas_h - oy)
 
     def _render_rotary_encoder(self, comp: dict, composite: Image.Image,
                                draw: ImageDraw.ImageDraw, canvas_h: int) -> None:

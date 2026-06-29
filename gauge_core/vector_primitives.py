@@ -500,9 +500,11 @@ def _filledrect_factory(comp: dict, base_dir: Path, container_size=None) -> Fill
 
 def _polygon_factory(comp: dict, base_dir: Path, container_size=None) -> Polygon:
     oc = comp.get("outline_color")
+    origin = comp.get("origin", [0, 0])
+    ox, oy = float(origin[0]), float(origin[1])
     poly = Polygon(
         name=comp["name"],
-        points=[tuple(p) for p in comp["points"]],
+        points=[(ox + float(p[0]), oy + float(p[1])) for p in comp["points"]],
         color=_as_color(comp.get("color")),
         filled=bool(comp.get("filled", True)),
         width=float(comp.get("width", 1.0)),

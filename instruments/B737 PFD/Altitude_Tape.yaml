@@ -1,4 +1,4 @@
-name: Speed_Tape
+name: Altitude_Tape
 size:
 - 600
 - 600
@@ -19,11 +19,10 @@ components:
   visibility:
     dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
     predicate: true_if_zero
-  hidden: true
 - name: speed_tape_background
   type: FilledRect
   position:
-  - 46
+  - 498
   - 306
   size:
   - 76
@@ -33,14 +32,12 @@ components:
   - 88
   - 87
   - 255
+  hidden: true
 - name: main_speed_tape
   type: VectorTape
-  position:
-  - 81
-  - 307
   scroll_axis: y
   pixels_per_unit: 3.0
-  tick_side: right
+  tick_side: left
   tick_color:
   - 255
   - 255
@@ -73,54 +70,6 @@ components:
     offset: 32.0
     font: ST_Boeing_PFD
     side: left
-  bands:
-  - range:
-    - 0.0
-    - dataref: laminar/B738/pfd/min_speed
-      table:
-      - - 0
-        - 0
-      - - 999
-        - 999
-    color:
-    - 233
-    - 18
-    - 16
-    - 255
-    width: 8.0
-    side: right
-    dash: 8.0
-  - range:
-    - 300.0
-    - 999.0
-    color:
-    - 233
-    - 18
-    - 16
-    - 255
-    width: 8.0
-    side: right
-    dash: 8.0
-  - range:
-    - dataref: laminar/B738/pfd/min_speed
-      table:
-      - - 0
-        - 0
-      - - 999
-        - 999
-    - dataref: laminar/B738/pfd/min_maneuver_speed
-      table:
-      - - 0
-        - 0
-      - - 999
-        - 999
-    color:
-    - 238
-    - 159
-    - 32
-    - 255
-    width: 4.0
-    side: right
   bugs:
   - value:
       dataref: sim/cockpit2/autopilot/airspeed_dial_kts
@@ -148,55 +97,29 @@ components:
     filled: false
     width: 2.0
   viewport:
-  - 9
+  - 459
   - 115
   - 84
   - 381
-- name: speed_acceleration
-  type: Vector
-  position:
-  - 71
-  - 307
-  direction: 90.0
-  length:
-    dataref: sim/cockpit2/gauges/indicators/airspeed_acceleration_kts_sec_pilot
-    table:
-    - - -6
-      - -180
-    - - 0
-      - 0
-    - - 6
-      - 180
-  color:
-  - 46
-  - 227
-  - 92
-  - 255
-  width: 2.0
-  cap: triangle
-  cap_width: 14.0
-  cap_height: 10.0
-  cap_filled: false
-  hide_if_less_than_cap: true
-- name: alt_tape_window
+- name: alt_tape_window_copy
   type: Polygon
   origin:
-  - 72
+  - 21
   - 306
   points:
-  - - -66
+  - - 66
     - 26
-  - - -12
+  - - 12
     - 26
-  - - -12
+  - - 12
     - 9
   - - 0
     - 0
-  - - -12
+  - - 12
     - -9
-  - - -12
+  - - 12
     - -26
-  - - -66
+  - - 66
     - -26
   color:
   - 0
@@ -209,6 +132,39 @@ components:
   - 255
   - 255
   outline_width: 2.0
+- name: units_speed_tape
+  type: VectorTape
+  position:
+  - 500
+  - 307
+  scroll_axis: y
+  pixels_per_unit: 24.0
+  wrap: 10.0
+  tick_side: left
+  tick_color:
+  - 245
+  - 243
+  - 224
+  - 255
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    table:
+    - - 0
+      - 0
+    - - 9.9
+      - 9.9
+    convert_function: return_units_decimal
+  labels:
+    interval: 1.0
+    font_size: 22.0
+    offset: 0.0
+    font: ST_Boeing_PFD
+    side: right
+  viewport:
+  - 44
+  - 282
+  - 16
+  - 47
 - name: units_speed_tape
   type: VectorTape
   position:
@@ -245,7 +201,7 @@ components:
 - name: tens_speed_tape
   type: VectorTape
   position:
-  - 28
+  - 500
   - 307
   scroll_axis: y
   pixels_per_unit: 32.0
@@ -271,7 +227,7 @@ components:
     font: ST_Boeing_PFD
     side: right
   viewport:
-  - 27
+  - 75
   - 288
   - 17
   - 37
