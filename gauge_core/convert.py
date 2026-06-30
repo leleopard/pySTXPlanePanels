@@ -153,6 +153,29 @@ def return_thousands_digit_int(value: float, _get: GetData) -> float:
     return float((int(value) // 1000) % 10)
 
 
+def return_ten_thousands_digit_int(value: float, _get: GetData) -> float:
+    """Ten-thousands digit only (0–9), no fractional part.  Input 23456.7 → 2."""
+    return float((int(value) // 10000) % 10)
+
+
+def return_ten_thousands_digit(value: float, _get: GetData) -> float:
+    """Ten-thousands digit with smooth rollover as the lower digits cross 9999 → 10000.
+
+    Returns a value in [0, 10): integer ten-thousands digit when lower digits < 9999,
+    blending fractionally toward the next ten-thousands digit as they rise from
+    9999 to 10000.  Combine with table [[0,0],[10,10]] and wrap: 10.0.
+
+    Example: altitude 19999.6 → lower=9999.6, ten_thousands_int=1, result=1.6
+             altitude 20000.0 → lower=0.0,    ten_thousands_int=2, result=2.0
+    """
+    lower = value % 10000.0
+    ten_thousands_int = (int(value) // 10000) % 10
+    if lower >= 9999.0:
+        frac = lower - 9999.0   # 0.0 → 1.0 as value crosses X9999 → X0000
+        return (ten_thousands_int + frac) % 10.0
+    return float(ten_thousands_int)
+
+
 def return_thousands_digit(value: float, _get: GetData) -> float:
     """Thousands digit with smooth rollover as the hundreds+tens+units cross 999 → 1000.
 
@@ -284,6 +307,8 @@ for _name, _func in {
     "return_tens_digit": return_tens_digit,
     "return_hundreds_digit_int": return_hundreds_digit_int,
     "return_hundreds_digit": return_hundreds_digit,
+    "return_ten_thousands_digit_int": return_ten_thousands_digit_int,
+    "return_ten_thousands_digit": return_ten_thousands_digit,
     "return_thousands_digit_int": return_thousands_digit_int,
     "return_thousands_digit": return_thousands_digit,
     "identity": identity,
