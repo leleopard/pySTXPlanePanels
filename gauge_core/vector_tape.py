@@ -315,8 +315,6 @@ class VectorTape:
             if self._scroll_convert is not None:
                 raw = float(self._scroll_convert(raw, get_data))
             self._current_value = lookup_piecewise(self._scroll_table, raw)
-            if self.name == "units_speed_tape":
-                print(f"[DEBUG] units_speed_tape scroll raw={float(get_data(self._scroll_dataref)):.2f}  after_convert={raw:.4f}  current_value={self._current_value:.4f}")
         for band in self._bands:
             if isinstance(band["lo"], _BandEndpoint):
                 band["lo_val"] = band["lo"].resolve(get_data)
