@@ -65,10 +65,17 @@ def _register_font_dirs(yaml_dir: str) -> None:
 
 def _pil_font(name: str | None, size: int, *,
               bold: bool = False, italic: bool = False) -> ImageFont.ImageFont:
-    """Load a PIL font by family name and style, falling back to the default bitmap font."""
+    """Load a PIL font by family name and style, falling back to the default bitmap font.
+
+    `size` is in points (matching Arcade/pyglet convention).  PIL's truetype()
+    takes pixels, so we convert assuming a standard 96 DPI display:
+        px = round(points * 96 / 72)
+    """
     key = (name or "", size, bold, italic)
     if key in _PIL_FONT_CACHE:
         return _PIL_FONT_CACHE[key]
+    # Convert Arcade/pyglet points to PIL pixels (96 DPI, 72 pt/inch).
+    px_size = max(1, int(round(size * 96 / 72)))
     font = None
     if name:
         needle = name.lower().replace(" ", "")
@@ -95,13 +102,13 @@ def _pil_font(name: str | None, size: int, *,
             candidates.sort(key=lambda t: (t[1] != bold) * 2 + (t[2] != italic))
             for f, _, _ in candidates:
                 try:
-                    font = ImageFont.truetype(str(f), size)
+                    font = ImageFont.truetype(str(f), px_size)
                     break
                 except Exception:
                     continue
     if font is None:
         try:
-            font = ImageFont.load_default(size=size)
+            font = ImageFont.load_default(size=px_size)
         except TypeError:
             font = ImageFont.load_default()
     _PIL_FONT_CACHE[key] = font
