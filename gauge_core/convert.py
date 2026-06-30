@@ -153,6 +153,24 @@ def return_thousands_digit_int(value: float, _get: GetData) -> float:
     return float((int(value) // 1000) % 10)
 
 
+def return_thousands_digit(value: float, _get: GetData) -> float:
+    """Thousands digit with smooth rollover as the hundreds+tens+units cross 999 → 1000.
+
+    Returns a value in [0, 10): integer thousands digit when hundreds_tens_units < 999,
+    blending fractionally toward the next thousands digit as hundreds_tens_units rises
+    from 999 to 1000.  Combine with table [[0,0],[10,10]] and wrap: 10.0.
+
+    Example: altitude 1999.6 → htu=999.6, thousands_int=1, result=1.6
+             altitude 2000.0 → htu=0.0,   thousands_int=2, result=2.0
+    """
+    hundreds_tens_units = value % 1000.0
+    thousands_int = (int(value) // 1000) % 10
+    if hundreds_tens_units >= 999.0:
+        frac = hundreds_tens_units - 999.0   # 0.0 → 1.0 as value crosses X999 → X000
+        return (thousands_int + frac) % 10.0
+    return float(thousands_int)
+
+
 # -- Predicates -----------------------------------------------------------
 # Predicates return a bool. Used by visibility transforms and
 # (potentially) for state-dependent component swapping.
@@ -267,6 +285,7 @@ for _name, _func in {
     "return_hundreds_digit_int": return_hundreds_digit_int,
     "return_hundreds_digit": return_hundreds_digit,
     "return_thousands_digit_int": return_thousands_digit_int,
+    "return_thousands_digit": return_thousands_digit,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
