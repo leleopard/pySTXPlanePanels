@@ -148,6 +148,21 @@ def return_hundreds_digit(value: float, _get: GetData) -> float:
     return float(hundreds_int)
 
 
+def return_sub_hundred_int(value: float, _get: GetData) -> float:
+    """Tens and units as a two-digit integer (0–99), no fractional part.  Input 1025 → 25."""
+    return float(int(value) % 100)
+
+
+def return_sub_hundred(value: float, _get: GetData) -> float:
+    """Tens and units as a continuous value in [0, 100).  Input 1025 → 25.0.
+
+    Returns value % 100 directly — no additional blending needed because the
+    tape already scrolls smoothly through 0–99.  Use with wrap: 100 and
+    table [[0,0],[100,100]].
+    """
+    return value % 100.0
+
+
 def return_thousands_digit_int(value: float, _get: GetData) -> float:
     """Thousands digit only (0–9), no fractional part.  Input 12345.6 → 2."""
     return float((int(value) // 1000) % 10)
@@ -307,6 +322,8 @@ for _name, _func in {
     "return_tens_digit": return_tens_digit,
     "return_hundreds_digit_int": return_hundreds_digit_int,
     "return_hundreds_digit": return_hundreds_digit,
+    "return_sub_hundred_int": return_sub_hundred_int,
+    "return_sub_hundred": return_sub_hundred,
     "return_ten_thousands_digit_int": return_ten_thousands_digit_int,
     "return_ten_thousands_digit": return_ten_thousands_digit,
     "return_thousands_digit_int": return_thousands_digit_int,
