@@ -74,6 +74,7 @@ import arcade
 
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component
+from gauge_core.text_component import _ensure_font_loaded
 
 
 def _col(raw) -> tuple[int, int, int, int]:
@@ -610,6 +611,9 @@ def _vector_tape_factory(
         }
         for b in bands_raw
     ]
+
+    if lbl.get("font_file"):
+        _ensure_font_loaded((base_dir / lbl["font_file"]).resolve())
 
     label_side_raw = lbl.get("side")
     tape = VectorTape(

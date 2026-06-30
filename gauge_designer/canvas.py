@@ -63,6 +63,33 @@ def _register_font_dirs(yaml_dir: str) -> None:
         _PIL_FONT_CACHE.clear()
 
 
+def _best_ttc_face(path: Path, px_size: int, bold: bool, italic: bool
+                   ) -> "ImageFont.FreeTypeFont | None":
+    """Return the best-matching face from a TTC collection for the requested style.
+
+    Enumerates all faces using PIL's getname() (family, style) and picks the
+    one whose style flags best match the bold/italic request.
+    """
+    best: "ImageFont.FreeTypeFont | None" = None
+    best_score = -999
+    idx = 0
+    while True:
+        try:
+            face = ImageFont.truetype(str(path), px_size, index=idx)
+        except OSError:
+            break
+        _, style = face.getname()
+        style_l = style.lower()
+        has_bold   = any(m in style_l for m in ("bold", "heavy", "black"))
+        has_italic = any(m in style_l for m in ("italic", "oblique"))
+        score = (2 if has_bold == bold else -1) + (2 if has_italic == italic else -1)
+        if score > best_score:
+            best_score = score
+            best = face
+        idx += 1
+    return best
+
+
 def _pil_font(name: str | None, size: int, *,
               bold: bool = False, italic: bool = False) -> ImageFont.ImageFont:
     """Load a PIL font by family name and style, falling back to the default bitmap font.
@@ -70,6 +97,9 @@ def _pil_font(name: str | None, size: int, *,
     `size` is in points (matching Arcade/pyglet convention).  PIL's truetype()
     takes pixels, so we convert assuming a standard 96 DPI display:
         px = round(points * 96 / 72)
+
+    TTC (collection) files are supported: all faces are enumerated and the
+    one whose internal style flags best match bold/italic is selected.
     """
     key = (name or "", size, bold, italic)
     if key in _PIL_FONT_CACHE:
@@ -86,24 +116,35 @@ def _pil_font(name: str | None, size: int, *,
             if not fonts_dir.is_dir():
                 continue
             for f in sorted(fonts_dir.iterdir()):
-                if f.suffix.lower() not in (".ttf", ".otf") or f in seen:
+                if f.suffix.lower() not in (".ttf", ".otf", ".ttc") or f in seen:
                     continue
                 seen.add(f)
                 stem = f.stem.lower().replace(" ", "").replace("-", "")
                 if needle not in stem:
                     continue
-                # Everything after the family name needle is the style suffix
-                suffix = stem[stem.index(needle) + len(needle):]
-                is_bold   = any(m in suffix for m in _BOLD_MARKERS)   if suffix else False
-                is_italic = any(m in suffix for m in _ITALIC_MARKERS) if suffix else False
-                candidates.append((f, is_bold, is_italic))
+                if f.suffix.lower() == ".ttc":
+                    # TTC: treat as a pseudo-candidate; bold/italic resolved
+                    # by face enumeration below, not by filename suffix.
+                    candidates.append((f, None, None))  # type: ignore[arg-type]
+                else:
+                    suffix = stem[stem.index(needle) + len(needle):]
+                    is_bold   = any(m in suffix for m in _BOLD_MARKERS)   if suffix else False
+                    is_italic = any(m in suffix for m in _ITALIC_MARKERS) if suffix else False
+                    candidates.append((f, is_bold, is_italic))
         if candidates:
-            # Sort by match quality: exact bold/italic match scores 0
-            candidates.sort(key=lambda t: (t[1] != bold) * 2 + (t[2] != italic))
-            for f, _, _ in candidates:
+            # TTCs go first so the correct face wins over a plain .ttf fallback.
+            candidates.sort(key=lambda t: (
+                0 if t[0].suffix.lower() == ".ttc" else
+                (t[1] != bold) * 2 + (t[2] != italic)  # type: ignore[operator]
+            ))
+            for f, fb, fi in candidates:
                 try:
-                    font = ImageFont.truetype(str(f), px_size)
-                    break
+                    if f.suffix.lower() == ".ttc":
+                        font = _best_ttc_face(f, px_size, bold, italic)
+                    else:
+                        font = ImageFont.truetype(str(f), px_size)
+                    if font is not None:
+                        break
                 except Exception:
                     continue
     if font is None:
