@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 import arcade
 
-from gauge_core.font_utils import auto_load_font
+from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.registry import (
     get_convert,
     register_component,
@@ -146,20 +146,24 @@ def _text_factory(
     base_dir: Path,
     container_size: tuple[int, int] | None = None,  # noqa: ARG001
 ) -> Text:
-    auto_load_font(comp.get("font_name"), base_dir,
-                   explicit_file=comp.get("font_file"))
+    font_name, bold, italic = resolve_font_for_arcade(
+        comp.get("font_name"), base_dir,
+        bold=bool(comp.get("bold", False)),
+        italic=bool(comp.get("italic", False)),
+        explicit_file=comp.get("font_file"),
+    )
 
     text = Text(
         name=comp["name"],
         position_xy=tuple(comp["position"]),
         text=comp.get("text", ""),
-        font_name=comp.get("font_name"),
+        font_name=font_name,
         font_size=float(comp.get("font_size", 12.0)),
         color=_as_color(comp.get("color")),
         anchor_x=comp.get("anchor_x", "left"),
         anchor_y=comp.get("anchor_y", "baseline"),
-        bold=bool(comp.get("bold", False)),
-        italic=bool(comp.get("italic", False)),
+        bold=bold,
+        italic=italic,
     )
     if "dataref" in comp:
         text.set_dataref(

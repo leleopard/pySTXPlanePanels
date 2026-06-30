@@ -72,7 +72,7 @@ from typing import Any, Callable
 
 import arcade
 
-from gauge_core.font_utils import auto_load_font
+from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component
 
@@ -612,7 +612,12 @@ def _vector_tape_factory(
         for b in bands_raw
     ]
 
-    auto_load_font(lbl.get("font"), base_dir, explicit_file=lbl.get("font_file"))
+    lbl_font, lbl_bold, lbl_italic = resolve_font_for_arcade(
+        lbl.get("font"), base_dir,
+        bold=bool(lbl.get("bold", False)),
+        italic=bool(lbl.get("italic", False)),
+        explicit_file=lbl.get("font_file"),
+    )
 
     label_side_raw = lbl.get("side")
     tape = VectorTape(
@@ -630,9 +635,9 @@ def _vector_tape_factory(
         label_format=str(lbl.get("format", "{:.0f}")),
         label_offset=float(lbl.get("offset", 8.0)),
         label_side=str(label_side_raw) if label_side_raw is not None else None,
-        label_font=str(lbl["font"]) if lbl.get("font") else None,
-        label_bold=bool(lbl.get("bold", False)),
-        label_italic=bool(lbl.get("italic", False)),
+        label_font=lbl_font,
+        label_bold=lbl_bold,
+        label_italic=lbl_italic,
         bands=bands,
         bugs=comp.get("bugs") or [],
         wrap=float(comp["wrap"]) if comp.get("wrap") is not None else None,
