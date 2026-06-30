@@ -35,9 +35,33 @@ def _rgba(raw) -> tuple:
 
 
 _PIL_FONT_CACHE: dict[tuple, ImageFont.FreeTypeFont] = {}
+# Extra font directories populated from the loaded instrument's location.
+# _pil_font searches these in addition to C:/Windows/Fonts so project-bundled
+# fonts (e.g. assets/ST_Boeing_PFD.ttf) are found without system installation.
+_EXTRA_FONT_DIRS: list[Path] = []
 
 _BOLD_MARKERS   = ("bold", "bd", "heavy", "black", "b")
 _ITALIC_MARKERS = ("italic", "oblique", "it", "i")
+
+
+def _register_font_dirs(yaml_dir: str) -> None:
+    """Populate _EXTRA_FONT_DIRS by scanning from yaml_dir up to the repo root."""
+    global _EXTRA_FONT_DIRS
+    dirs: list[Path] = []
+    p = Path(yaml_dir).resolve()
+    for _ in range(6):
+        for sub in ("assets", "assets/fonts", "fonts"):
+            d = p / sub
+            if d.is_dir() and d not in dirs:
+                dirs.append(d)
+        parent = p.parent
+        if parent == p:
+            break
+        p = parent
+    if dirs != _EXTRA_FONT_DIRS:
+        _EXTRA_FONT_DIRS = dirs
+        _PIL_FONT_CACHE.clear()
+
 
 def _pil_font(name: str | None, size: int, *,
               bold: bool = False, italic: bool = False) -> ImageFont.ImageFont:
@@ -47,13 +71,17 @@ def _pil_font(name: str | None, size: int, *,
         return _PIL_FONT_CACHE[key]
     font = None
     if name:
-        fonts_dir = Path("C:/Windows/Fonts")
-        if fonts_dir.exists():
-            needle = name.lower().replace(" ", "")
-            candidates: list[tuple[Path, bool, bool]] = []
+        needle = name.lower().replace(" ", "")
+        search_dirs = [Path("C:/Windows/Fonts")] + _EXTRA_FONT_DIRS
+        candidates: list[tuple[Path, bool, bool]] = []
+        seen: set[Path] = set()
+        for fonts_dir in search_dirs:
+            if not fonts_dir.is_dir():
+                continue
             for f in sorted(fonts_dir.iterdir()):
-                if f.suffix.lower() not in (".ttf", ".otf"):
+                if f.suffix.lower() not in (".ttf", ".otf") or f in seen:
                     continue
+                seen.add(f)
                 stem = f.stem.lower().replace(" ", "").replace("-", "")
                 if needle not in stem:
                     continue
@@ -62,15 +90,15 @@ def _pil_font(name: str | None, size: int, *,
                 is_bold   = any(m in suffix for m in _BOLD_MARKERS)   if suffix else False
                 is_italic = any(m in suffix for m in _ITALIC_MARKERS) if suffix else False
                 candidates.append((f, is_bold, is_italic))
-            if candidates:
-                # Sort by match quality: exact bold/italic match scores 0
-                candidates.sort(key=lambda t: (t[1] != bold) * 2 + (t[2] != italic))
-                for f, _, _ in candidates:
-                    try:
-                        font = ImageFont.truetype(str(f), size)
-                        break
-                    except Exception:
-                        continue
+        if candidates:
+            # Sort by match quality: exact bold/italic match scores 0
+            candidates.sort(key=lambda t: (t[1] != bold) * 2 + (t[2] != italic))
+            for f, _, _ in candidates:
+                try:
+                    font = ImageFont.truetype(str(f), size)
+                    break
+                except Exception:
+                    continue
     if font is None:
         try:
             font = ImageFont.load_default(size=size)
@@ -165,6 +193,7 @@ class InstrumentCanvas(QWidget):
         self._yaml_dir = yaml_dir
         self._atlas_cache.clear()
         self._hidden = set()   # reset so no stale names from previous instrument bleed through
+        _register_font_dirs(yaml_dir)
         self._render()
 
     def set_selected_point(self, idx: int):
@@ -491,6 +520,8 @@ class InstrumentCanvas(QWidget):
                     self._render_ai(comp, composite, draw, w, h)
                 elif ctype == "RotaryEncoder":
                     self._render_rotary_encoder(comp, composite, draw, h)
+                elif ctype == "Text":
+                    self._render_text(comp, draw, h)
             except Exception:
                 continue
 
@@ -552,6 +583,9 @@ class InstrumentCanvas(QWidget):
                     ey_p = int(round(oy_p - length * math.sin(dir_rad)))
                     lw = max(3, int(float(comp.get("width", 1.0))) + 2)
                     draw.line([(ox_p, oy_p), (ex_p, ey_p)], fill=SEL, width=lw)
+                elif ctype == "Text":
+                    pos = comp.get("position", [0, 0])
+                    self._draw_crosshair(draw, pos, h, SEL)
                 else:
                     self._draw_crosshair(draw, comp.get("position", [w//2, h//2]), h, SEL)
                 break
@@ -807,6 +841,24 @@ class InstrumentCanvas(QWidget):
                     (int(round(ex_p + px_p * half_w)), int(round(ey_p + py_p * half_w))),
                     (int(round(ex_p - px_p * half_w)), int(round(ey_p - py_p * half_w))),
                 ], fill=color, width=width)
+
+    def _render_text(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        pos   = comp.get("position", [0, 0])
+        cx_p  = int(pos[0])
+        cy_p  = canvas_h - int(pos[1])
+        color = _rgba(comp.get("color"))
+        size  = max(8, int(float(comp.get("font_size", 12.0))))
+        font  = _pil_font(comp.get("font_name"), size,
+                          bold=bool(comp.get("bold", False)),
+                          italic=bool(comp.get("italic", False)))
+        text  = comp.get("text") or comp.get("text_format") or comp.get("dataref") or "?"
+        anchor_x = comp.get("anchor_x", "left")
+        pil_anchor = {"left": "la", "center": "ma", "right": "ra"}.get(anchor_x, "la")
+        try:
+            draw.text((cx_p, cy_p), str(text), fill=color, font=font, anchor=pil_anchor)
+        except TypeError:
+            draw.text((cx_p, cy_p), str(text), fill=color, font=font)
+        self._crosshair(draw, cx_p, cy_p)
 
     def _render_vectortape(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_w: int, canvas_h: int) -> None:
