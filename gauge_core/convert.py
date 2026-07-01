@@ -232,27 +232,45 @@ def return_thousands_digit(value: float, _get: GetData) -> float:
     return float(thousands_int)
 
 
-def return_thousands_digit_100ft(value: float, _get: GetData) -> float:
-    """Thousands digit with smooth rollover as the hundreds place crosses 900 → 1000.
+def return_thousands_digit_20ft(value: float, _get: GetData) -> float:
+    """Thousands digit with smooth rollover as altitude crosses the last 20 ft before X000.
 
-    The digit drum below (hundreds place, e.g. hundredsDigit_alti_tape) only
-    changes once every 100 ft, so the thousands digit above it should start
-    blending toward the next value as soon as that layer enters its last
-    visible step (900–1000), not just the final 1-unit window
-    `return_thousands_digit` uses for 1-unit-resolution digit chains —
-    otherwise the thousands digit rolls over far too quickly relative to
-    the hundreds digit it sits above.
+    On the real B737 tape every digit above the sub-hundred drum blends
+    over the same final 20 ft, driven by the drum's own 20 ft resolution
+    (`return_sub_hundred`) rather than each digit's own place value — a
+    window scaled to the digit's place (e.g. the last 100 ft for a
+    thousands digit) rolls it over too quickly relative to what the sim
+    actually shows.
 
-    Example: altitude 2900 → htu=900, thousands_int=2, result=2.0
-             altitude 2950 → htu=950, thousands_int=2, result=2.5
+    Example: altitude 2980 → htu=980, thousands_int=2, result=2.0
+             altitude 2990 → htu=990, thousands_int=2, result=2.5
              altitude 3000 → htu=0,   thousands_int=3, result=3.0
     """
     hundreds_tens_units = value % 1000.0
     thousands_int = (int(value) // 1000) % 10
-    if hundreds_tens_units >= 900.0:
-        frac = (hundreds_tens_units - 900.0) / 100.0   # 0.0 → 1.0 as value crosses X900 → X000
+    if hundreds_tens_units >= 980.0:
+        frac = (hundreds_tens_units - 980.0) / 20.0   # 0.0 → 1.0 as value crosses X980 → X000
         return (thousands_int + frac) % 10.0
     return float(thousands_int)
+
+
+def return_ten_thousands_digit_20ft(value: float, _get: GetData) -> float:
+    """Ten-thousands digit with smooth rollover as altitude crosses the last 20 ft before X0000.
+
+    Same reasoning as `return_thousands_digit_20ft`: blends over the fixed
+    final 20 ft (matching the sub-hundred drum's own resolution) rather
+    than a window scaled to this digit's much larger place value.
+
+    Example: altitude 29980 → lower=9980, ten_thousands_int=2, result=2.0
+             altitude 29990 → lower=9990, ten_thousands_int=2, result=2.5
+             altitude 30000 → lower=0,    ten_thousands_int=3, result=3.0
+    """
+    lower = value % 10000.0
+    ten_thousands_int = (int(value) // 10000) % 10
+    if lower >= 9980.0:
+        frac = (lower - 9980.0) / 20.0   # 0.0 → 1.0 as value crosses X9980 → X0000
+        return (ten_thousands_int + frac) % 10.0
+    return float(ten_thousands_int)
 
 
 # -- Predicates -----------------------------------------------------------
@@ -373,9 +391,10 @@ for _name, _func in {
     "return_sub_hundred": return_sub_hundred,
     "return_ten_thousands_digit_int": return_ten_thousands_digit_int,
     "return_ten_thousands_digit": return_ten_thousands_digit,
+    "return_ten_thousands_digit_20ft": return_ten_thousands_digit_20ft,
     "return_thousands_digit_int": return_thousands_digit_int,
     "return_thousands_digit": return_thousands_digit,
-    "return_thousands_digit_100ft": return_thousands_digit_100ft,
+    "return_thousands_digit_20ft": return_thousands_digit_20ft,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
