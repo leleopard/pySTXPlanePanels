@@ -1541,6 +1541,11 @@ class PropertiesForm(QWidget):
         self._vt_label_interval.valueChanged.connect(self._emit)
         self._vt_sec.row("Label interval - dataref unit", self._vt_label_interval)
 
+        self._vt_label_format = QLineEdit()
+        self._vt_label_format.setPlaceholderText("{:.0f}  (blank = default)")
+        self._vt_label_format.editingFinished.connect(self._emit)
+        self._vt_sec.row("Label format", self._vt_label_format)
+
         self._vt_label_offset = QDoubleSpinBox()
         self._vt_label_offset.setRange(0.0, 200.0); self._vt_label_offset.setDecimals(1)
         self._vt_label_offset.setValue(8.0)
@@ -1586,7 +1591,7 @@ class PropertiesForm(QWidget):
         _vt_style_hl.addStretch()
         self._vt_sec.row("Label style", _vt_style_row)
 
-        hint = QLabel("Label color/format and ticks color are preserved as-is from YAML.")
+        hint = QLabel("Label color and ticks color are preserved as-is from YAML.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #999; font-size: 10px;")
         self._vt_sec.row_widget(hint)
@@ -2783,8 +2788,9 @@ class PropertiesForm(QWidget):
         lbl = comp.get("labels") or {}
         self._vt_labels_cache = {k: v for k, v in lbl.items()
                                  if k not in ("interval", "font_size", "font", "bold", "italic",
-                                              "side", "offset")}
+                                              "side", "offset", "format")}
         self._vt_label_interval.setValue(float(lbl.get("interval", 0.0)))
+        self._vt_label_format.setText(str(lbl.get("format", "")))
         self._vt_label_offset.setValue(float(lbl.get("offset", 8.0)))
         ls = str(lbl.get("side", "")) if lbl.get("side") else ""
         self._vt_label_side.setCurrentIndex(
@@ -3543,14 +3549,19 @@ class PropertiesForm(QWidget):
                      **( {"offset": r[3]} if len(r) > 3 and r[3] != 0 else {} )}
                     for r in ticks_raw
                 ]
-            # Labels dict: cache preserves color/format/offset;
-            # form controls interval, font_size, font, and side.
+            # Labels dict: cache preserves color and any other unmodeled keys;
+            # form controls interval, format, font_size, font, and side.
             lbl_dict = dict(self._vt_labels_cache)
             lbl_interval = self._vt_label_interval.value()
             if lbl_interval > 0:
                 lbl_dict["interval"] = lbl_interval
             else:
                 lbl_dict.pop("interval", None)
+            lbl_fmt = self._vt_label_format.text().strip()
+            if lbl_fmt:
+                lbl_dict["format"] = lbl_fmt
+            else:
+                lbl_dict.pop("format", None)
             lbl_dict["font_size"] = self._vt_label_font_size.value()
             lbl_dict["offset"] = self._vt_label_offset.value()
             fn = self._vt_label_font.text().strip()
@@ -3766,6 +3777,7 @@ class PropertiesForm(QWidget):
         self._vt_ticks.load([])
         self._vt_labels_cache = {}
         self._vt_label_interval.setValue(0.0)
+        self._vt_label_format.clear()
         self._vt_label_offset.setValue(8.0)
         self._vt_label_side.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
