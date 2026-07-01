@@ -18,9 +18,9 @@ import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+from PySide6.QtGui import QFontDatabase, QPixmap, QPainter
 from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QPixmap, QPainter
 
 from gauge_designer.ui_utils import is_y_down
 
@@ -44,8 +44,16 @@ _BOLD_MARKERS   = ("bold", "bd", "heavy", "black", "b")
 _ITALIC_MARKERS = ("italic", "oblique", "it", "i")
 
 
+_QT_FONTS_REGISTERED: set[str] = set()
+
+
 def _register_font_dirs(yaml_dir: str) -> None:
-    """Populate _EXTRA_FONT_DIRS by scanning from yaml_dir up to the repo root."""
+    """Populate _EXTRA_FONT_DIRS and register project fonts with QFontDatabase.
+
+    Scanning upward from yaml_dir finds asset directories.  Each font file
+    found is registered with Qt so it appears in QFontDialog without needing
+    to be installed system-wide.
+    """
     global _EXTRA_FONT_DIRS
     dirs: list[Path] = []
     p = Path(yaml_dir).resolve()
@@ -61,6 +69,14 @@ def _register_font_dirs(yaml_dir: str) -> None:
     if dirs != _EXTRA_FONT_DIRS:
         _EXTRA_FONT_DIRS = dirs
         _PIL_FONT_CACHE.clear()
+    # Register every discovered font file with Qt so QFontDialog lists them.
+    for d in dirs:
+        for f in sorted(d.iterdir()):
+            if f.suffix.lower() in (".ttf", ".otf", ".ttc"):
+                key = str(f.resolve())
+                if key not in _QT_FONTS_REGISTERED:
+                    QFontDatabase.addApplicationFont(key)
+                    _QT_FONTS_REGISTERED.add(key)
 
 
 def _best_ttc_face(path: Path, px_size: int, bold: bool, italic: bool
