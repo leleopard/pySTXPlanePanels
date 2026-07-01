@@ -22,21 +22,20 @@ components:
 - name: speed_tape_background
   type: FilledRect
   position:
-  - 498
+  - 493
   - 306
   size:
-  - 76
+  - 81
   - 382
   color:
   - 98
   - 88
   - 87
   - 255
-  hidden: true
-- name: main_speed_tape
+- name: main_altitude_tape
   type: VectorTape
   scroll_axis: y
-  pixels_per_unit: 3.0
+  pixels_per_unit: 0.49
   tick_side: left
   tick_color:
   - 255
@@ -44,60 +43,63 @@ components:
   - 255
   - 255
   scroll:
-    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
     table:
     - - 0
       - 0
-    - - 382
-      - 382
+    - - 60000
+      - 60000
   ticks:
-  - interval: 10
+  - interval: 100
     length: 15
     width: 2
-    offset: 9
-  - interval: 20
-    length: 15
-    width: 2
-    offset: 9
+    offset: 5
+  - interval: 500
+    length: 20
+    width: 4
   labels:
     color:
     - 255
     - 255
     - 255
+    interval: 200.0
     format: '{:.0f}'
-    interval: 20.0
-    font_size: 18.0
-    offset: 32.0
+    font_size: 15.0
+    offset: 26.0
     font: ST_Boeing_PFD
-    side: left
+    side: right
   bugs:
   - value:
-      dataref: sim/cockpit2/autopilot/airspeed_dial_kts
+      dataref: sim/cockpit2/autopilot/altitude_dial_ft
       table:
       - - 0
         - 0
-      - - 999
-        - 999
+      - - 70000
+        - 70000
     color:
     - 244
     - 146
     - 245
     - 255
     points:
-    - - -20
+    - - 5
       - 0
-    - - -11
-      - 8
-    - - 14
-      - 8
-    - - 14
-      - -8
-    - - -11
-      - -8
+    - - -1
+      - 7
+    - - -1
+      - 25
+    - - 40
+      - 25
+    - - 40
+      - -25
+    - - -1
+      - -25
+    - - -1
+      - -7
     filled: false
     width: 2.0
   viewport:
-  - 459
+  - 448
   - 115
   - 84
   - 381
@@ -125,7 +127,7 @@ components:
   - 0
   - 0
   - 0
-  - 20
+  - 255
   outline_color:
   - 255
   - 255
@@ -134,12 +136,9 @@ components:
   outline_width: 2.0
 - name: units_speed_tape
   type: VectorTape
-  position:
-  - 500
-  - 307
   scroll_axis: y
-  pixels_per_unit: 24.0
-  wrap: 10.0
+  pixels_per_unit: 1.2
+  wrap: 100.0
   tick_side: left
   tick_color:
   - 245
@@ -147,64 +146,29 @@ components:
   - 224
   - 255
   scroll:
-    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
     table:
     - - 0
       - 0
-    - - 9.9
-      - 9.9
-    convert_function: return_units_decimal
+    - - 100
+      - 100
+    convert_function: return_sub_hundred
   labels:
-    interval: 1.0
+    interval: 20.0
+    format: '{:02.0f}'
     font_size: 22.0
     offset: 0.0
     font: ST_Boeing_PFD
     side: right
   viewport:
-  - 44
-  - 282
-  - 16
-  - 47
-- name: units_speed_tape
+  - 533
+  - 281
+  - 33
+  - 52
+- name: hundredsDigit_alti_tape
   type: VectorTape
-  position:
-  - 45
-  - 307
   scroll_axis: y
-  pixels_per_unit: 24.0
-  wrap: 10.0
-  tick_side: left
-  tick_color:
-  - 245
-  - 243
-  - 224
-  - 255
-  scroll:
-    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
-    table:
-    - - 0
-      - 0
-    - - 9.9
-      - 9.9
-    convert_function: return_units_decimal
-  labels:
-    interval: 1.0
-    font_size: 22.0
-    offset: 0.0
-    font: ST_Boeing_PFD
-    side: right
-  viewport:
-  - 44
-  - 282
-  - 16
-  - 47
-- name: tens_speed_tape
-  type: VectorTape
-  position:
-  - 500
-  - 307
-  scroll_axis: y
-  pixels_per_unit: 32.0
+  pixels_per_unit: 35.0
   wrap: 10.0
   tick_side: left
   tick_color:
@@ -213,13 +177,13 @@ components:
   - 255
   - 255
   scroll:
-    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
     table:
     - - 0
       - 0
     - - 10
       - 10
-    convert_function: return_tens_digit
+    convert_function: return_hundreds_digit_20ft
   labels:
     interval: 1.0
     font_size: 22.0
@@ -227,17 +191,14 @@ components:
     font: ST_Boeing_PFD
     side: right
   viewport:
-  - 75
-  - 288
+  - 520
+  - 284
   - 17
-  - 37
-- name: hundreds_speed_tape
+  - 46
+- name: thousands_Digit_alti_tape
   type: VectorTape
-  position:
-  - 12
-  - 307
   scroll_axis: y
-  pixels_per_unit: 32.0
+  pixels_per_unit: 37.0
   wrap: 10.0
   tick_side: left
   tick_color:
@@ -246,60 +207,69 @@ components:
   - 255
   - 255
   scroll:
-    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
     table:
     - - 0
       - 0
     - - 10
       - 10
-    convert_function: return_hundreds_digit
+    convert_function: return_thousands_digit_20ft
   labels:
     interval: 1.0
-    font_size: 22.0
+    font_size: 26.0
     offset: 0.0
     font: ST_Boeing_PFD
+    bold: true
     side: right
   viewport:
-  - 10
-  - 288
+  - 502
+  - 286
   - 17
-  - 37
-- name: GS_static_text
+  - 46
+- name: 10Kdigit_alti_tape
+  type: VectorTape
+  scroll_axis: y
+  pixels_per_unit: 37.0
+  wrap: 10.0
+  tick_side: left
+  tick_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  scroll:
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    table:
+    - - 0
+      - 0
+    - - 10
+      - 10
+    convert_function: return_ten_thousands_digit_20ft
+  labels:
+    interval: 1.0
+    font_size: 26.0
+    offset: 0.0
+    font: ST_Boeing_PFD
+    bold: true
+    side: right
+  viewport:
+  - 485
+  - 286
+  - 17
+  - 46
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    predicate: nav_gsflg_visible
+- name: AP_Alt_Dial
   type: Text
   position:
-  - 9
-  - 53
-  text: GS
-  font_name: ST_Boeing_PFD
-  font_size: 18.0
-  color:
-  - 255
-  - 255
-  - 255
-  - 255
-- name: GS_text
-  type: Text
-  position:
-  - 39
-  - 53
-  dataref: sim/cockpit2/gauges/indicators/ground_speed_kt
-  text_format: '{:3.0f}'
-  font_name: ST_Boeing_PFD
-  font_size: 21.0
-  color:
-  - 255
-  - 255
-  - 255
-  - 255
-- name: AP_Airspeed
-  type: Text
-  position:
-  - 35
+  - 476
   - 515
-  dataref: sim/cockpit2/autopilot/airspeed_dial_kts
+  dataref: sim/cockpit2/autopilot/altitude_dial_ft
   text_format: '{:3.0f}'
   font_name: ST_Boeing_PFD
   font_size: 21.0
+  bold: true
   color:
   - 242
   - 161
