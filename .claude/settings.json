@@ -28,7 +28,14 @@
       "Bash(timeout 12 python -m gauge_core.runner \"instruments/B737 PFD/HSI.yaml\" --test)",
       "Bash(git commit -m 'fix\\(attitude_indicator\\): split show_bank_arc into show_arc_line/show_arc_ticks; fix preview y-offset *)",
       "Bash(git commit -m 'refactor\\(designer\\): collapsible sub-sections in AttitudeIndicator properties panel *)",
-      "Bash(git commit -m 'feat\\(attitude_indicator\\): configurable per-angle bank tick lengths *)"
+      "Bash(git commit -m 'feat\\(attitude_indicator\\): configurable per-angle bank tick lengths *)",
+      "Bash(git commit -m 'fix\\(designer\\): register project fonts with QFontDatabase on YAML load *)",
+      "Bash(py -c \"import gauge_core.font_utils, gauge_core.vector_tape, gauge_core.text_component; print\\('ok'\\)\")",
+      "Bash(mkdir -p /c/Users/stephane/AppData/Local/Temp/claude/c--Users-stephane-Desktop-plane-gauges/8c588a85-3a15-4ef7-a217-07c3b3719f64/scratchpad/fonttest)",
+      "Bash(rm -f assets/testwrite.tmp)",
+      "Bash(rm -f assets/testfont_out.ttf)",
+      "Bash(rm -f \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\bold_vs_regular.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\bold_vs_regular2.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\bold_vs_regular_real.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\pil_reference.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\gauge_err.txt\")",
+      "Bash(rm -rf \"C:\\\\Users\\\\stephane\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-stephane-Desktop-plane-gauges\\\\8c588a85-3a15-4ef7-a217-07c3b3719f64\\\\scratchpad\\\\fonttest\")"
     ]
   }
 }
