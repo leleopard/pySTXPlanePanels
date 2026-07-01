@@ -53,25 +53,47 @@ def strip_style_suffix(name: str) -> str:
     return " ".join(words) if words else name
 
 
-def _find_font_file(name: str, base_dir: Path) -> Path | None:
-    """Search base_dir and its ancestors for a font file matching name."""
-    needle = name.lower().replace(" ", "").replace("_", "").replace("-", "")
+def _normalize(text: str) -> str:
+    return text.lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+def _find_font_file(
+    name: str, base_dir: Path, bold: bool = False, italic: bool = False,
+) -> Path | None:
+    """Search base_dir and its ancestors for a font file matching name.
+
+    A single family can be split across several plain TTF/OTF files (one
+    per weight, e.g. "..._Bold.ttf" / "...-Regular.ttf") rather than faces
+    within one TTC. When more than one file matches `name`, the one whose
+    filename-inferred style (words after the matched name) best matches
+    bold/italic is picked — otherwise the first alphabetical match would
+    win regardless of the requested style.
+    """
+    needle = _normalize(name)
     p = base_dir.resolve()
     for _ in range(6):
         for sub in ("", "assets", "assets/fonts", "fonts"):
             d = p / sub if sub else p
             if not d.is_dir():
                 continue
-            # TTC before TTF/OTF so a collection with bold/thin wins over a
-            # single-face TTF with the same stem.
-            files = sorted(d.iterdir(),
-                           key=lambda f: (0 if f.suffix.lower() == ".ttc" else 1, f.name))
-            for f in files:
-                if f.suffix.lower() not in _EXTENSIONS:
-                    continue
-                stem = f.stem.lower().replace(" ", "").replace("_", "").replace("-", "")
-                if stem == needle or stem.startswith(needle):
-                    return f
+            candidates = [
+                f for f in sorted(d.iterdir())
+                if f.suffix.lower() in _EXTENSIONS
+                and _normalize(f.stem).startswith(needle)
+            ]
+            if not candidates:
+                continue
+            ttc = next((f for f in candidates if f.suffix.lower() == ".ttc"), None)
+            if ttc is not None:
+                return ttc
+
+            def _style_score(f: Path) -> int:
+                suffix = _normalize(f.stem)[len(needle):]
+                has_bold   = any(w in suffix for w in _BOLD_WORDS)
+                has_italic = any(w in suffix for w in _ITALIC_WORDS)
+                return (has_bold == bold) + (has_italic == italic)
+
+            return max(candidates, key=_style_score)
         parent = p.parent
         if parent == p:
             break
@@ -155,7 +177,7 @@ def resolve_font_for_arcade(
     if explicit_file:
         path = (base_dir / explicit_file).resolve()
     else:
-        path = _find_font_file(name, base_dir)  # type: ignore[arg-type]
+        path = _find_font_file(name, base_dir, bold=bold, italic=italic)  # type: ignore[arg-type]
 
     if path is None:
         return name, bold, italic
