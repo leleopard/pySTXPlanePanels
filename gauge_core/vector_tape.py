@@ -437,8 +437,9 @@ class VectorTape:
         else:
             lx, anchor_x = spine_x + self._label_offset, "left"
         half_range = vh / 2 / self._ppu
-        v_min = val - half_range - 1
-        v_max = val + half_range + 1
+        margin = max(1.0, self._label_font_size / self._ppu)
+        v_min = val - half_range - margin
+        v_max = val + half_range + margin
         v = math.floor(v_min / self._label_interval) * self._label_interval
         idx = 0
         while v <= v_max + self._label_interval * 0.001:
@@ -555,8 +556,9 @@ class VectorTape:
         else:
             ly, anchor_y = spine_y - self._label_offset, "top"
         half_range = vw / 2 / self._ppu
-        v_min = val - half_range - 1
-        v_max = val + half_range + 1
+        margin = max(1.0, self._label_font_size / self._ppu)
+        v_min = val - half_range - margin
+        v_max = val + half_range + margin
         v = math.floor(v_min / self._label_interval) * self._label_interval
         idx = 0
         while v <= v_max + self._label_interval * 0.001:
