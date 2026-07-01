@@ -148,6 +148,29 @@ def return_hundreds_digit(value: float, _get: GetData) -> float:
     return float(hundreds_int)
 
 
+def return_hundreds_digit_20ft(value: float, _get: GetData) -> float:
+    """Hundreds digit with smooth rollover as the sub-hundred crosses 80 → 100.
+
+    For drums whose sub-hundred display only steps in 20-unit increments
+    (e.g. a Boeing altitude tape showing 0/20/40/60/80, driven by
+    `return_sub_hundred`), the hundreds digit above it must start blending
+    toward the next digit as soon as the drum enters its last visible step
+    (80–100), not just the last 1-unit window `return_hundreds_digit` uses
+    for 1-unit-resolution drums — otherwise the hundreds digit snaps late
+    and out of sync with the drum's continuous scroll.
+
+    Example: altitude 380 → sub_hundred=80,  hundreds_int=3, result=3.0
+             altitude 390 → sub_hundred=90,  hundreds_int=3, result=3.5
+             altitude 400 → sub_hundred=0,   hundreds_int=4, result=4.0
+    """
+    sub_hundred = value % 100.0
+    hundreds_int = (int(value) // 100) % 10
+    if sub_hundred >= 80.0:
+        frac = (sub_hundred - 80.0) / 20.0   # 0.0 → 1.0 as value crosses X80 → X00
+        return (hundreds_int + frac) % 10.0
+    return float(hundreds_int)
+
+
 def return_sub_hundred_int(value: float, _get: GetData) -> float:
     """Tens and units as a two-digit integer (0–99), no fractional part.  Input 1025 → 25."""
     return float(int(value) % 100)
@@ -322,6 +345,7 @@ for _name, _func in {
     "return_tens_digit": return_tens_digit,
     "return_hundreds_digit_int": return_hundreds_digit_int,
     "return_hundreds_digit": return_hundreds_digit,
+    "return_hundreds_digit_20ft": return_hundreds_digit_20ft,
     "return_sub_hundred_int": return_sub_hundred_int,
     "return_sub_hundred": return_sub_hundred,
     "return_ten_thousands_digit_int": return_ten_thousands_digit_int,
