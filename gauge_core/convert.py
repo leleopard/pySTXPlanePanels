@@ -232,6 +232,29 @@ def return_thousands_digit(value: float, _get: GetData) -> float:
     return float(thousands_int)
 
 
+def return_thousands_digit_100ft(value: float, _get: GetData) -> float:
+    """Thousands digit with smooth rollover as the hundreds place crosses 900 → 1000.
+
+    The digit drum below (hundreds place, e.g. hundredsDigit_alti_tape) only
+    changes once every 100 ft, so the thousands digit above it should start
+    blending toward the next value as soon as that layer enters its last
+    visible step (900–1000), not just the final 1-unit window
+    `return_thousands_digit` uses for 1-unit-resolution digit chains —
+    otherwise the thousands digit rolls over far too quickly relative to
+    the hundreds digit it sits above.
+
+    Example: altitude 2900 → htu=900, thousands_int=2, result=2.0
+             altitude 2950 → htu=950, thousands_int=2, result=2.5
+             altitude 3000 → htu=0,   thousands_int=3, result=3.0
+    """
+    hundreds_tens_units = value % 1000.0
+    thousands_int = (int(value) // 1000) % 10
+    if hundreds_tens_units >= 900.0:
+        frac = (hundreds_tens_units - 900.0) / 100.0   # 0.0 → 1.0 as value crosses X900 → X000
+        return (thousands_int + frac) % 10.0
+    return float(thousands_int)
+
+
 # -- Predicates -----------------------------------------------------------
 # Predicates return a bool. Used by visibility transforms and
 # (potentially) for state-dependent component swapping.
@@ -352,6 +375,7 @@ for _name, _func in {
     "return_ten_thousands_digit": return_ten_thousands_digit,
     "return_thousands_digit_int": return_thousands_digit_int,
     "return_thousands_digit": return_thousands_digit,
+    "return_thousands_digit_100ft": return_thousands_digit_100ft,
     "identity": identity,
 }.items():
     register_convert(_name, _func)
