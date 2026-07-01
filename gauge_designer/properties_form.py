@@ -3928,6 +3928,7 @@ class PropertiesForm(QWidget):
 
     def _pick_label_font(self) -> None:
         from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
         current_name = self._vt_label_font.text().strip() or "Arial"
         current_size = int(self._vt_label_font_size.value())
         initial = QFont(current_name, current_size)
@@ -3935,7 +3936,7 @@ class PropertiesForm(QWidget):
         initial.setItalic(self._vt_label_italic.isChecked())
         ok, font = QFontDialog.getFont(initial, self, "Choose label font")
         if ok:
-            self._vt_label_font.setText(font.family())
+            self._vt_label_font.setText(strip_style_suffix(font.family()))
             self._vt_label_font_size.setValue(float(font.pointSize()))
             self._vt_label_bold.setChecked(font.bold())
             self._vt_label_italic.setChecked(font.italic())
@@ -3943,6 +3944,7 @@ class PropertiesForm(QWidget):
 
     def _pick_ai_ladder_font(self) -> None:
         from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
         current_name = self._ai_ladder_font.text().strip() or "Arial"
         current_size = self._ai_font_size.value()
         initial = QFont(current_name, current_size)
@@ -3950,7 +3952,7 @@ class PropertiesForm(QWidget):
         initial.setItalic(self._ai_ladder_italic.isChecked())
         ok, font = QFontDialog.getFont(initial, self, "Choose ladder font")
         if ok:
-            self._ai_ladder_font.setText(font.family())
+            self._ai_ladder_font.setText(strip_style_suffix(font.family()))
             self._ai_font_size.setValue(font.pointSize())
             self._ai_ladder_bold.setChecked(font.bold())
             self._ai_ladder_italic.setChecked(font.italic())
@@ -3958,6 +3960,7 @@ class PropertiesForm(QWidget):
 
     def _pick_txt_font(self) -> None:
         from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
         current_name = self._txt_font_name.text().strip() or "Arial"
         current_size = int(self._txt_font_size.value())
         initial = QFont(current_name, current_size)
@@ -3965,7 +3968,7 @@ class PropertiesForm(QWidget):
         initial.setItalic(self._txt_italic.isChecked())
         ok, font = QFontDialog.getFont(initial, self, "Choose font")
         if ok:
-            self._txt_font_name.setText(font.family())
+            self._txt_font_name.setText(strip_style_suffix(font.family()))
             self._txt_font_size.setValue(float(font.pointSize()))
             self._txt_bold.setChecked(font.bold())
             self._txt_italic.setChecked(font.italic())

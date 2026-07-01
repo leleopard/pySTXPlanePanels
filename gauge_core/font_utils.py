@@ -31,6 +31,26 @@ _EXTENSIONS = (".ttc", ".ttf", ".otf")   # TTC first so it wins over same-stem T
 
 _BOLD_WORDS   = ("bold", "heavy", "black")
 _ITALIC_WORDS = ("italic", "oblique")
+_STYLE_WORDS  = _BOLD_WORDS + _ITALIC_WORDS + ("regular", "normal")
+
+
+def strip_style_suffix(name: str) -> str:
+    """Strip trailing style words (Bold/Italic/Regular/...) from a font name.
+
+    pyglet's Windows backend (DirectWrite) matches loaded fonts by base
+    family name plus a separate weight/italic flag — a literal family name
+    like "ST_Boeing_PFD Bold" is a different (unregistered) family as far
+    as DirectWrite is concerned, even though the file was loaded and a
+    "ST_Boeing_PFD" + bold=True lookup would find it. Baked-in style words
+    are a leftover of hand-typed names or the designer's font picker
+    (QFontDialog reports "Family Style" for multi-file font families); the
+    bold/italic booleans already carry that information, so the suffix is
+    redundant and actively breaks the lookup.
+    """
+    words = name.split()
+    while words and words[-1].lower() in _STYLE_WORDS:
+        words.pop()
+    return " ".join(words) if words else name
 
 
 def _find_font_file(name: str, base_dir: Path) -> Path | None:
@@ -124,8 +144,10 @@ def resolve_font_for_arcade(
     replaces name+bold+italic with the full face name and False+False so
     that pyglet/GDI does an exact lookup rather than weight-flag guessing.
 
-    For plain TTF/OTF files the original (name, bold, italic) are returned
-    unchanged after the file is loaded.
+    For plain TTF/OTF files, any trailing style words (e.g. "Bold") are
+    stripped from `name` after the file is loaded so pyglet's weight-based
+    lookup (name + bold/italic flags) is used instead of an exact
+    "Family Style" name match.
     """
     if not name and not explicit_file:
         return name, bold, italic
@@ -144,5 +166,6 @@ def resolve_font_for_arcade(
         full_name = _best_ttc_face_name(path, bold, italic)
         if full_name:
             return full_name, False, False
+        return name, bold, italic
 
-    return name, bold, italic
+    return strip_style_suffix(name), bold, italic
