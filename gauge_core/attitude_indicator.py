@@ -117,7 +117,7 @@ from typing import Any, Callable
 import arcade
 
 from gauge_core.lookup import lookup_piecewise
-from gauge_core.registry import get_convert, register_component
+from gauge_core.registry import get_convert, register_component, resolve_predicate_name
 from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
 
 
@@ -889,7 +889,7 @@ def _ai_factory(
         )
     if "visibility" in comp:
         v = comp["visibility"]
-        ai.set_visibility(v["dataref"], v["predicate"])
+        ai.set_visibility(v["dataref"], resolve_predicate_name(v))
     return ai
 
 

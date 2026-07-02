@@ -26,7 +26,7 @@ from gauge_core import vector_tape as _vector_tape  # noqa: F401
 from gauge_core import attitude_indicator as _attitude_indicator  # noqa: F401
 from gauge_core import circular_gauge as _circular_gauge  # noqa: F401
 from gauge_core import rotary_encoder as _rotary_encoder  # noqa: F401
-from gauge_core.registry import get_component_factory, get_convert
+from gauge_core.registry import get_component_factory, get_convert, resolve_predicate_name
 
 
 def _as_dataref(raw: Any) -> Any:
@@ -96,11 +96,12 @@ def load_instrument(yaml_path: str | Path) -> Instrument:
     visibility: InstrumentVisibility | None = None
     if "visibility" in data:
         vis = data["visibility"]
-        predicate = get_convert(vis["predicate"])
+        predicate_name = resolve_predicate_name(vis)
+        predicate = get_convert(predicate_name)
         if predicate is None:
             raise ValueError(
                 f"Instrument visibility requires a known predicate; "
-                f"got {vis['predicate']!r} in {yaml_path}"
+                f"got {predicate_name!r} in {yaml_path}"
             )
         visibility = InstrumentVisibility(
             dataref=_as_dataref(vis["dataref"]),

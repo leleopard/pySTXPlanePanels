@@ -28,6 +28,7 @@ from gauge_core.registry import (
     get_component_factory,
     get_convert,
     register_component,
+    resolve_predicate_name,
 )
 
 
@@ -302,7 +303,7 @@ def _image_panel_factory(
 
     if "visibility" in comp:
         vis = comp["visibility"]
-        panel.set_visibility(dataref=vis["dataref"], predicate=vis["predicate"])
+        panel.set_visibility(dataref=vis["dataref"], predicate=resolve_predicate_name(vis))
 
     return panel
 

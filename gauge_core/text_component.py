@@ -18,6 +18,7 @@ from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.registry import (
     get_convert,
     register_component,
+    resolve_predicate_name,
 )
 
 
@@ -173,7 +174,7 @@ def _text_factory(
         )
     if "visibility" in comp:
         vis = comp["visibility"]
-        text.set_visibility(dataref=vis["dataref"], predicate=vis["predicate"])
+        text.set_visibility(dataref=vis["dataref"], predicate=resolve_predicate_name(vis))
     return text
 
 

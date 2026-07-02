@@ -2556,11 +2556,50 @@ class PropertiesForm(QWidget):
         self._vis_dr = QLineEdit(); self._vis_dr.editingFinished.connect(self._emit)
         self._vis_sec.row("Dataref", self._dr_field(self._vis_dr))
 
+        self._vis_mode = _NoScrollComboBox()
+        self._vis_mode.addItems(["Named predicate", "Compare value"])
+        self._vis_mode.currentIndexChanged.connect(self._on_vis_mode_changed)
+        self._vis_mode.currentIndexChanged.connect(self._emit)
+        self._vis_sec.row("Mode", self._vis_mode)
+
+        self._vis_stack = QStackedWidget()
+
+        # Page 0 — named predicate (original mechanism: a registered convert
+        # function used as a bool-returning predicate).
+        pred_page = QWidget()
+        pred_form = QFormLayout(pred_page)
+        pred_form.setContentsMargins(0, 2, 0, 2)
+        pred_form.setHorizontalSpacing(8)
+        pred_form.setVerticalSpacing(4)
         self._vis_pred = _NoScrollComboBox(); self._vis_pred.addItems(_PREDICATES)
         self._vis_pred.currentTextChanged.connect(self._emit)
-        self._vis_sec.row("Predicate", self._vis_pred)
+        pred_form.addRow("Predicate", self._vis_pred)
+
+        # Page 1 — inline threshold comparison (dataref <op> value), no
+        # convert.py function needed.
+        cmp_page = QWidget()
+        cmp_form = QFormLayout(cmp_page)
+        cmp_form.setContentsMargins(0, 2, 0, 2)
+        cmp_form.setHorizontalSpacing(8)
+        cmp_form.setVerticalSpacing(4)
+        self._vis_op = _NoScrollComboBox()
+        self._vis_op.addItems(["<", "<=", "==", "!=", ">", ">="])
+        self._vis_op.currentTextChanged.connect(self._emit)
+        cmp_form.addRow("Operator", self._vis_op)
+        self._vis_value = QDoubleSpinBox()
+        self._vis_value.setRange(-1_000_000_000.0, 1_000_000_000.0)
+        self._vis_value.setDecimals(3)
+        self._vis_value.valueChanged.connect(self._emit)
+        cmp_form.addRow("Value", self._vis_value)
+
+        self._vis_stack.addWidget(pred_page)
+        self._vis_stack.addWidget(cmp_page)
+        self._vis_sec.row_widget(self._vis_stack)
 
         self._vbox.addWidget(self._vis_sec)
+
+    def _on_vis_mode_changed(self, idx: int) -> None:
+        self._vis_stack.setCurrentIndex(idx)
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -3084,12 +3123,25 @@ class PropertiesForm(QWidget):
         self._vis_sec.set_active(vis is not None)
         if vis:
             self._vis_dr.setText(str(vis.get("dataref", "")))
-            self._vis_pred.setCurrentIndex(
-                max(self._vis_pred.findText(str(vis.get("predicate", ""))), 0))
+            if "operator" in vis:
+                self._vis_mode.setCurrentIndex(1)
+                self._vis_stack.setCurrentIndex(1)
+                self._vis_op.setCurrentIndex(
+                    max(self._vis_op.findText(str(vis.get("operator", "<"))), 0))
+                self._vis_value.setValue(float(vis.get("value", 0.0)))
+            else:
+                self._vis_mode.setCurrentIndex(0)
+                self._vis_stack.setCurrentIndex(0)
+                self._vis_pred.setCurrentIndex(
+                    max(self._vis_pred.findText(str(vis.get("predicate", ""))), 0))
         else:
             self._vis_dr.clear()
+            self._vis_mode.setCurrentIndex(0)
+            self._vis_stack.setCurrentIndex(0)
             if self._vis_pred.count():
                 self._vis_pred.setCurrentIndex(0)
+            self._vis_op.setCurrentIndex(0)
+            self._vis_value.setValue(0.0)
 
         self._loading = False
 
@@ -3605,10 +3657,17 @@ class PropertiesForm(QWidget):
                 data["viewport"] = [self._vp_x.value(), vy_yaml, self._vp_w.value(), vh]
 
         if self._vis_sec.active:
-            data["visibility"] = {
-                "dataref":   self._vis_dr.text().strip(),
-                "predicate": self._vis_pred.currentText(),
-            }
+            if self._vis_mode.currentIndex() == 1:
+                data["visibility"] = {
+                    "dataref":  self._vis_dr.text().strip(),
+                    "operator": self._vis_op.currentText(),
+                    "value":    self._vis_value.value(),
+                }
+            else:
+                data["visibility"] = {
+                    "dataref":   self._vis_dr.text().strip(),
+                    "predicate": self._vis_pred.currentText(),
+                }
 
         data.update(self._extra)
         return data

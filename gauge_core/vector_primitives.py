@@ -52,7 +52,7 @@ from typing import Any, Callable
 import arcade
 
 from gauge_core.lookup import lookup_piecewise
-from gauge_core.registry import get_convert, register_component
+from gauge_core.registry import get_convert, register_component, resolve_predicate_name
 
 
 def _as_color(raw: Any) -> tuple[int, int, int, int]:
@@ -460,7 +460,7 @@ def _line_factory(comp: dict, base_dir: Path, container_size=None) -> Line:
     )
     if "visibility" in comp:
         v = comp["visibility"]
-        line.set_visibility(v["dataref"], v["predicate"])
+        line.set_visibility(v["dataref"], resolve_predicate_name(v))
     return line
 
 
@@ -478,7 +478,7 @@ def _arc_factory(comp: dict, base_dir: Path, container_size=None) -> Arc:
     )
     if "visibility" in comp:
         v = comp["visibility"]
-        arc.set_visibility(v["dataref"], v["predicate"])
+        arc.set_visibility(v["dataref"], resolve_predicate_name(v))
     return arc
 
 
@@ -494,7 +494,7 @@ def _filledrect_factory(comp: dict, base_dir: Path, container_size=None) -> Fill
     )
     if "visibility" in comp:
         v = comp["visibility"]
-        rect.set_visibility(v["dataref"], v["predicate"])
+        rect.set_visibility(v["dataref"], resolve_predicate_name(v))
     return rect
 
 
@@ -513,7 +513,7 @@ def _polygon_factory(comp: dict, base_dir: Path, container_size=None) -> Polygon
     )
     if "visibility" in comp:
         v = comp["visibility"]
-        poly.set_visibility(v["dataref"], v["predicate"])
+        poly.set_visibility(v["dataref"], resolve_predicate_name(v))
     return poly
 
 
@@ -549,7 +549,7 @@ def _vector_factory(comp: dict, base_dir: Path, container_size=None) -> Vector:
         )
     if "visibility" in comp:
         vis = comp["visibility"]
-        vec.set_visibility(vis["dataref"], vis["predicate"])
+        vec.set_visibility(vis["dataref"], resolve_predicate_name(vis))
     return vec
 
 

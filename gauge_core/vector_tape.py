@@ -74,7 +74,7 @@ import arcade
 
 from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.lookup import lookup_piecewise
-from gauge_core.registry import get_convert, register_component
+from gauge_core.registry import get_convert, register_component, resolve_predicate_name
 
 
 def _col(raw) -> tuple[int, int, int, int]:
@@ -656,7 +656,7 @@ def _vector_tape_factory(
 
     if "visibility" in comp:
         v = comp["visibility"]
-        tape.set_visibility(v["dataref"], v["predicate"])
+        tape.set_visibility(v["dataref"], resolve_predicate_name(v))
 
     return tape
 
