@@ -86,6 +86,20 @@ class _ColorButton(QPushButton):
 
 _NONE = "(none)"
 
+# Shared tooltip for any field accepting a Python str.format() mini-language
+# spec, e.g. VectorTape label format and Text's custom format override.
+_FORMAT_SPEC_TOOLTIP = (
+    "Python format-spec syntax: {:<width><.precision><type>}\n"
+    "\n"
+    "  {:.0f}    -> 123        (no decimals)\n"
+    "  {:.1f}    -> 123.4      (1 decimal place)\n"
+    "  {:02.0f}  -> 03         (zero-padded to 2 digits)\n"
+    "  {:5.0f}   -> \"  123\"    (right-aligned, padded to width 5)\n"
+    "  {:+.0f}   -> +123       (always show sign)\n"
+    "\n"
+    "Leave blank to use the default."
+)
+
 # Derived from the live registry — adding a function to convert.py is enough.
 _PREDICATE_PREFIXES = ("true_if_", "nav_gsflg_")
 
@@ -1203,6 +1217,7 @@ class PropertiesForm(QWidget):
 
         self._txt_fmt_custom = QLineEdit()
         self._txt_fmt_custom.setPlaceholderText("Override, e.g.  {:05.0f}  (blank = auto)")
+        self._txt_fmt_custom.setToolTip(_FORMAT_SPEC_TOOLTIP)
         self._txt_fmt_custom.editingFinished.connect(self._on_txt_fmt_custom_changed)
         self._txt_fmt_custom.editingFinished.connect(self._emit)
         dp_form.addRow("Custom fmt", self._txt_fmt_custom)
@@ -1543,6 +1558,7 @@ class PropertiesForm(QWidget):
 
         self._vt_label_format = QLineEdit()
         self._vt_label_format.setPlaceholderText("{:.0f}  (blank = default)")
+        self._vt_label_format.setToolTip(_FORMAT_SPEC_TOOLTIP)
         self._vt_label_format.editingFinished.connect(self._emit)
         self._vt_sec.row("Label format", self._vt_label_format)
 
