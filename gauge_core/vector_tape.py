@@ -46,12 +46,15 @@ YAML schema
                                      # anchor implied by `side` (which flushes text
                                      # against the spine) without moving the
                                      # offset point itself
-        emphasize_place: 1000        # optional: render digits at/above this place
-                                     # value in a different size, e.g. the "30" in
-                                     # "30,000" — value // place vs value % place
-                                     # (zero-padded to place's digit width)
-        emphasize_font_size: 26      # font size for the emphasized part; the
-                                     # remainder keeps font_size above
+        emphasize_place: 3           # optional: number of trailing digits to
+                                     # keep at font_size (zero-padded to this
+                                     # many digits) — the leading digits above
+                                     # them render at emphasize_font_size
+                                     # instead, e.g. 3 keeps "000" small and
+                                     # makes the leading "30" in "30,000" big
+        emphasize_font_size: 26      # font size for the leading (emphasized)
+                                     # part; the last emphasize_place digits
+                                     # keep the regular font_size above
       bands:
         - range: [0, 67]             # both endpoints static
           color: [200, 0, 0, 180]

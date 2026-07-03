@@ -1223,13 +1223,15 @@ class PropertiesForm(QWidget):
         dp_form.addRow("Custom fmt", self._txt_fmt_custom)
 
         self._txt_emphasize_place = QDoubleSpinBox()
-        self._txt_emphasize_place.setRange(0.0, 1_000_000.0)
+        self._txt_emphasize_place.setRange(0.0, 8.0)
         self._txt_emphasize_place.setDecimals(0)
         self._txt_emphasize_place.setSpecialValueText("(none)")
         self._txt_emphasize_place.setToolTip(
-            "Render digits at/above this place value in a different size — e.g.\n"
-            "1000 renders the \"30\" in \"30,000\" separately from the \"000\".\n"
-            "(none) disables the split; the value renders as one uniform-size run."
+            "Number of trailing digits to keep at the regular font size — the\n"
+            "leading digits above them render at Emphasize font size instead.\n"
+            "E.g. 3 keeps \"000\" small and makes the leading \"30\" in \"30,000\"\n"
+            "big. (none) disables the split; the value renders as one\n"
+            "uniform-size run."
         )
         self._txt_emphasize_place.valueChanged.connect(self._emit)
         dp_form.addRow("Emphasize place", self._txt_emphasize_place)
@@ -1238,8 +1240,8 @@ class PropertiesForm(QWidget):
         self._txt_emphasize_size.setRange(4.0, 200.0); self._txt_emphasize_size.setDecimals(1)
         self._txt_emphasize_size.setValue(12.0)
         self._txt_emphasize_size.setToolTip(
-            "Font size for the emphasized part (digits at/above Emphasize place).\n"
-            "Only used when Emphasize place is set."
+            "Font size for the leading (emphasized) digits — everything except\n"
+            "the last Emphasize place digits. Only used when Emphasize place is set."
         )
         self._txt_emphasize_size.valueChanged.connect(self._emit)
         dp_form.addRow("Emphasize font size", self._txt_emphasize_size)
@@ -1615,13 +1617,14 @@ class PropertiesForm(QWidget):
         self._vt_sec.row("Label size px", self._vt_label_font_size)
 
         self._vt_label_emphasize_place = QDoubleSpinBox()
-        self._vt_label_emphasize_place.setRange(0.0, 1_000_000.0)
+        self._vt_label_emphasize_place.setRange(0.0, 8.0)
         self._vt_label_emphasize_place.setDecimals(0)
         self._vt_label_emphasize_place.setSpecialValueText("(none)")
         self._vt_label_emphasize_place.setToolTip(
-            "Render digits at/above this place value in a different size — e.g.\n"
-            "1000 renders the \"30\" in \"30,000\" separately from the \"000\".\n"
-            "(none) disables the split; labels render as one uniform-size run."
+            "Number of trailing digits to keep at the regular label size — the\n"
+            "leading digits above them render at Emphasize font size instead.\n"
+            "E.g. 3 keeps \"000\" small and makes the leading \"30\" in \"30,000\"\n"
+            "big. (none) disables the split; labels render as one uniform-size run."
         )
         self._vt_label_emphasize_place.valueChanged.connect(self._emit)
         self._vt_sec.row("Emphasize place", self._vt_label_emphasize_place)
@@ -1630,8 +1633,8 @@ class PropertiesForm(QWidget):
         self._vt_label_emphasize_size.setRange(4.0, 200.0); self._vt_label_emphasize_size.setDecimals(1)
         self._vt_label_emphasize_size.setValue(18.0)
         self._vt_label_emphasize_size.setToolTip(
-            "Font size for the emphasized part (digits at/above Emphasize place).\n"
-            "Only used when Emphasize place is set."
+            "Font size for the leading (emphasized) digits — everything except\n"
+            "the last Emphasize place digits. Only used when Emphasize place is set."
         )
         self._vt_label_emphasize_size.valueChanged.connect(self._emit)
         self._vt_sec.row("Emphasize font size", self._vt_label_emphasize_size)

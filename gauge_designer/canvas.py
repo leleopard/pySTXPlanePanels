@@ -927,7 +927,7 @@ class InstrumentCanvas(QWidget):
             # representative sample so the split is visible at design time.
             hi_size = max(8, int(float(comp.get("emphasize_font_size") or size)))
             hi_font = _pil_font(comp.get("font_name"), hi_size, bold=bold, italic=italic)
-            sample = float(emphasize_place) * 12.345
+            sample = (10 ** int(emphasize_place)) * 12.345
             hi_text, lo_text = split_at_place(sample, emphasize_place)
             hi_w = draw.textlength(hi_text, font=hi_font)
             lo_w = draw.textlength(lo_text, font=font)
