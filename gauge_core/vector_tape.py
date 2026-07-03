@@ -41,6 +41,11 @@ YAML schema
         offset: 8                    # gap (px) between spine and label edge
         side: left                   # optional: left/right (y) or top/bottom (x)
                                      # default = same as tick_side
+        justify: center              # optional: left/center/right (y-axis) or
+                                     # top/center/bottom (x-axis) — overrides the
+                                     # anchor implied by `side` (which flushes text
+                                     # against the spine) without moving the
+                                     # offset point itself
       bands:
         - range: [0, 67]             # both endpoints static
           color: [200, 0, 0, 180]
@@ -191,6 +196,7 @@ class VectorTape:
         label_format: str = "{:.0f}",
         label_offset: float = 8.0,
         label_side: str | None = None,
+        label_justify: str | None = None,
         label_font: str | None = None,
         label_bold: bool = False,
         label_italic: bool = False,
@@ -214,6 +220,10 @@ class VectorTape:
         self._label_format = label_format
         self._label_offset = float(label_offset)
         self._label_side = label_side  # None → fall back to tick_side
+        # None → derive from side (flush against the spine, the original
+        # behavior); explicit "left"/"center"/"right" (y-axis) or
+        # "top"/"center"/"bottom" (x-axis) overrides it.
+        self._label_justify = label_justify
         self._label_font = label_font  # None → Arcade default font
         self._label_bold = label_bold
         self._label_italic = label_italic
@@ -433,9 +443,10 @@ class VectorTape:
         spine_x = vx if self._tick_side == "left" else vx + vw
         side = self._label_side if self._label_side is not None else self._tick_side
         if side == "left":
-            lx, anchor_x = spine_x - self._label_offset, "right"
+            lx, default_justify = spine_x - self._label_offset, "right"
         else:
-            lx, anchor_x = spine_x + self._label_offset, "left"
+            lx, default_justify = spine_x + self._label_offset, "left"
+        anchor_x = self._label_justify or default_justify
         half_range = vh / 2 / self._ppu
         margin = max(1.0, self._label_font_size / self._ppu)
         v_min = val - half_range - margin
@@ -552,9 +563,10 @@ class VectorTape:
         spine_y = (vy + vh) if self._tick_side == "top" else vy
         side = self._label_side if self._label_side is not None else self._tick_side
         if side == "top":
-            ly, anchor_y = spine_y + self._label_offset, "bottom"
+            ly, default_justify = spine_y + self._label_offset, "bottom"
         else:
-            ly, anchor_y = spine_y - self._label_offset, "top"
+            ly, default_justify = spine_y - self._label_offset, "top"
+        anchor_y = self._label_justify or default_justify
         half_range = vw / 2 / self._ppu
         margin = max(1.0, self._label_font_size / self._ppu)
         v_min = val - half_range - margin
@@ -622,6 +634,7 @@ def _vector_tape_factory(
     )
 
     label_side_raw = lbl.get("side")
+    label_justify_raw = lbl.get("justify")
     tape = VectorTape(
         name=comp["name"],
         position_xy=tuple(comp.get("position", [0, 0])),
@@ -637,6 +650,7 @@ def _vector_tape_factory(
         label_format=str(lbl.get("format", "{:.0f}")),
         label_offset=float(lbl.get("offset", 8.0)),
         label_side=str(label_side_raw) if label_side_raw is not None else None,
+        label_justify=str(label_justify_raw) if label_justify_raw is not None else None,
         label_font=lbl_font,
         label_bold=lbl_bold,
         label_italic=lbl_italic,

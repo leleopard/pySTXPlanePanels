@@ -1573,6 +1573,19 @@ class PropertiesForm(QWidget):
         self._vt_label_side.currentTextChanged.connect(self._emit)
         self._vt_sec.row("Label side", self._vt_label_side)
 
+        self._vt_label_justify = _NoScrollComboBox()
+        self._vt_label_justify.addItems(
+            ["(auto — flush against spine)", "left", "center", "right", "top", "bottom"])
+        self._vt_label_justify.setToolTip(
+            "Justifies the label text relative to its offset point, independent of\n"
+            "which side of the spine it's on. Left/right/center apply to a\n"
+            "vertical (y-axis) tape; top/center/bottom apply to a horizontal\n"
+            "(x-axis) tape. Default flushes the text against the spine, matching\n"
+            "the direction implied by Label side."
+        )
+        self._vt_label_justify.currentTextChanged.connect(self._emit)
+        self._vt_sec.row("Label justify", self._vt_label_justify)
+
         self._vt_label_font_size = QDoubleSpinBox()
         self._vt_label_font_size.setRange(4.0, 120.0); self._vt_label_font_size.setDecimals(1)
         self._vt_label_font_size.setValue(18.0)
@@ -2843,13 +2856,17 @@ class PropertiesForm(QWidget):
         lbl = comp.get("labels") or {}
         self._vt_labels_cache = {k: v for k, v in lbl.items()
                                  if k not in ("interval", "font_size", "font", "bold", "italic",
-                                              "side", "offset", "format")}
+                                              "side", "justify", "offset", "format")}
         self._vt_label_interval.setValue(float(lbl.get("interval", 0.0)))
         self._vt_label_format.setText(str(lbl.get("format", "")))
         self._vt_label_offset.setValue(float(lbl.get("offset", 8.0)))
         ls = str(lbl.get("side", "")) if lbl.get("side") else ""
         self._vt_label_side.setCurrentIndex(
             max(self._vt_label_side.findText(ls), 0) if ls else 0
+        )
+        lj = str(lbl.get("justify", "")) if lbl.get("justify") else ""
+        self._vt_label_justify.setCurrentIndex(
+            max(self._vt_label_justify.findText(lj), 0) if lj else 0
         )
         self._vt_label_font_size.setValue(float(lbl.get("font_size", 18.0)))
         self._vt_label_font.setText(str(lbl.get("font", "")))
@@ -3650,6 +3667,11 @@ class PropertiesForm(QWidget):
                 lbl_dict["side"] = ls
             else:
                 lbl_dict.pop("side", None)
+            lj = self._vt_label_justify.currentText()
+            if lj != "(auto — flush against spine)":
+                lbl_dict["justify"] = lj
+            else:
+                lbl_dict.pop("justify", None)
             if lbl_dict:
                 data["labels"] = lbl_dict
             bands = self._vt_bands.get_data()
@@ -3855,6 +3877,7 @@ class PropertiesForm(QWidget):
         self._vt_label_format.clear()
         self._vt_label_offset.setValue(8.0)
         self._vt_label_side.setCurrentIndex(0)
+        self._vt_label_justify.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font.clear()
         self._vt_label_bold.setChecked(False)

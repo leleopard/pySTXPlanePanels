@@ -1078,10 +1078,12 @@ class InstrumentCanvas(QWidget):
                 spine_x = int(vx) if tick_side == "left" else int(vx + vw)
                 if label_side == "left":
                     lx = spine_x - int(label_offset)
-                    pil_anchor = "rm"
+                    default_justify = "r"
                 else:
                     lx = spine_x + int(label_offset)
-                    pil_anchor = "lm"
+                    default_justify = "l"
+                justify = {"left": "l", "center": "m", "right": "r"}.get(labels.get("justify"), default_justify)
+                pil_anchor = justify + "m"
                 lx_clip = lx - int(vx)  # x in clip_img coords
                 half_range = vh / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
@@ -1104,10 +1106,12 @@ class InstrumentCanvas(QWidget):
                 spine_y = int(py_top) if tick_side == "top" else int(py_top + vh)
                 if label_side == "top":
                     ly_base = spine_y - int(label_offset)
-                    pil_anchor = "mb"
+                    default_justify = "b"
                 else:
                     ly_base = spine_y + int(label_offset)
-                    pil_anchor = "mt"
+                    default_justify = "t"
+                justify = {"top": "t", "center": "m", "bottom": "b"}.get(labels.get("justify"), default_justify)
+                pil_anchor = "m" + justify
                 ly_clip = ly_base - int(py_top)  # y in clip_img coords
                 half_range = vw / 2 / ppu
                 v = math.floor((-half_range - label_interval) / label_interval) * label_interval
