@@ -917,7 +917,10 @@ class InstrumentCanvas(QWidget):
                           italic=bool(comp.get("italic", False)))
         text  = comp.get("text") or comp.get("text_format") or comp.get("dataref") or "?"
         anchor_x = comp.get("anchor_x", "left")
-        pil_anchor = {"left": "la", "center": "ma", "right": "ra"}.get(anchor_x, "la")
+        anchor_y = comp.get("anchor_y", "baseline")
+        pil_x = {"left": "l", "center": "m", "right": "r"}.get(anchor_x, "l")
+        pil_y = {"baseline": "s", "center": "m", "top": "a", "bottom": "d"}.get(anchor_y, "s")
+        pil_anchor = pil_x + pil_y
         try:
             draw.text((cx_p, cy_p), str(text), fill=color, font=font, anchor=pil_anchor)
         except TypeError:
