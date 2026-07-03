@@ -1222,6 +1222,28 @@ class PropertiesForm(QWidget):
         self._txt_fmt_custom.editingFinished.connect(self._emit)
         dp_form.addRow("Custom fmt", self._txt_fmt_custom)
 
+        self._txt_emphasize_place = QDoubleSpinBox()
+        self._txt_emphasize_place.setRange(0.0, 1_000_000.0)
+        self._txt_emphasize_place.setDecimals(0)
+        self._txt_emphasize_place.setSpecialValueText("(none)")
+        self._txt_emphasize_place.setToolTip(
+            "Render digits at/above this place value in a different size — e.g.\n"
+            "1000 renders the \"30\" in \"30,000\" separately from the \"000\".\n"
+            "(none) disables the split; the value renders as one uniform-size run."
+        )
+        self._txt_emphasize_place.valueChanged.connect(self._emit)
+        dp_form.addRow("Emphasize place", self._txt_emphasize_place)
+
+        self._txt_emphasize_size = QDoubleSpinBox()
+        self._txt_emphasize_size.setRange(4.0, 200.0); self._txt_emphasize_size.setDecimals(1)
+        self._txt_emphasize_size.setValue(12.0)
+        self._txt_emphasize_size.setToolTip(
+            "Font size for the emphasized part (digits at/above Emphasize place).\n"
+            "Only used when Emphasize place is set."
+        )
+        self._txt_emphasize_size.valueChanged.connect(self._emit)
+        dp_form.addRow("Emphasize font size", self._txt_emphasize_size)
+
         self._txt_stack.addWidget(static_page)
         self._txt_stack.addWidget(dr_page)
         self._txt_sec.row_widget(self._txt_stack)
@@ -1591,6 +1613,28 @@ class PropertiesForm(QWidget):
         self._vt_label_font_size.setValue(18.0)
         self._vt_label_font_size.valueChanged.connect(self._emit)
         self._vt_sec.row("Label size px", self._vt_label_font_size)
+
+        self._vt_label_emphasize_place = QDoubleSpinBox()
+        self._vt_label_emphasize_place.setRange(0.0, 1_000_000.0)
+        self._vt_label_emphasize_place.setDecimals(0)
+        self._vt_label_emphasize_place.setSpecialValueText("(none)")
+        self._vt_label_emphasize_place.setToolTip(
+            "Render digits at/above this place value in a different size — e.g.\n"
+            "1000 renders the \"30\" in \"30,000\" separately from the \"000\".\n"
+            "(none) disables the split; labels render as one uniform-size run."
+        )
+        self._vt_label_emphasize_place.valueChanged.connect(self._emit)
+        self._vt_sec.row("Emphasize place", self._vt_label_emphasize_place)
+
+        self._vt_label_emphasize_size = QDoubleSpinBox()
+        self._vt_label_emphasize_size.setRange(4.0, 200.0); self._vt_label_emphasize_size.setDecimals(1)
+        self._vt_label_emphasize_size.setValue(18.0)
+        self._vt_label_emphasize_size.setToolTip(
+            "Font size for the emphasized part (digits at/above Emphasize place).\n"
+            "Only used when Emphasize place is set."
+        )
+        self._vt_label_emphasize_size.valueChanged.connect(self._emit)
+        self._vt_sec.row("Emphasize font size", self._vt_label_emphasize_size)
 
         self._vt_label_font = QLineEdit()
         self._vt_label_font.setPlaceholderText("Arial  (blank = default)")
@@ -2856,7 +2900,8 @@ class PropertiesForm(QWidget):
         lbl = comp.get("labels") or {}
         self._vt_labels_cache = {k: v for k, v in lbl.items()
                                  if k not in ("interval", "font_size", "font", "bold", "italic",
-                                              "side", "justify", "offset", "format")}
+                                              "side", "justify", "offset", "format",
+                                              "emphasize_place", "emphasize_font_size")}
         self._vt_label_interval.setValue(float(lbl.get("interval", 0.0)))
         self._vt_label_format.setText(str(lbl.get("format", "")))
         self._vt_label_offset.setValue(float(lbl.get("offset", 8.0)))
@@ -2869,6 +2914,9 @@ class PropertiesForm(QWidget):
             max(self._vt_label_justify.findText(lj), 0) if lj else 0
         )
         self._vt_label_font_size.setValue(float(lbl.get("font_size", 18.0)))
+        self._vt_label_emphasize_place.setValue(float(lbl.get("emphasize_place", 0.0)))
+        self._vt_label_emphasize_size.setValue(
+            float(lbl.get("emphasize_font_size") or lbl.get("font_size", 18.0)))
         self._vt_label_font.setText(str(lbl.get("font", "")))
         self._vt_label_bold.setChecked(bool(lbl.get("bold", False)))
         self._vt_label_italic.setChecked(bool(lbl.get("italic", False)))
@@ -2890,6 +2938,9 @@ class PropertiesForm(QWidget):
         self._update_txt_format()  # refresh preview from builder
         if txt_fmt:
             self._txt_fmt_preview.setText(txt_fmt)  # custom overrides preview
+        self._txt_emphasize_place.setValue(float(comp.get("emphasize_place", 0.0)))
+        self._txt_emphasize_size.setValue(
+            float(comp.get("emphasize_font_size") or comp.get("font_size", 12.0)))
         self._txt_font_name.setText(str(comp.get("font_name", "")))
         self._txt_font_size.setValue(float(comp.get("font_size", 12.0)))
         self._txt_bold.setChecked(bool(comp.get("bold", False)))
@@ -3592,6 +3643,10 @@ class PropertiesForm(QWidget):
                     fill = "0" if z and w > 0 else ""
                     width_str = str(w) if w > 0 else ""
                     data["text_format"] = "{:" + fill + width_str + "." + str(d) + "f}"
+                emph_place = self._txt_emphasize_place.value()
+                if emph_place > 0:
+                    data["emphasize_place"] = emph_place
+                    data["emphasize_font_size"] = self._txt_emphasize_size.value()
             fn = self._txt_font_name.text().strip()
             if fn:
                 data["font_name"] = fn
@@ -3648,6 +3703,13 @@ class PropertiesForm(QWidget):
             else:
                 lbl_dict.pop("format", None)
             lbl_dict["font_size"] = self._vt_label_font_size.value()
+            emph_place = self._vt_label_emphasize_place.value()
+            if emph_place > 0:
+                lbl_dict["emphasize_place"] = emph_place
+                lbl_dict["emphasize_font_size"] = self._vt_label_emphasize_size.value()
+            else:
+                lbl_dict.pop("emphasize_place", None)
+                lbl_dict.pop("emphasize_font_size", None)
             lbl_dict["offset"] = self._vt_label_offset.value()
             fn = self._vt_label_font.text().strip()
             if fn:
@@ -3879,6 +3941,8 @@ class PropertiesForm(QWidget):
         self._vt_label_side.setCurrentIndex(0)
         self._vt_label_justify.setCurrentIndex(0)
         self._vt_label_font_size.setValue(18.0)
+        self._vt_label_emphasize_place.setValue(0.0)
+        self._vt_label_emphasize_size.setValue(18.0)
         self._vt_label_font.clear()
         self._vt_label_bold.setChecked(False)
         self._vt_label_italic.setChecked(False)
@@ -3893,6 +3957,8 @@ class PropertiesForm(QWidget):
         self._txt_width.setValue(0)
         self._txt_zerofill.setChecked(False)
         self._txt_fmt_custom.clear()
+        self._txt_emphasize_place.setValue(0.0)
+        self._txt_emphasize_size.setValue(12.0)
         self._txt_font_name.clear()
         self._txt_font_size.setValue(12.0)
         self._txt_bold.setChecked(False)

@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 import arcade
 
+from gauge_core.emphasize import split_at_place
 from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.registry import (
     get_convert,
@@ -50,8 +51,18 @@ class Text:
         anchor_y: str = "baseline",
         bold: bool = False,
         italic: bool = False,
+        emphasize_place: float | None = None,
+        emphasize_font_size: float | None = None,
     ) -> None:
         self.name = name
+        # Overall alignment intent (left/center/right). When emphasizing,
+        # both label objects are manually positioned with anchor_x="left"
+        # and this is applied to their combined width instead.
+        self._anchor_x_mode = anchor_x
+        self._emphasize_place = float(emphasize_place) if emphasize_place else None
+
+        label_anchor_x = "left" if self._emphasize_place else anchor_x
+
         # arcade.Text font_name accepts a tuple of fallbacks too; use the
         # default if the caller passes nothing.
         kwargs: dict[str, Any] = dict(
@@ -60,7 +71,7 @@ class Text:
             y=float(position_xy[1]),
             color=color,
             font_size=font_size,
-            anchor_x=anchor_x,
+            anchor_x=label_anchor_x,
             anchor_y=anchor_y,
             bold=bold,
             italic=italic,
@@ -68,6 +79,16 @@ class Text:
         if font_name:
             kwargs["font_name"] = font_name
         self.label = arcade.Text(**kwargs)
+
+        # Second label for the emphasized (usually larger) leading digits,
+        # e.g. the "30" in "30,000" ft. Only created when configured; laid
+        # out adjacent to self.label each time the dataref value changes.
+        self.label_hi: arcade.Text | None = None
+        if self._emphasize_place:
+            hi_kwargs = dict(kwargs)
+            hi_kwargs["text"] = ""
+            hi_kwargs["font_size"] = emphasize_font_size or font_size
+            self.label_hi = arcade.Text(**hi_kwargs)
 
         # Track position separately so apply_offset() can be called before
         # the Arcade window is created (arcade.Text is lazily GPU-initialised;
@@ -113,6 +134,8 @@ class Text:
         self._x *= scale
         self._y *= scale
         self.label.font_size *= scale
+        if self.label_hi is not None:
+            self.label_hi.font_size *= scale
         self._pos_dirty = True
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -121,9 +144,32 @@ class Text:
         self._y += dy
         self._pos_dirty = True
 
+    def _layout_emphasized(self) -> None:
+        """Position label_hi and label side-by-side, honoring anchor_x_mode.
+
+        Both are created with anchor_x="left"; this computes their combined
+        width and positions the pair so it aligns as if it were one run of
+        text anchored left/center/right at self._x, per the original
+        anchor_x the caller configured.
+        """
+        hi_w = self.label_hi.content_width
+        lo_w = self.label.content_width
+        total = hi_w + lo_w
+        if self._anchor_x_mode == "right":
+            start = self._x - total
+        elif self._anchor_x_mode == "center":
+            start = self._x - total / 2
+        else:
+            start = self._x
+        self.label_hi.x = start
+        self.label_hi.y = self._y
+        self.label.x = start + hi_w
+        self.label.y = self._y
+
     def update(self, get_data: Callable[[Any], float]) -> None:
         if self._pos_dirty:
-            self.label.x = self._x
+            if self.label_hi is None:
+                self.label.x = self._x
             self.label.y = self._y
             self._pos_dirty = False
 
@@ -131,7 +177,13 @@ class Text:
             value = float(get_data(self._dataref))
             if self._convert is not None:
                 value = float(self._convert(value, get_data))
-            self.label.text = self._format.format(value)
+            if self.label_hi is not None:
+                hi_text, lo_text = split_at_place(value, self._emphasize_place)
+                self.label_hi.text = hi_text
+                self.label.text = lo_text
+                self._layout_emphasized()
+            else:
+                self.label.text = self._format.format(value)
 
         if self._vis_dataref is not None and self._vis_predicate is not None:
             value = float(get_data(self._vis_dataref))
@@ -140,6 +192,8 @@ class Text:
     def draw(self) -> None:
         if self.visible:
             self.label.draw()
+            if self.label_hi is not None:
+                self.label_hi.draw()
 
 
 def _text_factory(
@@ -165,6 +219,8 @@ def _text_factory(
         anchor_y=comp.get("anchor_y", "baseline"),
         bold=bold,
         italic=italic,
+        emphasize_place=comp.get("emphasize_place"),
+        emphasize_font_size=comp.get("emphasize_font_size"),
     )
     if "dataref" in comp:
         text.set_dataref(

@@ -46,6 +46,12 @@ YAML schema
                                      # anchor implied by `side` (which flushes text
                                      # against the spine) without moving the
                                      # offset point itself
+        emphasize_place: 1000        # optional: render digits at/above this place
+                                     # value in a different size, e.g. the "30" in
+                                     # "30,000" — value // place vs value % place
+                                     # (zero-padded to place's digit width)
+        emphasize_font_size: 26      # font size for the emphasized part; the
+                                     # remainder keeps font_size above
       bands:
         - range: [0, 67]             # both endpoints static
           color: [200, 0, 0, 180]
@@ -77,6 +83,7 @@ from typing import Any, Callable
 
 import arcade
 
+from gauge_core.emphasize import split_at_place
 from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component, resolve_predicate_name
@@ -200,6 +207,8 @@ class VectorTape:
         label_font: str | None = None,
         label_bold: bool = False,
         label_italic: bool = False,
+        label_emphasize_place: float | None = None,
+        label_emphasize_font_size: float | None = None,
         bands: list[dict] | None = None,
         bugs: list[dict] | None = None,
         wrap: float | None = None,
@@ -227,6 +236,12 @@ class VectorTape:
         self._label_font = label_font  # None → Arcade default font
         self._label_bold = label_bold
         self._label_italic = label_italic
+        # Split-font-size emphasis (e.g. big "30" + small "000" for 30,000):
+        # None → render labels as one uniform-size run (original behavior).
+        self._label_emphasize_place = float(label_emphasize_place) if label_emphasize_place else None
+        self._label_emphasize_font_size = (
+            float(label_emphasize_font_size) if label_emphasize_font_size else self._label_font_size
+        )
         self._wrap = float(wrap) if wrap is not None else None
         self._bg_color: tuple | None = _col(bg_color) if bg_color is not None else None
         self._bands: list[dict] = []
@@ -268,6 +283,9 @@ class VectorTape:
         # Pool of arcade.Text objects reused each frame to avoid the cost of
         # draw_text (which rebuilds a glyph batch on every call).
         self._label_pool: list[arcade.Text] = []
+        # Parallel pool for the emphasized leading part, only populated when
+        # label_emphasize_place is set.
+        self._label_hi_pool: list[arcade.Text] = []
 
     # -- configuration --------------------------------------------------------
 
@@ -300,7 +318,9 @@ class VectorTape:
             td["offset"] = float(td.get("offset", 0.0)) * scale
         self._label_offset    *= scale
         self._label_font_size *= scale
-        self._label_pool.clear()  # font size changed; pool objects are stale
+        self._label_emphasize_font_size *= scale
+        self._label_pool.clear()     # font size changed; pool objects are stale
+        self._label_hi_pool.clear()
         for band in self._bands:
             band["width"] *= scale
         for bug in self._bugs:
@@ -309,6 +329,46 @@ class VectorTape:
     def _label_text(self, v: float) -> str:
         display = v % self._wrap if self._wrap is not None else v
         return self._label_format.format(display)
+
+    @staticmethod
+    def _pair_start(hi_w: float, lo_w: float, anchor_point: float, mode: str) -> float:
+        """Starting coordinate for two left/bottom-anchored runs of widths
+        hi_w then lo_w, laid out so their combined span aligns to
+        anchor_point the way a single run anchored `mode` would.
+        """
+        total = hi_w + lo_w
+        if mode in ("right", "bottom"):
+            return anchor_point - total
+        if mode == "center":
+            return anchor_point - total / 2
+        return anchor_point  # left / top
+
+    def _ensure_emphasized_pair(
+        self, idx: int, cross_anchor_x: str, cross_anchor_y: str,
+    ) -> tuple[arcade.Text, arcade.Text]:
+        """Return (hi, lo) Text objects at pool index idx, growing
+        `_label_hi_pool`/`_label_pool` in lockstep on first use.
+
+        `cross_anchor_x`/`cross_anchor_y` are the anchors held fixed for
+        this axis (e.g. anchor_x="left" + anchor_y="center" for a y-axis
+        tape, where the caller manually positions x for the hi/lo split
+        and y is simply the label's row).
+        """
+        if idx >= len(self._label_hi_pool):
+            kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
+            if self._label_font:
+                kw["font_name"] = self._label_font
+            self._label_hi_pool.append(arcade.Text(
+                "", 0, 0, color=self._label_color,
+                font_size=self._label_emphasize_font_size,
+                anchor_x=cross_anchor_x, anchor_y=cross_anchor_y, **kw,
+            ))
+            self._label_pool.append(arcade.Text(
+                "", 0, 0, color=self._label_color,
+                font_size=self._label_font_size,
+                anchor_x=cross_anchor_x, anchor_y=cross_anchor_y, **kw,
+            ))
+        return self._label_hi_pool[idx], self._label_pool[idx]
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._cx += dx;  self._cy += dy
@@ -455,23 +515,32 @@ class VectorTape:
         idx = 0
         while v <= v_max + self._label_interval * 0.001:
             y = cy + (v - val) * self._ppu
-            if idx >= len(self._label_pool):
-                kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
-                if self._label_font:
-                    kw["font_name"] = self._label_font
-                self._label_pool.append(arcade.Text(
-                    "", 0, 0,
-                    color=self._label_color,
-                    font_size=self._label_font_size,
-                    anchor_x=anchor_x,
-                    anchor_y="center",
-                    **kw,
-                ))
-            t = self._label_pool[idx]
-            t.value = self._label_text(v)
-            t.x = lx
-            t.y = y
-            t.draw()
+            if self._label_emphasize_place:
+                hi, lo = self._ensure_emphasized_pair(idx, cross_anchor_x="left", cross_anchor_y="center")
+                display = v % self._wrap if self._wrap else v
+                hi.text, lo.text = split_at_place(display, self._label_emphasize_place)
+                start = self._pair_start(hi.content_width, lo.content_width, lx, anchor_x)
+                hi.x, hi.y = start, y
+                lo.x, lo.y = start + hi.content_width, y
+                hi.draw(); lo.draw()
+            else:
+                if idx >= len(self._label_pool):
+                    kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
+                    if self._label_font:
+                        kw["font_name"] = self._label_font
+                    self._label_pool.append(arcade.Text(
+                        "", 0, 0,
+                        color=self._label_color,
+                        font_size=self._label_font_size,
+                        anchor_x=anchor_x,
+                        anchor_y="center",
+                        **kw,
+                    ))
+                t = self._label_pool[idx]
+                t.value = self._label_text(v)
+                t.x = lx
+                t.y = y
+                t.draw()
             idx += 1
             v += self._label_interval
 
@@ -575,23 +644,32 @@ class VectorTape:
         idx = 0
         while v <= v_max + self._label_interval * 0.001:
             x = cx + (v - val) * self._ppu
-            if idx >= len(self._label_pool):
-                kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
-                if self._label_font:
-                    kw["font_name"] = self._label_font
-                self._label_pool.append(arcade.Text(
-                    "", 0, 0,
-                    color=self._label_color,
-                    font_size=self._label_font_size,
-                    anchor_x="center",
-                    anchor_y=anchor_y,
-                    **kw,
-                ))
-            t = self._label_pool[idx]
-            t.value = self._label_text(v)
-            t.x = x
-            t.y = ly
-            t.draw()
+            if self._label_emphasize_place:
+                hi, lo = self._ensure_emphasized_pair(idx, cross_anchor_x="left", cross_anchor_y=anchor_y)
+                display = v % self._wrap if self._wrap else v
+                hi.text, lo.text = split_at_place(display, self._label_emphasize_place)
+                start = self._pair_start(hi.content_width, lo.content_width, x, "center")
+                hi.x, hi.y = start, ly
+                lo.x, lo.y = start + hi.content_width, ly
+                hi.draw(); lo.draw()
+            else:
+                if idx >= len(self._label_pool):
+                    kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
+                    if self._label_font:
+                        kw["font_name"] = self._label_font
+                    self._label_pool.append(arcade.Text(
+                        "", 0, 0,
+                        color=self._label_color,
+                        font_size=self._label_font_size,
+                        anchor_x="center",
+                        anchor_y=anchor_y,
+                        **kw,
+                    ))
+                t = self._label_pool[idx]
+                t.value = self._label_text(v)
+                t.x = x
+                t.y = ly
+                t.draw()
             idx += 1
             v += self._label_interval
 
@@ -654,6 +732,8 @@ def _vector_tape_factory(
         label_font=lbl_font,
         label_bold=lbl_bold,
         label_italic=lbl_italic,
+        label_emphasize_place=lbl.get("emphasize_place"),
+        label_emphasize_font_size=lbl.get("emphasize_font_size"),
         bands=bands,
         bugs=comp.get("bugs") or [],
         wrap=float(comp["wrap"]) if comp.get("wrap") is not None else None,

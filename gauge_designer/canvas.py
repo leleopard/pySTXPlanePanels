@@ -22,6 +22,7 @@ from PySide6.QtGui import QFontDatabase, QPixmap, QPainter
 from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
 
+from gauge_core.emphasize import split_at_place
 from gauge_designer.ui_utils import is_y_down
 
 
@@ -912,19 +913,38 @@ class InstrumentCanvas(QWidget):
         cy_p  = canvas_h - int(pos[1])
         color = _rgba(comp.get("color"))
         size  = max(8, int(float(comp.get("font_size", 12.0))))
-        font  = _pil_font(comp.get("font_name"), size,
-                          bold=bool(comp.get("bold", False)),
-                          italic=bool(comp.get("italic", False)))
-        text  = comp.get("text") or comp.get("text_format") or comp.get("dataref") or "?"
+        bold   = bool(comp.get("bold", False))
+        italic = bool(comp.get("italic", False))
+        font  = _pil_font(comp.get("font_name"), size, bold=bold, italic=italic)
         anchor_x = comp.get("anchor_x", "left")
         anchor_y = comp.get("anchor_y", "baseline")
         pil_x = {"left": "l", "center": "m", "right": "r"}.get(anchor_x, "l")
         pil_y = {"baseline": "s", "center": "m", "top": "a", "bottom": "d"}.get(anchor_y, "s")
-        pil_anchor = pil_x + pil_y
-        try:
-            draw.text((cx_p, cy_p), str(text), fill=color, font=font, anchor=pil_anchor)
-        except TypeError:
-            draw.text((cx_p, cy_p), str(text), fill=color, font=font)
+
+        emphasize_place = comp.get("emphasize_place")
+        if emphasize_place and (comp.get("dataref") or comp.get("text_format")):
+            # No live dataref value in the static preview — show a
+            # representative sample so the split is visible at design time.
+            hi_size = max(8, int(float(comp.get("emphasize_font_size") or size)))
+            hi_font = _pil_font(comp.get("font_name"), hi_size, bold=bold, italic=italic)
+            sample = float(emphasize_place) * 12.345
+            hi_text, lo_text = split_at_place(sample, emphasize_place)
+            hi_w = draw.textlength(hi_text, font=hi_font)
+            lo_w = draw.textlength(lo_text, font=font)
+            total = hi_w + lo_w
+            start = {"r": cx_p - total, "m": cx_p - total / 2}.get(pil_x, cx_p)
+            try:
+                draw.text((start, cy_p), hi_text, fill=color, font=hi_font, anchor="l" + pil_y)
+                draw.text((start + hi_w, cy_p), lo_text, fill=color, font=font, anchor="l" + pil_y)
+            except TypeError:
+                draw.text((start, cy_p), hi_text, fill=color, font=hi_font)
+                draw.text((start + hi_w, cy_p), lo_text, fill=color, font=font)
+        else:
+            text = comp.get("text") or comp.get("text_format") or comp.get("dataref") or "?"
+            try:
+                draw.text((cx_p, cy_p), str(text), fill=color, font=font, anchor=pil_x + pil_y)
+            except TypeError:
+                draw.text((cx_p, cy_p), str(text), fill=color, font=font)
         self._crosshair(draw, cx_p, cy_p)
 
     def _render_vectortape(self, comp: dict, composite: Image.Image,
@@ -1062,9 +1082,14 @@ class InstrumentCanvas(QWidget):
             label_fmt    = labels.get("format", "{:.0f}")
             wrap         = comp.get("wrap")
             font_size    = max(8, int(float(labels.get("font_size", 18))))
-            font         = _pil_font(labels.get("font"), font_size,
-                                     bold=bool(labels.get("bold", False)),
-                                     italic=bool(labels.get("italic", False)))
+            lbl_bold     = bool(labels.get("bold", False))
+            lbl_italic   = bool(labels.get("italic", False))
+            font         = _pil_font(labels.get("font"), font_size, bold=lbl_bold, italic=lbl_italic)
+            emphasize_place = labels.get("emphasize_place")
+            hi_font = None
+            if emphasize_place:
+                hi_size = max(8, int(float(labels.get("emphasize_font_size") or font_size)))
+                hi_font = _pil_font(labels.get("font"), hi_size, bold=lbl_bold, italic=lbl_italic)
 
             # Sub-image exactly the size of the viewport — matches the OpenGL
             # scissor rectangle used at runtime, clipping in both axes.
@@ -1092,13 +1117,28 @@ class InstrumentCanvas(QWidget):
                     y_local = int(cy_pil - v * ppu) - int(py_top)
                     if -font_size <= y_local <= clip_h + font_size:
                         display = v % wrap if wrap else v
-                        text = label_fmt.format(display)
-                        try:
-                            ldraw.text((lx_clip, y_local), text, fill=label_color,
-                                       font=font, anchor=pil_anchor)
-                        except TypeError:
-                            ldraw.text((lx_clip, y_local), text, fill=label_color,
-                                       font=font)
+                        if emphasize_place:
+                            hi_text, lo_text = split_at_place(display, emphasize_place)
+                            hi_w = ldraw.textlength(hi_text, font=hi_font)
+                            lo_w = ldraw.textlength(lo_text, font=font)
+                            total = hi_w + lo_w
+                            start = {"r": lx_clip - total, "m": lx_clip - total / 2}.get(justify, lx_clip)
+                            try:
+                                ldraw.text((start, y_local), hi_text, fill=label_color,
+                                           font=hi_font, anchor="lm")
+                                ldraw.text((start + hi_w, y_local), lo_text, fill=label_color,
+                                           font=font, anchor="lm")
+                            except TypeError:
+                                ldraw.text((start, y_local), hi_text, fill=label_color, font=hi_font)
+                                ldraw.text((start + hi_w, y_local), lo_text, fill=label_color, font=font)
+                        else:
+                            text = label_fmt.format(display)
+                            try:
+                                ldraw.text((lx_clip, y_local), text, fill=label_color,
+                                           font=font, anchor=pil_anchor)
+                            except TypeError:
+                                ldraw.text((lx_clip, y_local), text, fill=label_color,
+                                           font=font)
                     v += label_interval
                 composite.paste(clip_img, (int(vx), int(py_top)), mask=clip_img)
             else:
@@ -1120,13 +1160,27 @@ class InstrumentCanvas(QWidget):
                     x_local = int(cx_pil + v * ppu) - int(vx)
                     if -font_size <= x_local <= clip_w + font_size:
                         display = v % wrap if wrap else v
-                        text = label_fmt.format(display)
-                        try:
-                            ldraw.text((x_local, ly_clip), text, fill=label_color,
-                                       font=font, anchor=pil_anchor)
-                        except TypeError:
-                            ldraw.text((x_local, ly_clip), text, fill=label_color,
-                                       font=font)
+                        if emphasize_place:
+                            hi_text, lo_text = split_at_place(display, emphasize_place)
+                            hi_w = ldraw.textlength(hi_text, font=hi_font)
+                            lo_w = ldraw.textlength(lo_text, font=font)
+                            start = x_local - (hi_w + lo_w) / 2  # always centered on the tick
+                            try:
+                                ldraw.text((start, ly_clip), hi_text, fill=label_color,
+                                           font=hi_font, anchor="l" + justify)
+                                ldraw.text((start + hi_w, ly_clip), lo_text, fill=label_color,
+                                           font=font, anchor="l" + justify)
+                            except TypeError:
+                                ldraw.text((start, ly_clip), hi_text, fill=label_color, font=hi_font)
+                                ldraw.text((start + hi_w, ly_clip), lo_text, fill=label_color, font=font)
+                        else:
+                            text = label_fmt.format(display)
+                            try:
+                                ldraw.text((x_local, ly_clip), text, fill=label_color,
+                                           font=font, anchor=pil_anchor)
+                            except TypeError:
+                                ldraw.text((x_local, ly_clip), text, fill=label_color,
+                                           font=font)
                     v += label_interval
                 composite.paste(clip_img, (int(vx), int(py_top)), mask=clip_img)
 
