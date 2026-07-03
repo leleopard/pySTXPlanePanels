@@ -16,9 +16,16 @@ def split_at_place(value: float, place: float) -> tuple[str, str]:
     `hi_text` is the plain integer string of ``value // place`` (no
     padding). `lo_text` is ``value % place``, zero-padded to the digit
     width implied by `place` (e.g. place=1000 -> 3 digits, "005").
+
+    `place=1` (or any single-digit place) implies zero digits of
+    remainder — Python's `{:00d}` still renders a lone "0" rather than
+    nothing, which would silently append a spurious digit (8400 -> "8400"
+    + "0" = "84000"), so `lo_text` is forced empty in that case: the whole
+    value is emphasized, matching what "split at the ones place" means.
     """
     place_int = int(place)
     digits = len(str(place_int)) - 1
     v_int = int(round(value))
     hi, lo = divmod(v_int, place_int)
-    return str(hi), f"{lo:0{digits}d}"
+    lo_text = f"{lo:0{digits}d}" if digits > 0 else ""
+    return str(hi), lo_text
