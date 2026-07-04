@@ -487,6 +487,12 @@ class _BandsEditor(QWidget):
         self._ep_side.addItems(["left", "right", "top", "bottom"])
         self._ep_side.currentTextChanged.connect(self._on_endpoint_changed)
         width_row.addWidget(self._ep_side)
+        width_row.addWidget(QLabel("Offset px:"))
+        self._ep_offset = QDoubleSpinBox()
+        self._ep_offset.setRange(0.0, 500.0); self._ep_offset.setDecimals(1)
+        self._ep_offset.setToolTip("Gap between the spine and the band's edge — same direction ticks use.")
+        self._ep_offset.valueChanged.connect(self._on_endpoint_changed)
+        width_row.addWidget(self._ep_offset)
         width_row.addStretch()
 
         dash_row = QHBoxLayout()
@@ -551,6 +557,7 @@ class _BandsEditor(QWidget):
         self._ep_width.setValue(float(band.get("width", 8.0)))
         side = band.get("side") or "left"
         self._ep_side.setCurrentText(side)
+        self._ep_offset.setValue(float(band.get("offset", 0.0)))
         dash = band.get("dash")
         self._ep_dash_chk.blockSignals(True)
         self._ep_dash_chk.setChecked(dash is not None)
@@ -570,6 +577,10 @@ class _BandsEditor(QWidget):
         self._bands[row]["color"] = list(self._ep_color.get_rgba())
         self._bands[row]["width"] = self._ep_width.value()
         self._bands[row]["side"] = self._ep_side.currentText()
+        if self._ep_offset.value() != 0:
+            self._bands[row]["offset"] = self._ep_offset.value()
+        else:
+            self._bands[row].pop("offset", None)
         if self._ep_dash_chk.isChecked():
             self._bands[row]["dash"] = self._ep_dash_len.value()
         else:
@@ -601,6 +612,8 @@ class _BandsEditor(QWidget):
                 "width": float(b.get("width", 8.0)),
                 "side": b.get("side") or "left",
             }
+            if b.get("offset"):
+                entry["offset"] = float(b["offset"])
             if b.get("dash") is not None:
                 entry["dash"] = float(b["dash"])
             self._bands.append(entry)
@@ -613,6 +626,8 @@ class _BandsEditor(QWidget):
         for b in self._bands:
             entry = {"range": list(b["range"]), "color": list(b["color"]),
                      "width": b["width"], "side": b.get("side", "left")}
+            if b.get("offset"):
+                entry["offset"] = b["offset"]
             if b.get("dash") is not None:
                 entry["dash"] = b["dash"]
             result.append(entry)

@@ -979,7 +979,8 @@ class InstrumentCanvas(QWidget):
                 bc = _rgba(band.get("color"))
                 bw = float(band.get("width", 8))
                 bside = band.get("side") or tick_side
-                bx = int(vx) if bside == "left" else int(vx + vw - bw)
+                boff = float(band.get("offset", 0))
+                bx = int(vx + boff) if bside == "left" else int(vx + vw - bw - boff)
                 dash = int(band.get("dash", 0))
                 if dash > 0:
                     y, on = int(py_top), True
@@ -1021,7 +1022,8 @@ class InstrumentCanvas(QWidget):
                 bc = _rgba(band.get("color"))
                 bh = float(band.get("width", 8))
                 bside = band.get("side") or tick_side
-                by = int(py_top) if bside == "top" else int(py_top + vh - bh)
+                boff = float(band.get("offset", 0))
+                by = int(py_top + boff) if bside == "top" else int(py_top + vh - bh - boff)
                 dash = int(band.get("dash", 0))
                 if dash > 0:
                     x, on = int(vx), True

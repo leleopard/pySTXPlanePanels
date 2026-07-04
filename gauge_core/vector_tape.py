@@ -66,6 +66,8 @@ YAML schema
         - range: [0, 67]             # both endpoints static
           color: [200, 0, 0, 180]
           width: 8
+          offset: 0                  # optional: gap (px) between spine and
+                                     # band edge, same direction ticks use
         - range:                     # one or both endpoints dataref-driven
             - dataref: sim/aircraft/view/acf_Vso
               table: [[0, 0], [400, 400]]
@@ -266,6 +268,7 @@ class VectorTape:
                 "hi_val": hi if isinstance(hi, float) else 0.0,
                 "color": _col(b["color"]),
                 "width": float(b.get("width", 8.0)),
+                "offset": float(b.get("offset", 0.0)),  # gap (px) from the spine
                 "side": b.get("side"),  # None → follow tick_side
                 "dash": float(b["dash"]) if b.get("dash") else 0.0,
             })
@@ -333,7 +336,8 @@ class VectorTape:
         self._label_pool.clear()     # font size changed; pool objects are stale
         self._label_hi_pool.clear()
         for band in self._bands:
-            band["width"] *= scale
+            band["width"]  *= scale
+            band["offset"] *= scale
         for bug in self._bugs:
             bug.scale(scale)
 
@@ -463,7 +467,8 @@ class VectorTape:
             if y_top <= y_bot:
                 continue
             side = band.get("side") or self._tick_side
-            bx = vx if side == "left" else vx + vw - bw
+            offset = band.get("offset", 0.0)
+            bx = vx + offset if side == "left" else vx + vw - bw - offset
             dash = float(band.get("dash", 0.0))
             if dash > 0:
                 y = y_bot
@@ -579,7 +584,8 @@ class VectorTape:
             if x_right <= x_left:
                 continue
             side = band.get("side") or self._tick_side
-            by = (vy + vh - bh) if side == "top" else vy
+            offset = band.get("offset", 0.0)
+            by = (vy + vh - bh - offset) if side == "top" else vy + offset
             dash = float(band.get("dash", 0.0))
             if dash > 0:
                 x = x_left
@@ -705,6 +711,7 @@ def _vector_tape_factory(
             "range": b["range"],   # kept as-is; _parse_endpoint handles float or dict
             "color": b["color"],
             "width": float(b.get("width", 8.0)),
+            "offset": float(b.get("offset", 0.0)),
             "side": b.get("side"),
             "dash": float(b["dash"]) if b.get("dash") else 0.0,
         }
