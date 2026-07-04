@@ -1000,13 +1000,17 @@ class InstrumentCanvas(QWidget):
                 interval = float(td["interval"])
                 length   = float(td.get("length", 15))
                 tw       = max(1, int(td.get("width", 2)))
-                toff     = int(td.get("offset", 0))
+                x_off    = int(td.get("x_offset", 0))
+                y_off    = int(td.get("y_offset", 0))
                 tc_col   = _rgba(td["color"]) if td.get("color") else tc
-                x0 = spine_x + tick_dir * toff
-                x1 = spine_x + tick_dir * (toff + int(length))
+                x0 = spine_x + tick_dir * x_off
+                x1 = spine_x + tick_dir * (x_off + int(length))
                 v = math.floor((-half_range - interval) / interval) * interval
                 while v <= half_range + interval + interval * 0.001:
-                    y = int(cy_pil - v * ppu)
+                    # PIL y is flipped relative to Arcade's y-up; subtract
+                    # y_off so positive values nudge the tick up, matching
+                    # the runtime (gauge_core/vector_tape.py).
+                    y = int(cy_pil - v * ppu - y_off)
                     if int(py_top) <= y <= int(py_top + vh):
                         draw.line([(x0, y), (x1, y)], fill=tc_col, width=tw)
                     v += interval
@@ -1035,13 +1039,14 @@ class InstrumentCanvas(QWidget):
                 interval = float(td["interval"])
                 length   = float(td.get("length", 15))
                 tw       = max(1, int(td.get("width", 2)))
-                toff     = int(td.get("offset", 0))
+                x_off    = int(td.get("x_offset", 0))
+                y_off    = int(td.get("y_offset", 0))
                 tc_col   = _rgba(td["color"]) if td.get("color") else tc
-                y0 = spine_y + tick_dir * toff
-                y1 = spine_y + tick_dir * (toff + int(length))
+                y0 = spine_y + tick_dir * y_off
+                y1 = spine_y + tick_dir * (y_off + int(length))
                 v = math.floor((-half_range - interval) / interval) * interval
                 while v <= half_range + interval + interval * 0.001:
-                    x = int(cx_pil + v * ppu)
+                    x = int(cx_pil + v * ppu + x_off)
                     if int(vx) <= x <= int(vx + vw):
                         draw.line([(x, y0), (x, y1)], fill=tc_col, width=tw)
                     v += interval

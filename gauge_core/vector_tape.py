@@ -26,11 +26,18 @@ YAML schema
         - interval: 10
           length: 15
           width: 2
-          offset: 0                  # optional: gap (px) between spine and tick start
+          x_offset: 0                # optional: screen-space pixel nudge in x
+          y_offset: 0                # optional: screen-space pixel nudge in y
+                                     # (both default 0; on a y-axis tape x_offset
+                                     # is the usual "gap between spine and tick
+                                     # start" — length extends from x_offset in
+                                     # the spine direction; y_offset just nudges
+                                     # the tick along the tape. Roles swap on an
+                                     # x-axis tape: y_offset is the spine gap,
+                                     # x_offset nudges along the tape.)
         - interval: 20
           length: 30
           width: 3
-          offset: 0
           color: [255, 220, 100]      # optional per-level override
       labels:
         interval: 20
@@ -316,9 +323,10 @@ class VectorTape:
         self._vp_w *= scale;     self._vp_h *= scale
         self._ppu *= scale
         for td in self._tick_defs:
-            td["length"] = float(td["length"]) * scale
-            td["width"]  = max(1.0, float(td["width"]) * scale)
-            td["offset"] = float(td.get("offset", 0.0)) * scale
+            td["length"]   = float(td["length"]) * scale
+            td["width"]    = max(1.0, float(td["width"]) * scale)
+            td["x_offset"] = float(td.get("x_offset", 0.0)) * scale
+            td["y_offset"] = float(td.get("y_offset", 0.0)) * scale
         self._label_offset    *= scale
         self._label_font_size *= scale
         self._label_emphasize_font_size *= scale
@@ -480,13 +488,14 @@ class VectorTape:
             interval = float(td["interval"])
             length   = float(td["length"])
             width    = max(1.0, float(td["width"]))
-            offset   = float(td.get("offset", 0.0))
+            x_offset = float(td.get("x_offset", 0.0))
+            y_offset = float(td.get("y_offset", 0.0))
             color    = _col(td.get("color", self._tick_color_default))
-            x0 = spine_x + tick_dir * offset
-            x1 = spine_x + tick_dir * (offset + length)
+            x0 = spine_x + tick_dir * x_offset
+            x1 = spine_x + tick_dir * (x_offset + length)
             v = math.floor(v_min / interval) * interval
             while v <= v_max + interval * 0.001:
-                y = cy + (v - val) * self._ppu
+                y = cy + (v - val) * self._ppu + y_offset
                 arcade.draw_line(x0, y, x1, y, color, width)
                 v += interval
 
@@ -595,13 +604,14 @@ class VectorTape:
             interval = float(td["interval"])
             length   = float(td["length"])
             width    = max(1.0, float(td["width"]))
-            offset   = float(td.get("offset", 0.0))
+            x_offset = float(td.get("x_offset", 0.0))
+            y_offset = float(td.get("y_offset", 0.0))
             color    = _col(td.get("color", self._tick_color_default))
-            y0 = spine_y + tick_dir * offset
-            y1 = spine_y + tick_dir * (offset + length)
+            y0 = spine_y + tick_dir * y_offset
+            y1 = spine_y + tick_dir * (y_offset + length)
             v = math.floor(v_min / interval) * interval
             while v <= v_max + interval * 0.001:
-                x = cx + (v - val) * self._ppu
+                x = cx + (v - val) * self._ppu + x_offset
                 arcade.draw_line(x, y0, x, y1, color, width)
                 v += interval
 
@@ -683,7 +693,8 @@ def _vector_tape_factory(
             "interval": float(td["interval"]),
             "length":   float(td["length"]),
             "width":    float(td.get("width", 2.0)),
-            "offset":   float(td.get("offset", 0.0)),
+            "x_offset": float(td.get("x_offset", 0.0)),
+            "y_offset": float(td.get("y_offset", 0.0)),
             "color":    td.get("color"),  # None → use tape-level default
         })
 

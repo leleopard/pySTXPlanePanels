@@ -35,9 +35,6 @@ components:
   - 255
 - name: main_speed_tape
   type: VectorTape
-  position:
-  - 81
-  - 307
   scroll_axis: y
   pixels_per_unit: 3.0
   tick_side: right
@@ -57,20 +54,16 @@ components:
   - interval: 10
     length: 15
     width: 2
-    offset: 9
-  - interval: 20
-    length: 15
-    width: 2
-    offset: 9
+    x_offset: 27
   labels:
     color:
     - 255
     - 255
     - 255
-    format: '{:.0f}'
     interval: 20.0
+    format: '{:.0f}'
     font_size: 18.0
-    offset: 32.0
+    offset: 50.0
     font: ST_Boeing_PFD
     side: left
   bands:
@@ -135,22 +128,22 @@ components:
     - 245
     - 255
     points:
-    - - -20
+    - - -39
       - 0
-    - - -11
+    - - -27
       - 8
-    - - 14
+    - - -1
       - 8
-    - - 14
+    - - -1
       - -8
-    - - -11
+    - - -27
       - -8
     filled: false
     width: 2.0
   viewport:
   - 9
   - 115
-  - 84
+  - 102
   - 381
 - name: speed_acceleration
   type: Vector
