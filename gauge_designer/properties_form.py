@@ -926,6 +926,10 @@ class _SubSection(QWidget):
         hl.addWidget(w1); hl.addWidget(w2)
         self._form.addRow(label, box)
 
+    def row_widget(self, widget: QWidget) -> QWidget:
+        self._form.addRow(widget)
+        return widget
+
 
 def _sb(lo: int = -4096, hi: int = 4096) -> QSpinBox:
     s = QSpinBox(); s.setRange(lo, hi); s.setMinimumWidth(64); return s
@@ -2209,10 +2213,40 @@ class PropertiesForm(QWidget):
         self._ai_fd_h_vis_dr.editingFinished.connect(self._emit)
         _ai_fd.row("H vis dataref", self._dr_field(self._ai_fd_h_vis_dr))
 
-        self._ai_fd_h_vis_pred = QLineEdit()
-        self._ai_fd_h_vis_pred.setPlaceholderText("e.g. true_if_over_zero")
-        self._ai_fd_h_vis_pred.editingFinished.connect(self._emit)
-        _ai_fd.row("H vis predicate", self._ai_fd_h_vis_pred)
+        self._ai_fd_h_vis_mode = _NoScrollComboBox()
+        self._ai_fd_h_vis_mode.addItems(["Named predicate", "Compare value"])
+        self._ai_fd_h_vis_mode.currentIndexChanged.connect(self._on_ai_fd_h_vis_mode_changed)
+        self._ai_fd_h_vis_mode.currentIndexChanged.connect(self._emit)
+        _ai_fd.row("H vis mode", self._ai_fd_h_vis_mode)
+
+        self._ai_fd_h_vis_stack = QStackedWidget()
+        _fd_h_pred_page = QWidget()
+        _fd_h_pred_form = QFormLayout(_fd_h_pred_page)
+        _fd_h_pred_form.setContentsMargins(0, 2, 0, 2)
+        _fd_h_pred_form.setHorizontalSpacing(8)
+        _fd_h_pred_form.setVerticalSpacing(4)
+        self._ai_fd_h_vis_pred = _NoScrollComboBox(); self._ai_fd_h_vis_pred.addItems(_PREDICATES)
+        self._ai_fd_h_vis_pred.currentTextChanged.connect(self._emit)
+        _fd_h_pred_form.addRow("Predicate", self._ai_fd_h_vis_pred)
+
+        _fd_h_cmp_page = QWidget()
+        _fd_h_cmp_form = QFormLayout(_fd_h_cmp_page)
+        _fd_h_cmp_form.setContentsMargins(0, 2, 0, 2)
+        _fd_h_cmp_form.setHorizontalSpacing(8)
+        _fd_h_cmp_form.setVerticalSpacing(4)
+        self._ai_fd_h_vis_op = _NoScrollComboBox()
+        self._ai_fd_h_vis_op.addItems(["<", "<=", "==", "!=", ">", ">="])
+        self._ai_fd_h_vis_op.currentTextChanged.connect(self._emit)
+        _fd_h_cmp_form.addRow("Operator", self._ai_fd_h_vis_op)
+        self._ai_fd_h_vis_value = QDoubleSpinBox()
+        self._ai_fd_h_vis_value.setRange(-1_000_000_000.0, 1_000_000_000.0)
+        self._ai_fd_h_vis_value.setDecimals(3)
+        self._ai_fd_h_vis_value.valueChanged.connect(self._emit)
+        _fd_h_cmp_form.addRow("Value", self._ai_fd_h_vis_value)
+
+        self._ai_fd_h_vis_stack.addWidget(_fd_h_pred_page)
+        self._ai_fd_h_vis_stack.addWidget(_fd_h_cmp_page)
+        _ai_fd.row_widget(self._ai_fd_h_vis_stack)
 
         _fd_h_style_row = QWidget(); _fd_h_style_hl = QHBoxLayout(_fd_h_style_row)
         _fd_h_style_hl.setContentsMargins(0, 0, 0, 0); _fd_h_style_hl.setSpacing(4)
@@ -2241,7 +2275,7 @@ class PropertiesForm(QWidget):
 
         self._ai_fd_h_controls = [
             self._ai_fd_h_dr, self._ai_fd_h_fn,
-            self._ai_fd_h_vis_dr, self._ai_fd_h_vis_pred,
+            self._ai_fd_h_vis_dr, self._ai_fd_h_vis_mode, self._ai_fd_h_vis_stack,
             self._ai_fd_h_color, self._ai_fd_h_len, self._ai_fd_h_width,
             self._ai_fd_h_scale,
         ]
@@ -2270,10 +2304,40 @@ class PropertiesForm(QWidget):
         self._ai_fd_v_vis_dr.editingFinished.connect(self._emit)
         _ai_fd.row("V vis dataref", self._dr_field(self._ai_fd_v_vis_dr))
 
-        self._ai_fd_v_vis_pred = QLineEdit()
-        self._ai_fd_v_vis_pred.setPlaceholderText("e.g. true_if_over_zero")
-        self._ai_fd_v_vis_pred.editingFinished.connect(self._emit)
-        _ai_fd.row("V vis predicate", self._ai_fd_v_vis_pred)
+        self._ai_fd_v_vis_mode = _NoScrollComboBox()
+        self._ai_fd_v_vis_mode.addItems(["Named predicate", "Compare value"])
+        self._ai_fd_v_vis_mode.currentIndexChanged.connect(self._on_ai_fd_v_vis_mode_changed)
+        self._ai_fd_v_vis_mode.currentIndexChanged.connect(self._emit)
+        _ai_fd.row("V vis mode", self._ai_fd_v_vis_mode)
+
+        self._ai_fd_v_vis_stack = QStackedWidget()
+        _fd_v_pred_page = QWidget()
+        _fd_v_pred_form = QFormLayout(_fd_v_pred_page)
+        _fd_v_pred_form.setContentsMargins(0, 2, 0, 2)
+        _fd_v_pred_form.setHorizontalSpacing(8)
+        _fd_v_pred_form.setVerticalSpacing(4)
+        self._ai_fd_v_vis_pred = _NoScrollComboBox(); self._ai_fd_v_vis_pred.addItems(_PREDICATES)
+        self._ai_fd_v_vis_pred.currentTextChanged.connect(self._emit)
+        _fd_v_pred_form.addRow("Predicate", self._ai_fd_v_vis_pred)
+
+        _fd_v_cmp_page = QWidget()
+        _fd_v_cmp_form = QFormLayout(_fd_v_cmp_page)
+        _fd_v_cmp_form.setContentsMargins(0, 2, 0, 2)
+        _fd_v_cmp_form.setHorizontalSpacing(8)
+        _fd_v_cmp_form.setVerticalSpacing(4)
+        self._ai_fd_v_vis_op = _NoScrollComboBox()
+        self._ai_fd_v_vis_op.addItems(["<", "<=", "==", "!=", ">", ">="])
+        self._ai_fd_v_vis_op.currentTextChanged.connect(self._emit)
+        _fd_v_cmp_form.addRow("Operator", self._ai_fd_v_vis_op)
+        self._ai_fd_v_vis_value = QDoubleSpinBox()
+        self._ai_fd_v_vis_value.setRange(-1_000_000_000.0, 1_000_000_000.0)
+        self._ai_fd_v_vis_value.setDecimals(3)
+        self._ai_fd_v_vis_value.valueChanged.connect(self._emit)
+        _fd_v_cmp_form.addRow("Value", self._ai_fd_v_vis_value)
+
+        self._ai_fd_v_vis_stack.addWidget(_fd_v_pred_page)
+        self._ai_fd_v_vis_stack.addWidget(_fd_v_cmp_page)
+        _ai_fd.row_widget(self._ai_fd_v_vis_stack)
 
         _fd_v_style_row = QWidget(); _fd_v_style_hl = QHBoxLayout(_fd_v_style_row)
         _fd_v_style_hl.setContentsMargins(0, 0, 0, 0); _fd_v_style_hl.setSpacing(4)
@@ -2302,7 +2366,7 @@ class PropertiesForm(QWidget):
 
         self._ai_fd_v_controls = [
             self._ai_fd_v_dr, self._ai_fd_v_fn,
-            self._ai_fd_v_vis_dr, self._ai_fd_v_vis_pred,
+            self._ai_fd_v_vis_dr, self._ai_fd_v_vis_mode, self._ai_fd_v_vis_stack,
             self._ai_fd_v_color, self._ai_fd_v_len, self._ai_fd_v_width,
             self._ai_fd_v_scale,
         ]
@@ -2691,6 +2755,12 @@ class PropertiesForm(QWidget):
 
     def _on_vis_mode_changed(self, idx: int) -> None:
         self._vis_stack.setCurrentIndex(idx)
+
+    def _on_ai_fd_h_vis_mode_changed(self, idx: int) -> None:
+        self._ai_fd_h_vis_stack.setCurrentIndex(idx)
+
+    def _on_ai_fd_v_vis_mode_changed(self, idx: int) -> None:
+        self._ai_fd_v_vis_stack.setCurrentIndex(idx)
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -3129,8 +3199,19 @@ class PropertiesForm(QWidget):
         self._ai_fd_h_dr.setText(str(comp.get("fd_pitch_dataref", "")))
         self._ai_fd_h_fn.setCurrentIndex(
             max(self._ai_fd_h_fn.findText(str(comp.get("fd_pitch_convert_function") or _NONE)), 0))
-        self._ai_fd_h_vis_dr.setText(str(comp.get("fd_h_vis_dataref", "")))
-        self._ai_fd_h_vis_pred.setText(str(comp.get("fd_h_vis_predicate", "")))
+        _fd_h_vis = comp.get("fd_h_visibility") or {}
+        self._ai_fd_h_vis_dr.setText(str(_fd_h_vis.get("dataref", "")))
+        if "operator" in _fd_h_vis:
+            self._ai_fd_h_vis_mode.setCurrentIndex(1)
+            self._ai_fd_h_vis_stack.setCurrentIndex(1)
+            self._ai_fd_h_vis_op.setCurrentIndex(
+                max(self._ai_fd_h_vis_op.findText(str(_fd_h_vis.get("operator", "<"))), 0))
+            self._ai_fd_h_vis_value.setValue(float(_fd_h_vis.get("value", 0.0)))
+        else:
+            self._ai_fd_h_vis_mode.setCurrentIndex(0)
+            self._ai_fd_h_vis_stack.setCurrentIndex(0)
+            self._ai_fd_h_vis_pred.setCurrentIndex(
+                max(self._ai_fd_h_vis_pred.findText(str(_fd_h_vis.get("predicate", ""))), 0))
         self._ai_fd_h_color.set_rgba(comp.get("fd_h_color", [255, 200, 0, 255]))
         self._ai_fd_h_len.setValue(float(comp.get("fd_h_length", 200.0)))
         self._ai_fd_h_width.setValue(float(comp.get("fd_h_width", 3.0)))
@@ -3144,8 +3225,19 @@ class PropertiesForm(QWidget):
         self._ai_fd_v_dr.setText(str(comp.get("fd_roll_dataref", "")))
         self._ai_fd_v_fn.setCurrentIndex(
             max(self._ai_fd_v_fn.findText(str(comp.get("fd_roll_convert_function") or _NONE)), 0))
-        self._ai_fd_v_vis_dr.setText(str(comp.get("fd_v_vis_dataref", "")))
-        self._ai_fd_v_vis_pred.setText(str(comp.get("fd_v_vis_predicate", "")))
+        _fd_v_vis = comp.get("fd_v_visibility") or {}
+        self._ai_fd_v_vis_dr.setText(str(_fd_v_vis.get("dataref", "")))
+        if "operator" in _fd_v_vis:
+            self._ai_fd_v_vis_mode.setCurrentIndex(1)
+            self._ai_fd_v_vis_stack.setCurrentIndex(1)
+            self._ai_fd_v_vis_op.setCurrentIndex(
+                max(self._ai_fd_v_vis_op.findText(str(_fd_v_vis.get("operator", "<"))), 0))
+            self._ai_fd_v_vis_value.setValue(float(_fd_v_vis.get("value", 0.0)))
+        else:
+            self._ai_fd_v_vis_mode.setCurrentIndex(0)
+            self._ai_fd_v_vis_stack.setCurrentIndex(0)
+            self._ai_fd_v_vis_pred.setCurrentIndex(
+                max(self._ai_fd_v_vis_pred.findText(str(_fd_v_vis.get("predicate", ""))), 0))
         self._ai_fd_v_color.set_rgba(comp.get("fd_v_color", [255, 200, 0, 255]))
         self._ai_fd_v_len.setValue(float(comp.get("fd_v_length", 200.0)))
         self._ai_fd_v_width.setValue(float(comp.get("fd_v_width", 3.0)))
@@ -3523,10 +3615,16 @@ class PropertiesForm(QWidget):
                     data["fd_pitch_convert_function"] = _ffn
                 _fvdr = self._ai_fd_h_vis_dr.text().strip()
                 if _fvdr:
-                    data["fd_h_vis_dataref"] = _fvdr
-                _fvp = self._ai_fd_h_vis_pred.text().strip()
-                if _fvp:
-                    data["fd_h_vis_predicate"] = _fvp
+                    if self._ai_fd_h_vis_mode.currentIndex() == 1:
+                        data["fd_h_visibility"] = {
+                            "dataref": _fvdr,
+                            "operator": self._ai_fd_h_vis_op.currentText(),
+                            "value": self._ai_fd_h_vis_value.value(),
+                        }
+                    else:
+                        _fvp = self._ai_fd_h_vis_pred.currentText()
+                        if _fvp:
+                            data["fd_h_visibility"] = {"dataref": _fvdr, "predicate": _fvp}
                 data["fd_h_color"] = list(self._ai_fd_h_color.get_rgba())
                 if self._ai_fd_h_len.value() != 200.0:
                     data["fd_h_length"] = self._ai_fd_h_len.value()
@@ -3544,10 +3642,16 @@ class PropertiesForm(QWidget):
                     data["fd_roll_convert_function"] = _ffn
                 _fvdr = self._ai_fd_v_vis_dr.text().strip()
                 if _fvdr:
-                    data["fd_v_vis_dataref"] = _fvdr
-                _fvp = self._ai_fd_v_vis_pred.text().strip()
-                if _fvp:
-                    data["fd_v_vis_predicate"] = _fvp
+                    if self._ai_fd_v_vis_mode.currentIndex() == 1:
+                        data["fd_v_visibility"] = {
+                            "dataref": _fvdr,
+                            "operator": self._ai_fd_v_vis_op.currentText(),
+                            "value": self._ai_fd_v_vis_value.value(),
+                        }
+                    else:
+                        _fvp = self._ai_fd_v_vis_pred.currentText()
+                        if _fvp:
+                            data["fd_v_visibility"] = {"dataref": _fvdr, "predicate": _fvp}
                 data["fd_v_color"] = list(self._ai_fd_v_color.get_rgba())
                 if self._ai_fd_v_len.value() != 200.0:
                     data["fd_v_length"] = self._ai_fd_v_len.value()
@@ -3931,7 +4035,10 @@ class PropertiesForm(QWidget):
             w.setEnabled(False)
         self._ai_fd_h_show.setChecked(False)
         self._ai_fd_h_dr.clear(); self._ai_fd_h_fn.setCurrentIndex(0)
-        self._ai_fd_h_vis_dr.clear(); self._ai_fd_h_vis_pred.clear()
+        self._ai_fd_h_vis_dr.clear()
+        self._ai_fd_h_vis_mode.setCurrentIndex(0); self._ai_fd_h_vis_stack.setCurrentIndex(0)
+        self._ai_fd_h_vis_pred.setCurrentIndex(0)
+        self._ai_fd_h_vis_op.setCurrentIndex(0); self._ai_fd_h_vis_value.setValue(0.0)
         self._ai_fd_h_color.set_rgba([255, 200, 0, 255])
         self._ai_fd_h_len.setValue(200.0); self._ai_fd_h_width.setValue(3.0)
         self._ai_fd_h_scale.setValue(8.0)
@@ -3939,7 +4046,10 @@ class PropertiesForm(QWidget):
             w.setEnabled(False)
         self._ai_fd_v_show.setChecked(False)
         self._ai_fd_v_dr.clear(); self._ai_fd_v_fn.setCurrentIndex(0)
-        self._ai_fd_v_vis_dr.clear(); self._ai_fd_v_vis_pred.clear()
+        self._ai_fd_v_vis_dr.clear()
+        self._ai_fd_v_vis_mode.setCurrentIndex(0); self._ai_fd_v_vis_stack.setCurrentIndex(0)
+        self._ai_fd_v_vis_pred.setCurrentIndex(0)
+        self._ai_fd_v_vis_op.setCurrentIndex(0); self._ai_fd_v_vis_value.setValue(0.0)
         self._ai_fd_v_color.set_rgba([255, 200, 0, 255])
         self._ai_fd_v_len.setValue(200.0); self._ai_fd_v_width.setValue(3.0)
         self._ai_fd_v_scale.setValue(4.0)

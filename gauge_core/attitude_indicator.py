@@ -91,8 +91,13 @@ Flight director (cross-pointer / dual-cue):
       fd_pitch_dataref:        sim/cockpit/autopilot/flight_director_pitch
       fd_pitch_convert_function: ~  # optional
       fd_pitch_scale:          8.0  # pixels per dataref unit (matches pixels_per_degree by default)
-      fd_h_vis_dataref:        ~    # visibility control dataref (omit → always visible)
-      fd_h_vis_predicate:      true_if_over_zero
+      fd_h_visibility:         ~    # optional (omit → always visible); either
+        dataref:               ~    #   dataref + predicate: <registered convert fn>
+        predicate:             true_if_over_zero
+                               #   or dataref + operator/value (no convert fn needed):
+                               #   dataref: ...
+                               #   operator: ">="   # <, <=, ==, !=, >, >=
+                               #   value: 0.5
       fd_h_color:              [255, 200, 0, 255]
       fd_h_length:             200  # full bar length in px
       fd_h_width:              3
@@ -101,8 +106,7 @@ Flight director (cross-pointer / dual-cue):
       fd_roll_dataref:         sim/cockpit/autopilot/flight_director_roll
       fd_roll_convert_function: ~
       fd_roll_scale:           4.0
-      fd_v_vis_dataref:        ~
-      fd_v_vis_predicate:      true_if_over_zero
+      fd_v_visibility:         ~    # same shape as fd_h_visibility
       fd_v_color:              [255, 200, 0, 255]
       fd_v_length:             200
       fd_v_width:              3
@@ -874,18 +878,20 @@ def _ai_factory(
         ai.set_slip_dataref(comp["slip_dataref"],
                             comp.get("slip_convert_function"))
     if "fd_pitch_dataref" in comp:
+        fd_h_vis = comp.get("fd_h_visibility")
         ai.set_fd_h_dataref(
             comp["fd_pitch_dataref"],
             comp.get("fd_pitch_convert_function"),
-            comp.get("fd_h_vis_dataref"),
-            comp.get("fd_h_vis_predicate"),
+            fd_h_vis.get("dataref") if fd_h_vis else None,
+            resolve_predicate_name(fd_h_vis) if fd_h_vis else None,
         )
     if "fd_roll_dataref" in comp:
+        fd_v_vis = comp.get("fd_v_visibility")
         ai.set_fd_v_dataref(
             comp["fd_roll_dataref"],
             comp.get("fd_roll_convert_function"),
-            comp.get("fd_v_vis_dataref"),
-            comp.get("fd_v_vis_predicate"),
+            fd_v_vis.get("dataref") if fd_v_vis else None,
+            resolve_predicate_name(fd_v_vis) if fd_v_vis else None,
         )
     if "visibility" in comp:
         v = comp["visibility"]
