@@ -2655,6 +2655,68 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_heading)
 
+        # ── Track Indicator ──────────────────────────────────────────────────
+        _cr_track = _SubSection("Track Indicator", collapsed=True)
+
+        self._cr_track_dr = QLineEdit()
+        self._cr_track_dr.setPlaceholderText("track dataref  (blank = no track line)")
+        self._cr_track_dr.editingFinished.connect(self._emit)
+        _cr_track.row("Track dataref", self._dr_field(self._cr_track_dr))
+        self._cr_track_fn = _NoScrollComboBox()
+        self._cr_track_fn.addItems(_VALUE_FUNCS)
+        self._cr_track_fn.currentTextChanged.connect(self._emit)
+        _cr_track.row("Convert fn", self._cr_track_fn)
+
+        _cr_track_style_row = QWidget()
+        _cr_track_style_hl = QHBoxLayout(_cr_track_style_row)
+        _cr_track_style_hl.setContentsMargins(0, 0, 0, 0); _cr_track_style_hl.setSpacing(4)
+        self._cr_track_color = _ColorButton()
+        self._cr_track_color.color_changed.connect(self._emit)
+        self._cr_track_width = QDoubleSpinBox()
+        self._cr_track_width.setRange(0.5, 50.0); self._cr_track_width.setDecimals(1)
+        self._cr_track_width.setValue(2.0)
+        self._cr_track_width.valueChanged.connect(self._emit)
+        _cr_track_style_hl.addWidget(self._cr_track_color)
+        _cr_track_style_hl.addWidget(self._cr_track_width)
+        _cr_track.row("Color / width", _cr_track_style_row)
+        _cr_track.row_widget(_sep_label("Shared by the line and its perpendicular tick"))
+
+        self._cr_track_start = QDoubleSpinBox()
+        self._cr_track_start.setRange(-4096.0, 4096.0); self._cr_track_start.setDecimals(1)
+        self._cr_track_start.setValue(0.0)
+        self._cr_track_start.setToolTip("Distance from the rose centre where the line starts, in px.")
+        self._cr_track_start.valueChanged.connect(self._emit)
+        _cr_track.row("Start px", self._cr_track_start)
+
+        self._cr_track_end = QDoubleSpinBox()
+        self._cr_track_end.setRange(-4096.0, 4096.0); self._cr_track_end.setDecimals(1)
+        self._cr_track_end.setValue(150.0)
+        self._cr_track_end.setToolTip("Distance from the rose centre where the line ends, in px.")
+        self._cr_track_end.valueChanged.connect(self._emit)
+        _cr_track.row("End px", self._cr_track_end)
+
+        self._cr_track_tick_pos = QDoubleSpinBox()
+        self._cr_track_tick_pos.setRange(0.0, 4096.0); self._cr_track_tick_pos.setDecimals(1)
+        self._cr_track_tick_pos.setSpecialValueText("(none)")
+        self._cr_track_tick_pos.setToolTip(
+            "Distance from the rose centre, along the line, where a tick\n"
+            "perpendicular to the line is drawn. (none) draws no tick."
+        )
+        self._cr_track_tick_pos.valueChanged.connect(self._emit)
+        _cr_track.row("Tick position px", self._cr_track_tick_pos)
+
+        self._cr_track_tick_len = QDoubleSpinBox()
+        self._cr_track_tick_len.setRange(1.0, 200.0); self._cr_track_tick_len.setDecimals(1)
+        self._cr_track_tick_len.setValue(20.0)
+        self._cr_track_tick_len.setToolTip(
+            "Full length of the perpendicular tick, split evenly across the line.\n"
+            "Only used when Tick position px is set."
+        )
+        self._cr_track_tick_len.valueChanged.connect(self._emit)
+        _cr_track.row("Tick length px", self._cr_track_tick_len)
+
+        self._cr_sec.row_widget(_cr_track)
+
         self._vbox.addWidget(self._cr_sec)
 
     def _on_cr_line_toggled(self, on: bool) -> None:
@@ -3071,7 +3133,7 @@ class PropertiesForm(QWidget):
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
-            "heading",
+            "heading", "track",
             # shared across all
             "viewport", "visibility",
         }
@@ -3579,6 +3641,16 @@ class PropertiesForm(QWidget):
         self._cr_heading_dr.setText(str(cr_heading.get("dataref", "")))
         self._cr_heading_fn.setCurrentIndex(
             max(self._cr_heading_fn.findText(str(cr_heading.get("convert_function") or _NONE)), 0))
+        cr_track = comp.get("track") or {}
+        self._cr_track_dr.setText(str(cr_track.get("dataref", "")))
+        self._cr_track_fn.setCurrentIndex(
+            max(self._cr_track_fn.findText(str(cr_track.get("convert_function") or _NONE)), 0))
+        self._cr_track_color.set_rgba(cr_track.get("color", [0, 255, 0, 255]))
+        self._cr_track_width.setValue(float(cr_track.get("width", 2.0)))
+        self._cr_track_start.setValue(float(cr_track.get("start", 0.0)))
+        self._cr_track_end.setValue(float(cr_track.get("end", 150.0)))
+        self._cr_track_tick_pos.setValue(float(cr_track.get("tick_position", 0.0)))
+        self._cr_track_tick_len.setValue(float(cr_track.get("tick_length", 20.0)))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -3810,6 +3882,23 @@ class PropertiesForm(QWidget):
                 if cr_hfn != _NONE:
                     heading["convert_function"] = cr_hfn
                 data["heading"] = heading
+            cr_tdr = self._cr_track_dr.text().strip()
+            if cr_tdr:
+                track: dict = {
+                    "dataref": cr_tdr,
+                    "color": list(self._cr_track_color.get_rgba()),
+                    "width": self._cr_track_width.value(),
+                    "start": self._cr_track_start.value(),
+                    "end": self._cr_track_end.value(),
+                }
+                cr_tfn = self._cr_track_fn.currentText()
+                if cr_tfn != _NONE:
+                    track["convert_function"] = cr_tfn
+                cr_tick_pos = self._cr_track_tick_pos.value()
+                if cr_tick_pos > 0:
+                    track["tick_position"] = cr_tick_pos
+                    track["tick_length"] = self._cr_track_tick_len.value()
+                data["track"] = track
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -4329,6 +4418,10 @@ class PropertiesForm(QWidget):
         self._cr_label_color.set_rgba(None)
         self._cr_label_anchor_y.setCurrentIndex(1)  # "center"
         self._cr_heading_dr.clear(); self._cr_heading_fn.setCurrentIndex(0)
+        self._cr_track_dr.clear(); self._cr_track_fn.setCurrentIndex(0)
+        self._cr_track_color.set_rgba(None); self._cr_track_width.setValue(2.0)
+        self._cr_track_start.setValue(0.0); self._cr_track_end.setValue(150.0)
+        self._cr_track_tick_pos.setValue(0.0); self._cr_track_tick_len.setValue(20.0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)

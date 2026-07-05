@@ -65,6 +65,22 @@ YAML schema
         dataref: sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot
         convert_function: null              # optional
 
+      track:                                # optional: a line from the centre,
+                                             # rotating with the rose like a tick
+                                             # (i.e. relative to heading, showing
+                                             # crab angle) — omit to not draw one
+        dataref: sim/cockpit2/gauges/indicators/track_mag_pilot
+        convert_function: null              # optional
+        color: [0, 255, 0, 255]
+        width: 2.0
+        start: 0                            # px from centre where the line starts
+        end: 150                            # px from centre where the line ends
+        tick_position: 100                  # optional px from centre for a tick
+                                             # perpendicular to the line; omit for
+                                             # no tick
+        tick_length: 20                     # full length of that tick, split
+                                             # evenly across the line
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -166,12 +182,49 @@ class VectorCompassRose(_VecBase):
         self._heading_dr: Any | None = None
         self._heading_convert: Callable | None = None
 
+        # Track indicator (optional; enabled by calling set_track()) — a line
+        # from the centre that rotates with the rose like a tick, driven by
+        # its own dataref, with an optional perpendicular tick sharing the
+        # line's color/width.
+        self._show_track = False
+        self._track_color: tuple[int, int, int, int] = (0, 255, 0, 255)
+        self._track_width = 2.0
+        self._track_start = 0.0
+        self._track_end = 150.0
+        self._track_tick_position: float | None = None
+        self._track_tick_length = 20.0
+        self._track_angle = 0.0
+        self._track_dr: Any | None = None
+        self._track_convert: Callable | None = None
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
         self._heading_dr = _as_dataref(dataref)
         if convert_fn:
             self._heading_convert = get_convert(convert_fn)
+
+    def set_track(
+        self,
+        color: tuple[int, int, int, int],
+        width: float,
+        start: float,
+        end: float,
+        tick_position: float | None,
+        tick_length: float,
+        dataref: Any,
+        convert_fn: str | None = None,
+    ) -> None:
+        self._show_track = True
+        self._track_color = color
+        self._track_width = float(width)
+        self._track_start = float(start)
+        self._track_end = float(end)
+        self._track_tick_position = float(tick_position) if tick_position is not None else None
+        self._track_tick_length = float(tick_length)
+        self._track_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._track_convert = get_convert(convert_fn)
 
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
@@ -185,12 +238,23 @@ class VectorCompassRose(_VecBase):
         self._label_font_size *= scale
         self._label_emphasize_font_size *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
+        self._track_width *= scale
+        self._track_start *= scale
+        self._track_end *= scale
+        if self._track_tick_position is not None:
+            self._track_tick_position *= scale
+        self._track_tick_length *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._cx += dx; self._cy += dy
 
     def update(self, get_data: Callable[[Any], float]) -> None:
         self._update_visibility(get_data)
+        if self._track_dr is not None:
+            raw = float(get_data(self._track_dr))
+            if self._track_convert is not None:
+                raw = float(self._track_convert(raw, get_data))
+            self._track_angle = raw % 360.0
         if self._heading_dr is not None:
             raw = float(get_data(self._heading_dr))
             if self._heading_convert is not None:
@@ -273,6 +337,22 @@ class VectorCompassRose(_VecBase):
             t.draw()
             idx += 1
 
+        if self._show_track:
+            self._draw_track()
+
+    def _draw_track(self) -> None:
+        x0, y0 = self._point_at(self._track_angle, self._track_start)
+        x1, y1 = self._point_at(self._track_angle, self._track_end)
+        arcade.draw_line(x0, y0, x1, y1, self._track_color, self._track_width)
+        if self._track_tick_position is not None:
+            tx, ty = self._point_at(self._track_angle, self._track_tick_position)
+            line_angle = math.radians(90.0 - self._track_angle + self._heading)
+            perp = line_angle + math.pi / 2.0
+            half = self._track_tick_length / 2.0
+            dx, dy = half * math.cos(perp), half * math.sin(perp)
+            arcade.draw_line(tx - dx, ty - dy, tx + dx, ty + dy,
+                             self._track_color, self._track_width)
+
 
 def _compass_rose_factory(
     comp: dict[str, Any],
@@ -323,6 +403,19 @@ def _compass_rose_factory(
         rose.set_heading_dataref(
             heading_cfg["dataref"],
             heading_cfg.get("convert_function"),
+        )
+
+    track_cfg = comp.get("track")
+    if track_cfg:
+        rose.set_track(
+            color=_as_color(track_cfg.get("color", [0, 255, 0, 255])),
+            width=float(track_cfg.get("width", 2.0)),
+            start=float(track_cfg.get("start", 0.0)),
+            end=float(track_cfg.get("end", comp.get("radius", 150.0))),
+            tick_position=track_cfg.get("tick_position"),
+            tick_length=float(track_cfg.get("tick_length", 20.0)),
+            dataref=track_cfg["dataref"],
+            convert_fn=track_cfg.get("convert_function"),
         )
 
     if "visibility" in comp:

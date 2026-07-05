@@ -798,6 +798,30 @@ class InstrumentCanvas(QWidget):
             self._paste_rotated_text(composite, text, use_font, label_color, x, y, -h_deg,
                                      anchor_y=anchor_y_pil)
 
+        track_cfg = comp.get("track")
+        if track_cfg:
+            # No live dataref value in the static preview — show a
+            # representative angle so position/length/tick are visible.
+            track_angle = 45.0
+            tcolor = _rgba(track_cfg.get("color", [0, 255, 0, 255]))
+            twidth = max(1, int(round(float(track_cfg.get("width", 2.0)))))
+            tstart = float(track_cfg.get("start", 0.0))
+            tend = float(track_cfg.get("end", r))
+            x0, y0 = point_at(track_angle, tstart)
+            x1, y1 = point_at(track_angle, tend)
+            draw.line([(x0, y0), (x1, y1)], fill=tcolor, width=twidth)
+            tick_pos = track_cfg.get("tick_position")
+            if tick_pos is not None:
+                tick_len = float(track_cfg.get("tick_length", 20.0))
+                tx, ty = point_at(track_angle, float(tick_pos))
+                line_angle = math.radians(90.0 - track_angle)  # heading=0 for static preview
+                perp = line_angle + math.pi / 2.0
+                half = tick_len / 2.0
+                # point_at() subtracts the sin term (PIL y is flipped vs. Arcade);
+                # match that convention for this offset too.
+                dx, dy = half * math.cos(perp), half * math.sin(perp)
+                draw.line([(tx - dx, ty + dy), (tx + dx, ty - dy)], fill=tcolor, width=twidth)
+
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
