@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
     QFileDialog, QListWidget, QListWidgetItem, QStackedWidget, QFrame,
     QGroupBox, QDialogButtonBox,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, Signal, QSize, QSettings
+from PySide6.QtGui import QColor, QIcon, QPixmap
 
 
 class _NoScrollComboBox(QComboBox):
@@ -37,16 +37,51 @@ class _NoScrollComboBox(QComboBox):
         event.ignore()
 
 
+_CUSTOM_COLOR_SLOTS = 16  # QColorDialog's fixed custom-color palette size
+
+
 class _ColorButton(QPushButton):
-    """Button showing the current RGBA color; opens QColorDialog on click."""
+    """Button showing the current RGBA color as a small swatch icon (not as
+    the button's own background — that fights the OS theme and makes the
+    hex/alpha text hard to read against light or saturated colors); opens
+    QColorDialog on click.
+
+    QColorDialog's "custom colors" row is a static, in-memory, per-process
+    palette — Qt doesn't persist it across app restarts on its own. This
+    class loads it from QSettings the first time any color button is used,
+    and saves it back after every pick so custom swatches survive a restart.
+    """
     color_changed = Signal()
+    _custom_colors_loaded = False
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._rgba = (255, 255, 255, 255)
         self.setFixedHeight(24)
+        self.setIconSize(QSize(16, 16))
         self.clicked.connect(self._pick)
+        _ColorButton._load_custom_colors()
         self._refresh()
+
+    @classmethod
+    def _load_custom_colors(cls) -> None:
+        if cls._custom_colors_loaded:
+            return
+        cls._custom_colors_loaded = True
+        settings = QSettings()
+        for i in range(_CUSTOM_COLOR_SLOTS):
+            raw = settings.value(f"colorPicker/customColor{i}", "")
+            if raw:
+                color = QColor(raw)
+                if color.isValid():
+                    QColorDialog.setCustomColor(i, color)
+
+    @staticmethod
+    def _save_custom_colors() -> None:
+        settings = QSettings()
+        for i in range(_CUSTOM_COLOR_SLOTS):
+            settings.setValue(f"colorPicker/customColor{i}",
+                              QColorDialog.customColor(i).name(QColor.HexArgb))
 
     def set_rgba(self, raw) -> None:
         if raw is None:
@@ -62,13 +97,11 @@ class _ColorButton(QPushButton):
 
     def _refresh(self) -> None:
         r, g, b, a = self._rgba
-        luma = r * 299 + g * 587 + b * 114
-        fg = "#000" if luma > 128000 else "#fff"
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(QColor(r, g, b, a))
+        self.setIcon(QIcon(pixmap))
         self.setText(f"  #{r:02X}{g:02X}{b:02X}   α {a}")
-        self.setStyleSheet(
-            f"background-color: rgb({r},{g},{b}); color: {fg};"
-            f"border: 1px solid #888; text-align: left; padding: 2px;"
-        )
+        self.setStyleSheet("text-align: left; padding: 2px;")
 
     def _pick(self) -> None:
         r, g, b, a = self._rgba
@@ -76,6 +109,7 @@ class _ColorButton(QPushButton):
             QColor(r, g, b, a), self, "Pick Color",
             QColorDialog.ShowAlphaChannel,
         )
+        self._save_custom_colors()
         if c.isValid():
             self._rgba = (c.red(), c.green(), c.blue(), c.alpha())
             self._refresh()

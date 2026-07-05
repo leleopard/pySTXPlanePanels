@@ -13,15 +13,15 @@ import yaml
 from PySide6.QtWidgets import (
     QWidget, QSplitter, QTreeWidget, QTreeWidgetItem, QAbstractItemView,
     QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QMessageBox, QInputDialog, QFileDialog, QColorDialog,
+    QMessageBox, QInputDialog, QFileDialog,
     QCheckBox, QComboBox, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QSettings, QSize
 from gauge_designer.ui_utils import QSpinBox, QDoubleSpinBox, is_y_down
-from PySide6.QtGui import QColor
 
 from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
 from gauge_designer.panel_canvas import PanelCanvas
+from gauge_designer.properties_form import _ColorButton
 from gauge_designer.ui_utils import header_label, make_svg_icon
 
 _ROLE_TYPE = Qt.UserRole          # "instrument" | "grid"
@@ -276,19 +276,17 @@ class PanelView(QWidget):
         ea.addLayout(size_bar)
 
         # Background colour
-        self._bg_color = QColor(13, 13, 13)
         color_bar = QHBoxLayout()
         color_bar.setContentsMargins(0, 0, 0, 4)
         color_bar.setSpacing(4)
         color_bar.addWidget(QLabel("Background:"))
-        self._bg_color_btn = QPushButton()
-        self._bg_color_btn.setFixedSize(60, 22)
+        self._bg_color_btn = _ColorButton()
+        self._bg_color_btn.set_rgba((13, 13, 13))
         self._bg_color_btn.setToolTip("Click to choose panel background colour")
-        self._bg_color_btn.clicked.connect(self._pick_bg_color)
+        self._bg_color_btn.color_changed.connect(self._on_bg_color_changed)
         color_bar.addWidget(self._bg_color_btn)
         color_bar.addStretch()
         ea.addLayout(color_bar)
-        self._update_bg_swatch()
 
         # UDP listen port bar
         port_bar = QHBoxLayout()
@@ -548,14 +546,13 @@ class PanelView(QWidget):
 
         bg = panel_data.get("background_color", [0.05, 0.05, 0.05])
         try:
-            self._bg_color = QColor(
+            self._bg_color_btn.set_rgba((
                 int(round(bg[0] * 255)),
                 int(round(bg[1] * 255)),
                 int(round(bg[2] * 255)),
-            )
+            ))
         except (TypeError, IndexError, ValueError):
-            self._bg_color = QColor(13, 13, 13)
-        self._update_bg_swatch()
+            self._bg_color_btn.set_rgba((13, 13, 13))
 
         win = panel_data.get("window") or {}
         self._fullscreen_chk.blockSignals(True)
@@ -601,8 +598,7 @@ class PanelView(QWidget):
         self._name_edit.clear()
         self._listen_port_sb.setValue(0)
         self._port_warning.setText("")
-        self._bg_color = QColor(13, 13, 13)
-        self._update_bg_swatch()
+        self._bg_color_btn.set_rgba((13, 13, 13))
         self._fullscreen_chk.blockSignals(True)
         self._fullscreen_chk.setChecked(False)
         self._fullscreen_chk.blockSignals(False)
@@ -631,7 +627,7 @@ class PanelView(QWidget):
         return v if v > 0 else None
 
     def get_background_color(self) -> list[float]:
-        r, g, b = self._bg_color.red(), self._bg_color.green(), self._bg_color.blue()
+        r, g, b, _a = self._bg_color_btn.get_rgba()
         return [round(r / 255, 4), round(g / 255, 4), round(b / 255, 4)]
 
     def get_window_opts(self) -> dict | None:
@@ -729,22 +725,10 @@ class PanelView(QWidget):
 
     # ── Background colour ──────────────────────────────────────────────────
 
-    def _pick_bg_color(self):
-        color = QColorDialog.getColor(self._bg_color, self, "Panel Background Colour")
-        if color.isValid():
-            self._bg_color = color
-            self._update_bg_swatch()
-            self._canvas.set_background_color(color.red(), color.green(), color.blue())
-            self.changed.emit()
-
-    def _update_bg_swatch(self):
-        r, g, b = self._bg_color.red(), self._bg_color.green(), self._bg_color.blue()
-        lum = 0.299 * r + 0.587 * g + 0.114 * b
-        text_color = "#ffffff" if lum < 128 else "#000000"
-        self._bg_color_btn.setStyleSheet(
-            f"background-color: rgb({r},{g},{b}); color: {text_color}; "
-            f"border: 1px solid #888; border-radius: 2px;"
-        )
+    def _on_bg_color_changed(self):
+        r, g, b, _a = self._bg_color_btn.get_rgba()
+        self._canvas.set_background_color(r, g, b)
+        self.changed.emit()
 
     def refresh_form(self):
         """Re-populate the active form using the current coord convention."""
