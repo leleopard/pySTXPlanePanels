@@ -35,7 +35,8 @@
       "Bash(rm -f assets/testwrite.tmp)",
       "Bash(rm -f assets/testfont_out.ttf)",
       "Bash(rm -f \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\bold_vs_regular.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\bold_vs_regular2.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\bold_vs_regular_real.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\pil_reference.png\" \"c:\\\\Users\\\\stephane\\\\Desktop\\\\plane_gauges\\\\gauge_err.txt\")",
-      "Bash(rm -rf \"C:\\\\Users\\\\stephane\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-stephane-Desktop-plane-gauges\\\\8c588a85-3a15-4ef7-a217-07c3b3719f64\\\\scratchpad\\\\fonttest\")"
+      "Bash(rm -rf \"C:\\\\Users\\\\stephane\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-stephane-Desktop-plane-gauges\\\\8c588a85-3a15-4ef7-a217-07c3b3719f64\\\\scratchpad\\\\fonttest\")",
+      "Bash(QT_QPA_PLATFORM=offscreen py -c ' *)"
     ]
   }
 }
