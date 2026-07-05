@@ -19,6 +19,10 @@ instruments:
   position:
   - 0
   - 0
+- file: instruments/B737 PFD/dir_HSI.yaml
+  position:
+  - 0
+  - 33
 background_color:
 - 0.0
 - 0.0
