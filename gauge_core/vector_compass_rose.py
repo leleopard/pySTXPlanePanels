@@ -251,8 +251,13 @@ class VectorCompassRose(_VecBase):
             # Radial orientation: baseline tangent to the circle (perpendicular
             # to the radius), with "up" pointing outward along the radius.
             # point_at()'s angle is (90 - h + heading); subtracting the 90
-            # unrotated "up" gives the rotation needed to reach it.
-            t.rotation = self._heading - h
+            # unrotated "up" gives the rotation needed to reach it. Negated
+            # relative to that derivation: arcade.Text's rendered rotation
+            # comes out mirrored versus a plain geometric CCW rotation once
+            # it's drawn through the runtime's render pipeline (confirmed by
+            # comparing against the designer's PIL preview, which needed no
+            # such flip), so the sign is reversed here to compensate.
+            t.rotation = h - self._heading
             t.draw()
             idx += 1
 
