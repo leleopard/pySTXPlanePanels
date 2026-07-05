@@ -729,7 +729,27 @@ class InstrumentCanvas(QWidget):
 
     def _render_compassrose(self, comp: dict, composite: Image.Image,
                             draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
-        """Static preview at heading=0 — matches the runtime's neutral orientation."""
+        """Static preview at heading=0 — matches the runtime's neutral orientation.
+
+        Mirrors the runtime's optional scissor clip (viewport): with one
+        configured, render onto a transparent layer first and paste back only
+        the cropped viewport rect, the same "draw fully, clip after" approach
+        the runtime's GL scissor achieves — avoids hand-clipping every element
+        (circle, ticks, rotated labels, track line) against the rect.
+        """
+        vp = comp.get("viewport")
+        if vp:
+            layer = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+            ldraw = ImageDraw.Draw(layer)
+            self._render_compassrose_unclipped(comp, layer, ldraw, canvas_h)
+            vx, vy, vw, vh = self._viewport_rect_pil(comp, canvas_h)
+            cropped = layer.crop((vx, vy, vx + vw, vy + vh))
+            composite.alpha_composite(cropped, (vx, vy))
+        else:
+            self._render_compassrose_unclipped(comp, composite, draw, canvas_h)
+
+    def _render_compassrose_unclipped(self, comp: dict, composite: Image.Image,
+                                      draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         ctr = comp.get("center", [0, 0])
         r = float(comp.get("radius", 100))
         cx_p, cy_p = float(ctr[0]), canvas_h - float(ctr[1])

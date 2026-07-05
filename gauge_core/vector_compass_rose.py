@@ -81,6 +81,12 @@ YAML schema
         tick_length: 20                     # full length of that tick, split
                                              # evenly across the line
 
+      viewport: [10, 0, 500, 100]            # optional scissor clip [x, y_bottom, w, h];
+                                             # confines the rose to a rectangular window
+                                             # (e.g. a partial arc peeking from behind
+                                             # other panel artwork) instead of drawing
+                                             # its full extent unclipped
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -132,6 +138,7 @@ class VectorCompassRose(_VecBase):
         label_emphasize_interval: float | None = None,
         label_emphasize_font_size: float | None = None,
         label_anchor_y: str = "center",
+        viewport: tuple[float, float, float, float] | None = None,
     ) -> None:
         self.name = name
         self._cx = float(center[0])
@@ -177,6 +184,10 @@ class VectorCompassRose(_VecBase):
             float(label_emphasize_font_size) if label_emphasize_font_size else self._label_font_size
         )
         self._label_pool: list[arcade.Text] = []
+
+        # Optional scissor clip [x, y_bottom, w, h] in panel coords; None means
+        # draw the full rose unclipped (the pre-existing behaviour).
+        self._viewport = tuple(float(v) for v in viewport) if viewport is not None else None
 
         self._heading = 0.0
         self._heading_dr: Any | None = None
@@ -244,9 +255,15 @@ class VectorCompassRose(_VecBase):
         if self._track_tick_position is not None:
             self._track_tick_position *= scale
         self._track_tick_length *= scale
+        if self._viewport is not None:
+            vx, vy, vw, vh = self._viewport
+            self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._cx += dx; self._cy += dy
+        if self._viewport is not None:
+            vx, vy, vw, vh = self._viewport
+            self._viewport = (vx + dx, vy + dy, vw, vh)
 
     def update(self, get_data: Callable[[Any], float]) -> None:
         self._update_visibility(get_data)
@@ -272,6 +289,24 @@ class VectorCompassRose(_VecBase):
         if not self._visible:
             return
 
+        if self._viewport is not None:
+            win = arcade.get_window()
+            ctx = win.ctx
+            vx, vy, vw, vh = self._viewport
+            # Scale panel-space viewport to framebuffer pixels — see VectorTape's
+            # draw() for why (SSAA renders into a larger-than-logical-panel FBO).
+            _, _, fvp_w, fvp_h = ctx.viewport
+            panel_w, panel_h = getattr(win, "_panel_size", (win.width, win.height))
+            sx = fvp_w / panel_w
+            sy = fvp_h / panel_h
+            ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
+
+        self._draw_all()
+
+        if self._viewport is not None:
+            ctx.scissor = None
+
+    def _draw_all(self) -> None:
         if self._background_color is not None:
             arcade.draw_circle_filled(
                 self._cx, self._cy, self._radius, self._background_color,
@@ -396,6 +431,7 @@ def _compass_rose_factory(
         label_emphasize_interval=comp.get("label_emphasize_interval"),
         label_emphasize_font_size=comp.get("label_emphasize_font_size"),
         label_anchor_y=str(comp.get("label_anchor_y", "center")),
+        viewport=tuple(comp["viewport"]) if "viewport" in comp else None,
     )
 
     heading_cfg = comp.get("heading")

@@ -4701,8 +4701,9 @@ class PropertiesForm(QWidget):
         # Animation: SpriteSheet, ScrollingTape, and VectorTape (scroll dataref)
         self._anim_sec.setVisible(is_ss or is_st or is_vt)
 
-        # Viewport clip: image types and VectorTape; AI uses its own viewport spinboxes
-        self._vp_sec.setVisible(is_img or is_vt)
+        # Viewport clip: image types, VectorTape, and VectorCompassRose;
+        # AI uses its own viewport spinboxes
+        self._vp_sec.setVisible(is_img or is_vt or is_cr)
         if is_vt:
             self._vp_sec.set_active(True)
         # VectorTape: x/y comes from Position section; only W/H shown in Viewport Clip
