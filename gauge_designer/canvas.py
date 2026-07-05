@@ -744,19 +744,29 @@ class InstrumentCanvas(QWidget):
         label_offset   = float(comp.get("label_offset", 20.0))
         label_position = comp.get("label_position", "inside")
         label_fmt      = comp.get("label_format", "{:02.0f}")
+        label_bold = bool(comp.get("label_bold", False))
+        label_italic = bool(comp.get("label_italic", False))
         font_size = max(8, int(float(comp.get("label_font_size", 14))))
-        font = _pil_font(comp.get("label_font"), font_size,
-                         bold=bool(comp.get("label_bold", False)),
-                         italic=bool(comp.get("label_italic", False)))
+        font = _pil_font(comp.get("label_font"), font_size, bold=label_bold, italic=label_italic)
+        emphasize_interval = comp.get("label_emphasize_interval")
+        emphasize_font = None
+        if emphasize_interval:
+            emphasize_interval = int(float(emphasize_interval))
+            emphasize_size = max(8, int(float(comp.get("label_emphasize_font_size") or font_size)))
+            emphasize_font = _pil_font(comp.get("label_font"), emphasize_size,
+                                       bold=label_bold, italic=label_italic)
         label_color = _rgba(comp.get("label_color"))
         r_label = (r - label_offset) if label_position == "inside" else (r + label_offset)
         for h_deg in range(0, 360, label_interval):
             x, y = point_at(h_deg, r_label)
             text = label_fmt.format(h_deg / 10.0)
+            use_font = (
+                emphasize_font if emphasize_interval and h_deg % emphasize_interval == 0 else font
+            )
             try:
-                draw.text((x, y), text, fill=label_color, font=font, anchor="mm")
+                draw.text((x, y), text, fill=label_color, font=use_font, anchor="mm")
             except TypeError:
-                draw.text((x, y), text, fill=label_color, font=font)
+                draw.text((x, y), text, fill=label_color, font=use_font)
 
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:

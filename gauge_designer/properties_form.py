@@ -2567,6 +2567,25 @@ class PropertiesForm(QWidget):
         self._cr_label_font_size.setValue(14.0)
         self._cr_label_font_size.valueChanged.connect(self._emit)
         self._cr_sec.row("Font size", self._cr_label_font_size)
+        self._cr_label_emph_interval = QDoubleSpinBox()
+        self._cr_label_emph_interval.setRange(0.0, 180.0); self._cr_label_emph_interval.setDecimals(0)
+        self._cr_label_emph_interval.setSpecialValueText("(none)")
+        self._cr_label_emph_interval.setToolTip(
+            "Headings on this coarser interval (must be a multiple of Interval °\n"
+            "above) use a different font size — e.g. label every 10° but a bigger\n"
+            "size every 30°. (none) disables the split; all labels use Font size."
+        )
+        self._cr_label_emph_interval.valueChanged.connect(self._emit)
+        self._cr_sec.row("Emphasize interval °", self._cr_label_emph_interval)
+        self._cr_label_emph_size = QDoubleSpinBox()
+        self._cr_label_emph_size.setRange(4.0, 120.0); self._cr_label_emph_size.setDecimals(1)
+        self._cr_label_emph_size.setValue(20.0)
+        self._cr_label_emph_size.setToolTip(
+            "Font size for headings on the Emphasize interval. Only used when\n"
+            "Emphasize interval ° is set."
+        )
+        self._cr_label_emph_size.valueChanged.connect(self._emit)
+        self._cr_sec.row("Emphasize font size", self._cr_label_emph_size)
         self._cr_label_font = QLineEdit()
         self._cr_label_font.setPlaceholderText("Arial  (blank = default)")
         self._cr_label_font.editingFinished.connect(self._emit)
@@ -3021,6 +3040,7 @@ class PropertiesForm(QWidget):
             "tick10_length", "tick10_color", "tick10_width", "tick10_position",
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
+            "label_emphasize_interval", "label_emphasize_font_size",
             "heading",
             # shared across all
             "viewport", "visibility",
@@ -3517,6 +3537,9 @@ class PropertiesForm(QWidget):
         self._cr_label_pos.setCurrentText(str(comp.get("label_position", "inside")))
         self._cr_label_format.setText(str(comp.get("label_format", "")))
         self._cr_label_font_size.setValue(float(comp.get("label_font_size", 14.0)))
+        self._cr_label_emph_interval.setValue(float(comp.get("label_emphasize_interval", 0.0)))
+        self._cr_label_emph_size.setValue(
+            float(comp.get("label_emphasize_font_size") or comp.get("label_font_size", 14.0)))
         self._cr_label_font.setText(str(comp.get("label_font", "")))
         self._cr_label_bold.setChecked(bool(comp.get("label_bold", False)))
         self._cr_label_italic.setChecked(bool(comp.get("label_italic", False)))
@@ -3734,6 +3757,10 @@ class PropertiesForm(QWidget):
             if cr_fmt:
                 data["label_format"] = cr_fmt
             data["label_font_size"] = self._cr_label_font_size.value()
+            cr_emph_interval = self._cr_label_emph_interval.value()
+            if cr_emph_interval > 0:
+                data["label_emphasize_interval"] = cr_emph_interval
+                data["label_emphasize_font_size"] = self._cr_label_emph_size.value()
             cr_font = self._cr_label_font.text().strip()
             if cr_font:
                 data["label_font"] = cr_font
@@ -4263,6 +4290,7 @@ class PropertiesForm(QWidget):
         self._cr_label_interval.setValue(30.0); self._cr_label_offset.setValue(20.0)
         self._cr_label_pos.setCurrentIndex(0); self._cr_label_format.clear()
         self._cr_label_font_size.setValue(14.0); self._cr_label_font.clear()
+        self._cr_label_emph_interval.setValue(0.0); self._cr_label_emph_size.setValue(20.0)
         self._cr_label_bold.setChecked(False); self._cr_label_italic.setChecked(False)
         self._cr_label_color.set_rgba(None)
         self._cr_heading_dr.clear(); self._cr_heading_fn.setCurrentIndex(0)

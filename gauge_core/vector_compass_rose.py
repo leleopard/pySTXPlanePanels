@@ -48,6 +48,12 @@ YAML schema
       label_format: "{:02.0f}"              # applied to heading/10, e.g. 030° → "03"
       label_bold: false
       label_italic: false
+      label_emphasize_interval: 30          # optional: headings on this coarser
+                                             # interval (must be a multiple of
+                                             # label_interval) use a bigger/smaller
+                                             # font, e.g. label every 10° but a
+                                             # bigger size every 30°
+      label_emphasize_font_size: 20         # font size for those headings
 
       heading:                              # rotates the whole rose
         dataref: sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot
@@ -101,6 +107,8 @@ class VectorCompassRose(_VecBase):
         label_format: str = "{:02.0f}",
         label_bold: bool = False,
         label_italic: bool = False,
+        label_emphasize_interval: float | None = None,
+        label_emphasize_font_size: float | None = None,
     ) -> None:
         self.name = name
         self._cx = float(center[0])
@@ -131,6 +139,15 @@ class VectorCompassRose(_VecBase):
         self._label_format = label_format
         self._label_bold = label_bold
         self._label_italic = label_italic
+        # Optional bigger/smaller font for headings on a coarser interval,
+        # e.g. label every 10° but a bigger size every 30°. None → all
+        # labels use label_font_size.
+        self._label_emphasize_interval = (
+            int(label_emphasize_interval) if label_emphasize_interval else None
+        )
+        self._label_emphasize_font_size = (
+            float(label_emphasize_font_size) if label_emphasize_font_size else self._label_font_size
+        )
         self._label_pool: list[arcade.Text] = []
 
         self._heading = 0.0
@@ -154,6 +171,7 @@ class VectorCompassRose(_VecBase):
         self._tick10_width *= scale
         self._label_offset *= scale
         self._label_font_size *= scale
+        self._label_emphasize_font_size *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -224,6 +242,11 @@ class VectorCompassRose(_VecBase):
                 ))
             t = self._label_pool[idx]
             t.text = self._label_format.format(h / 10.0)
+            t.font_size = (
+                self._label_emphasize_font_size
+                if self._label_emphasize_interval and h % self._label_emphasize_interval == 0
+                else self._label_font_size
+            )
             t.x, t.y = x, y
             t.draw()
             idx += 1
@@ -268,6 +291,8 @@ def _compass_rose_factory(
         label_format=str(comp.get("label_format", "{:02.0f}")),
         label_bold=label_bold,
         label_italic=label_italic,
+        label_emphasize_interval=comp.get("label_emphasize_interval"),
+        label_emphasize_font_size=comp.get("label_emphasize_font_size"),
     )
 
     heading_cfg = comp.get("heading")
