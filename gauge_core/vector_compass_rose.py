@@ -248,6 +248,11 @@ class VectorCompassRose(_VecBase):
                 else self._label_font_size
             )
             t.x, t.y = x, y
+            # Radial orientation: baseline tangent to the circle (perpendicular
+            # to the radius), with "up" pointing outward along the radius.
+            # point_at()'s angle is (90 - h + heading); subtracting the 90
+            # unrotated "up" gives the rotation needed to reach it.
+            t.rotation = self._heading - h
             t.draw()
             idx += 1
 

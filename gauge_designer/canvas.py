@@ -584,7 +584,7 @@ class InstrumentCanvas(QWidget):
                 elif ctype == "AttitudeIndicator":
                     self._render_ai(comp, composite, draw, w, h)
                 elif ctype == "VectorCompassRose":
-                    self._render_compassrose(comp, draw, h)
+                    self._render_compassrose(comp, composite, draw, h)
                 elif ctype == "RotaryEncoder":
                     self._render_rotary_encoder(comp, composite, draw, h)
                 elif ctype == "Text":
@@ -701,7 +701,26 @@ class InstrumentCanvas(QWidget):
         draw.line([(cx - 10, cy), (cx + 10, cy)], fill=c, width=1)
         draw.line([(cx, cy - 10), (cx, cy + 10)], fill=c, width=1)
 
-    def _render_compassrose(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+    @staticmethod
+    def _paste_rotated_text(composite: Image.Image, text: str, font, color,
+                            x: float, y: float, rotation_deg: float) -> None:
+        """Draw `text` centered at (x, y), rotated `rotation_deg` (same sign
+        convention as Arcade: positive = counter-clockwise as viewed).
+        PIL has no rotated-text draw call, so render to a small transparent
+        tile, rotate it, then alpha-paste onto `composite` centered at (x, y).
+        """
+        pad = 4
+        bbox = font.getbbox(text)
+        tw, th = bbox[2] - bbox[0] + pad * 2, bbox[3] - bbox[1] + pad * 2
+        tile = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+        ImageDraw.Draw(tile).text((tw / 2, th / 2), text, fill=color, font=font, anchor="mm")
+        rotated = tile.rotate(rotation_deg, expand=True, resample=Image.BICUBIC)
+        px = int(round(x - rotated.width / 2))
+        py = int(round(y - rotated.height / 2))
+        composite.paste(rotated, (px, py), rotated)
+
+    def _render_compassrose(self, comp: dict, composite: Image.Image,
+                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         """Static preview at heading=0 — matches the runtime's neutral orientation."""
         ctr = comp.get("center", [0, 0])
         r = float(comp.get("radius", 100))
@@ -763,10 +782,10 @@ class InstrumentCanvas(QWidget):
             use_font = (
                 emphasize_font if emphasize_interval and h_deg % emphasize_interval == 0 else font
             )
-            try:
-                draw.text((x, y), text, fill=label_color, font=use_font, anchor="mm")
-            except TypeError:
-                draw.text((x, y), text, fill=label_color, font=use_font)
+            # Radial orientation: baseline tangent to the circle (perpendicular
+            # to the radius), "up" pointing outward. Static preview → heading=0,
+            # matching the runtime's -h rotation with heading folded in.
+            self._paste_rotated_text(composite, text, use_font, label_color, x, y, -h_deg)
 
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
