@@ -285,16 +285,6 @@ class InstrumentView(QWidget):
         self._tree.currentItemChanged.connect(self._on_ctx_selection_changed)
         tl.addWidget(self._tree)
 
-        crud_bar = QHBoxLayout()
-        crud_bar.setContentsMargins(0, 2, 0, 0)
-        crud_bar.setSpacing(2)
-        btn = QPushButton("+ Folder")
-        btn.setToolTip("Create a new sub-folder")
-        btn.clicked.connect(self._new_folder)
-        crud_bar.addWidget(btn)
-        crud_bar.addStretch()
-        tl.addLayout(crud_bar)
-
         # ── Right pane: always visible (provides empty space on startup) ──────
         self._editor_pane = QWidget()
         el = QVBoxLayout(self._editor_pane)
@@ -709,6 +699,12 @@ class InstrumentView(QWidget):
 
     def can_add(self) -> bool:
         return self._add_context is not None
+
+    def can_add_folder(self) -> bool:
+        return self._add_context == "instrument"
+
+    def do_add_folder(self) -> None:
+        self._new_folder()
 
     def can_delete(self) -> bool:
         if self._add_context == "instrument":

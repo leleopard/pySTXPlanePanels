@@ -216,6 +216,10 @@ class MainWindow(QMainWindow):
         self._ctx_paste_act.setEnabled(False)
         edit_menu.addAction(self._ctx_paste_act)
 
+        self._ctx_add_folder_act = QAction("New &Folder", self)
+        self._ctx_add_folder_act.setEnabled(False)
+        edit_menu.addAction(self._ctx_add_folder_act)
+
         settings_menu = menu.addMenu("&Settings")
 
         xplane_act = QAction("X-Plane &Network Settings…", self)
@@ -315,6 +319,7 @@ class MainWindow(QMainWindow):
             ("plus-circle-multiple-outline", "Duplicate", self._ctx_duplicate_act, "_ctx_duplicate_btn"),
             ("content-copy",                 "Copy",      self._ctx_copy_act,      "_ctx_copy_btn"),
             ("content-paste",                "Paste",     self._ctx_paste_act,     "_ctx_paste_btn"),
+            ("folder-plus-outline",          "New Folder", self._ctx_add_folder_act, "_ctx_add_folder_btn"),
         ):
             btn = QPushButton()
             btn.setIcon(make_svg_icon(icon, self._ICON_GREY, size=36))
@@ -589,6 +594,7 @@ class MainWindow(QMainWindow):
         self._ctx_duplicate_act.triggered.connect(self._on_ctx_duplicate)
         self._ctx_copy_act.triggered.connect(self._on_ctx_copy)
         self._ctx_paste_act.triggered.connect(self._on_ctx_paste)
+        self._ctx_add_folder_act.triggered.connect(self._on_ctx_add_folder)
 
     def _refresh_ctx_actions(self) -> None:
         from gauge_designer.ui_utils import _HEADER_COLOR
@@ -599,12 +605,15 @@ class MainWindow(QMainWindow):
         can_dup   = view.can_duplicate() if view else False
         can_copy  = view.can_copy()      if view else False
         can_paste = view.can_paste()     if view else False
+        # Instruments-tree-only; PanelView has no folder concept.
+        can_add_folder = idx == _TAB_GAUGE and self._gauge_view.can_add_folder()
         for btn, icon, enabled in (
             (self._ctx_add_btn,       "plus-circle-outline",          can_add),
             (self._ctx_delete_btn,    "trash-can-outline",            can_del),
             (self._ctx_duplicate_btn, "plus-circle-multiple-outline", can_dup),
             (self._ctx_copy_btn,      "content-copy",                 can_copy),
             (self._ctx_paste_btn,     "content-paste",                can_paste),
+            (self._ctx_add_folder_btn, "folder-plus-outline",         can_add_folder),
         ):
             btn.setEnabled(enabled)
             btn.setIcon(make_svg_icon(icon, _HEADER_COLOR if enabled else self._ICON_GREY, size=36))
@@ -612,6 +621,7 @@ class MainWindow(QMainWindow):
         self._ctx_delete_act.setEnabled(can_del)
         self._ctx_duplicate_act.setEnabled(can_dup)
         self._ctx_copy_act.setEnabled(can_copy)
+        self._ctx_add_folder_act.setEnabled(can_add_folder)
         self._ctx_paste_act.setEnabled(can_paste)
 
     def _on_ctx_add(self) -> None:
@@ -644,6 +654,10 @@ class MainWindow(QMainWindow):
         idx = self._tabs.currentIndex()
         if idx == _TAB_GAUGE:
             self._gauge_view.do_paste()
+
+    def _on_ctx_add_folder(self) -> None:
+        if self._tabs.currentIndex() == _TAB_GAUGE:
+            self._gauge_view.do_add_folder()
 
     # ── Tab handling ──────────────────────────────────────────────────────
 
