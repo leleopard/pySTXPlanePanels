@@ -822,7 +822,7 @@ class InstrumentCanvas(QWidget):
         if track_cfg:
             # No live dataref value in the static preview — show a
             # representative angle so position/length/tick are visible.
-            track_angle = 45.0
+            track_angle = 10.0
             tcolor = _rgba(track_cfg.get("color", [0, 255, 0, 255]))
             twidth = max(1, int(round(float(track_cfg.get("width", 2.0)))))
             tstart = float(track_cfg.get("start", 0.0))
@@ -846,7 +846,7 @@ class InstrumentCanvas(QWidget):
         if bug_cfg and bug_cfg.get("points"):
             # No live dataref value in the static preview — show a
             # representative angle so position/orientation are visible.
-            bug_heading = 45.0
+            bug_heading = 20.0
             bug_radius = float(bug_cfg.get("radius", comp.get("radius", r)))
             bcx, bcy = point_at(bug_heading, bug_radius)
             # Rotate the bug's local points the same way point_at() derives
