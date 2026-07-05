@@ -842,6 +842,36 @@ class InstrumentCanvas(QWidget):
                 dx, dy = half * math.cos(perp), half * math.sin(perp)
                 draw.line([(tx - dx, ty + dy), (tx + dx, ty - dy)], fill=tcolor, width=twidth)
 
+        bug_cfg = comp.get("heading_bug")
+        if bug_cfg and bug_cfg.get("points"):
+            # No live dataref value in the static preview — show a
+            # representative angle so position/orientation are visible.
+            bug_heading = 45.0
+            bug_radius = float(bug_cfg.get("radius", comp.get("radius", r)))
+            bcx, bcy = point_at(bug_heading, bug_radius)
+            # Rotate the bug's local points the same way point_at() derives
+            # position (heading=0 for the static preview, so the runtime's
+            # `heading - bug_heading` reduces to `-bug_heading`); PIL y is
+            # flipped vs. Arcade, so negate the rotated Y offset only (same
+            # rule the track tick above uses for its perpendicular offset).
+            angle = math.radians(-bug_heading)
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            bug_pts = []
+            for px, py in bug_cfg["points"]:
+                rx = px * cos_a - py * sin_a
+                ry = px * sin_a + py * cos_a
+                bug_pts.append((bcx + rx, bcy - ry))
+            bcolor = _rgba(bug_cfg.get("color"))
+            if bool(bug_cfg.get("filled", True)):
+                draw.polygon(bug_pts, fill=bcolor)
+                boc = bug_cfg.get("outline_color")
+                if boc is not None:
+                    bow = max(1, int(round(float(bug_cfg.get("outline_width", 1.0)))))
+                    draw.polygon(bug_pts, outline=_rgba(boc), width=bow)
+            else:
+                bwidth = max(1, int(round(float(bug_cfg.get("width", 1.0)))))
+                draw.line(bug_pts + [bug_pts[0]], fill=bcolor, width=bwidth)
+
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])

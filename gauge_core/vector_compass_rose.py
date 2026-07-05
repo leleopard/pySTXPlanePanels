@@ -87,6 +87,24 @@ YAML schema
                                              # other panel artwork) instead of drawing
                                              # its full extent unclipped
 
+      heading_bug:                           # optional: e.g. the autopilot selected-heading
+                                             # bug — a polygon marker on the arc, positioned
+                                             # by its own dataref (not the rose's own heading)
+                                             # and rotating with the rose like a tick; clipped
+                                             # by `viewport` the same as everything else, so it
+                                             # disappears when rotated past the visible arc
+        dataref: sim/cockpit/autopilot/heading_mag
+        convert_function: null              # optional
+        radius: 210                         # px from centre where the bug's local origin sits
+        points: [[0, 0], [-8, -18], [8, -18]]  # relative to that origin, in the bug's own
+                                             # unrotated local space where +y points radially
+                                             # outward (away from the rose centre) at heading=0
+        color: [255, 255, 255, 255]
+        filled: true
+        width: 2.0                         # stroke width when filled: false
+        outline_color: null                # optional outline drawn on top when filled: true
+        outline_width: 1.0
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -208,6 +226,22 @@ class VectorCompassRose(_VecBase):
         self._track_dr: Any | None = None
         self._track_convert: Callable | None = None
 
+        # Heading bug (optional; enabled by calling set_heading_bug()) — a
+        # polygon marker (e.g. the autopilot selected-heading bug) that sits
+        # on the arc at its own dataref-driven heading and rotates with the
+        # rose, like a tick or the track indicator.
+        self._show_bug = False
+        self._bug_radius = 0.0
+        self._bug_points: list[tuple[float, float]] = []
+        self._bug_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._bug_filled = True
+        self._bug_width = 2.0
+        self._bug_outline_color: tuple[int, int, int, int] | None = None
+        self._bug_outline_width = 1.0
+        self._bug_heading = 0.0
+        self._bug_dr: Any | None = None
+        self._bug_convert: Callable | None = None
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
@@ -237,6 +271,30 @@ class VectorCompassRose(_VecBase):
         if convert_fn:
             self._track_convert = get_convert(convert_fn)
 
+    def set_heading_bug(
+        self,
+        radius: float,
+        points: list[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        filled: bool,
+        width: float,
+        outline_color: tuple[int, int, int, int] | None,
+        outline_width: float,
+        dataref: Any,
+        convert_fn: str | None = None,
+    ) -> None:
+        self._show_bug = True
+        self._bug_radius = float(radius)
+        self._bug_points = [(float(x), float(y)) for x, y in points]
+        self._bug_color = color
+        self._bug_filled = bool(filled)
+        self._bug_width = float(width)
+        self._bug_outline_color = outline_color
+        self._bug_outline_width = float(outline_width)
+        self._bug_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._bug_convert = get_convert(convert_fn)
+
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
         self._radius *= scale
@@ -255,6 +313,10 @@ class VectorCompassRose(_VecBase):
         if self._track_tick_position is not None:
             self._track_tick_position *= scale
         self._track_tick_length *= scale
+        self._bug_radius *= scale
+        self._bug_points = [(x * scale, y * scale) for x, y in self._bug_points]
+        self._bug_width *= scale
+        self._bug_outline_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -272,6 +334,11 @@ class VectorCompassRose(_VecBase):
             if self._track_convert is not None:
                 raw = float(self._track_convert(raw, get_data))
             self._track_angle = raw % 360.0
+        if self._bug_dr is not None:
+            raw = float(get_data(self._bug_dr))
+            if self._bug_convert is not None:
+                raw = float(self._bug_convert(raw, get_data))
+            self._bug_heading = raw % 360.0
         if self._heading_dr is not None:
             raw = float(get_data(self._heading_dr))
             if self._heading_convert is not None:
@@ -375,6 +442,32 @@ class VectorCompassRose(_VecBase):
         if self._show_track:
             self._draw_track()
 
+        if self._show_bug:
+            self._draw_heading_bug()
+
+    def _draw_heading_bug(self) -> None:
+        cx, cy = self._point_at(self._bug_heading, self._bug_radius)
+        # Radial orientation, like the ticks: point_at()'s outward direction
+        # at this heading is (90 - bug_heading + heading) degrees from +x:
+        # rotating the bug's local +y (its unrotated "outward") to line up
+        # with that direction takes (90 - bug_heading + heading) - 90, i.e.
+        # (heading - bug_heading). Manual point rotation (not arcade.Text),
+        # so this uses the plain geometric angle directly — the sign flip
+        # needed for label rotation is a quirk of arcade.Text specifically
+        # (see the label loop above), not of raw draw_polygon coordinates.
+        angle = math.radians(self._heading - self._bug_heading)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        pts = [
+            (cx + px * cos_a - py * sin_a, cy + px * sin_a + py * cos_a)
+            for px, py in self._bug_points
+        ]
+        if self._bug_filled:
+            arcade.draw_polygon_filled(pts, self._bug_color)
+            if self._bug_outline_color is not None:
+                arcade.draw_polygon_outline(pts, self._bug_outline_color, self._bug_outline_width)
+        else:
+            arcade.draw_polygon_outline(pts, self._bug_color, self._bug_width)
+
     def _draw_track(self) -> None:
         x0, y0 = self._point_at(self._track_angle, self._track_start)
         x1, y1 = self._point_at(self._track_angle, self._track_end)
@@ -452,6 +545,21 @@ def _compass_rose_factory(
             tick_length=float(track_cfg.get("tick_length", 20.0)),
             dataref=track_cfg["dataref"],
             convert_fn=track_cfg.get("convert_function"),
+        )
+
+    bug_cfg = comp.get("heading_bug")
+    if bug_cfg:
+        oc = bug_cfg.get("outline_color")
+        rose.set_heading_bug(
+            radius=float(bug_cfg.get("radius", comp.get("radius", 150.0))),
+            points=[tuple(p) for p in bug_cfg["points"]],
+            color=_as_color(bug_cfg.get("color", [255, 255, 255, 255])),
+            filled=bool(bug_cfg.get("filled", True)),
+            width=float(bug_cfg.get("width", 2.0)),
+            outline_color=_as_color(oc) if oc is not None else None,
+            outline_width=float(bug_cfg.get("outline_width", 1.0)),
+            dataref=bug_cfg["dataref"],
+            convert_fn=bug_cfg.get("convert_function"),
         )
 
     if "visibility" in comp:

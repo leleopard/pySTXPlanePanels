@@ -2779,7 +2779,89 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_track)
 
+        # ── Heading Bug ──────────────────────────────────────────────────────
+        _cr_bug = _SubSection("Heading Bug", collapsed=True)
+
+        self._cr_bug_dr = QLineEdit()
+        self._cr_bug_dr.setPlaceholderText("bug heading dataref  (blank = no bug)")
+        self._cr_bug_dr.editingFinished.connect(self._emit)
+        _cr_bug.row("Bug dataref", self._dr_field(self._cr_bug_dr))
+        self._cr_bug_fn = _NoScrollComboBox()
+        self._cr_bug_fn.addItems(_VALUE_FUNCS)
+        self._cr_bug_fn.currentTextChanged.connect(self._emit)
+        _cr_bug.row("Convert fn", self._cr_bug_fn)
+
+        self._cr_bug_radius = QDoubleSpinBox()
+        self._cr_bug_radius.setRange(-4096.0, 4096.0); self._cr_bug_radius.setDecimals(1)
+        self._cr_bug_radius.setValue(150.0)
+        self._cr_bug_radius.setToolTip(
+            "Distance from the rose centre where the bug's local origin sits\n"
+            "(usually the rose radius, so the bug rides on the arc)."
+        )
+        self._cr_bug_radius.valueChanged.connect(self._emit)
+        _cr_bug.row("Radius px", self._cr_bug_radius)
+
+        self._cr_bug_pts = _PointsTableEditor()
+        self._cr_bug_pts.changed.connect(self._emit)
+        self._cr_bug_pts.setToolTip(
+            "Relative to the bug's own origin, in its unrotated local space\n"
+            "where +Y points radially outward (away from the rose centre)."
+        )
+        _cr_bug.row("Points (relative to origin)", self._cr_bug_pts)
+
+        self._cr_bug_color = _ColorButton()
+        self._cr_bug_color.color_changed.connect(self._emit)
+        _cr_bug.row("Fill color", self._cr_bug_color)
+
+        self._cr_bug_filled = QCheckBox("Filled")
+        self._cr_bug_filled.setChecked(True)
+        self._cr_bug_filled.toggled.connect(self._on_cr_bug_filled_toggled)
+        self._cr_bug_filled.toggled.connect(self._emit)
+        _cr_bug.row_widget(self._cr_bug_filled)
+
+        self._cr_bug_width = QDoubleSpinBox()
+        self._cr_bug_width.setRange(0.5, 50.0); self._cr_bug_width.setDecimals(1)
+        self._cr_bug_width.setValue(2.0)
+        self._cr_bug_width.setEnabled(False)  # shown only when not filled
+        self._cr_bug_width.valueChanged.connect(self._emit)
+        _cr_bug.row("Outline width", self._cr_bug_width)
+
+        self._cr_bug_outline_chk = QCheckBox("Add outline")
+        self._cr_bug_outline_chk.toggled.connect(self._on_cr_bug_outline_toggled)
+        self._cr_bug_outline_chk.toggled.connect(self._emit)
+        _cr_bug.row_widget(self._cr_bug_outline_chk)
+
+        self._cr_bug_outline_color = _ColorButton()
+        self._cr_bug_outline_color.set_rgba((255, 255, 255, 255))
+        self._cr_bug_outline_color.setEnabled(False)
+        self._cr_bug_outline_color.color_changed.connect(self._emit)
+        _cr_bug.row("Outline color", self._cr_bug_outline_color)
+
+        self._cr_bug_outline_width = QDoubleSpinBox()
+        self._cr_bug_outline_width.setRange(0.5, 50.0); self._cr_bug_outline_width.setDecimals(1)
+        self._cr_bug_outline_width.setValue(1.0)
+        self._cr_bug_outline_width.setEnabled(False)
+        self._cr_bug_outline_width.valueChanged.connect(self._emit)
+        _cr_bug.row("Outline width ", self._cr_bug_outline_width)
+
+        self._cr_sec.row_widget(_cr_bug)
+
         self._vbox.addWidget(self._cr_sec)
+
+    def _on_cr_bug_filled_toggled(self, filled: bool) -> None:
+        self._cr_bug_width.setEnabled(not filled)
+        # Outline overlay only makes sense when filled; unfilled IS an outline
+        self._cr_bug_outline_chk.setVisible(filled)
+        self._cr_bug_outline_color.setVisible(filled)
+        self._cr_bug_outline_width.setVisible(filled)
+        if not filled:
+            self._cr_bug_outline_chk.blockSignals(True)
+            self._cr_bug_outline_chk.setChecked(False)
+            self._cr_bug_outline_chk.blockSignals(False)
+
+    def _on_cr_bug_outline_toggled(self, on: bool) -> None:
+        self._cr_bug_outline_color.setEnabled(on)
+        self._cr_bug_outline_width.setEnabled(on)
 
     def _on_cr_line_toggled(self, on: bool) -> None:
         self._cr_line_color.setEnabled(on)
@@ -3195,7 +3277,7 @@ class PropertiesForm(QWidget):
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
-            "heading", "track",
+            "heading", "track", "heading_bug",
             # shared across all
             "viewport", "visibility",
         }
@@ -3713,6 +3795,31 @@ class PropertiesForm(QWidget):
         self._cr_track_end.setValue(float(cr_track.get("end", 150.0)))
         self._cr_track_tick_pos.setValue(float(cr_track.get("tick_position", 0.0)))
         self._cr_track_tick_len.setValue(float(cr_track.get("tick_length", 20.0)))
+        cr_bug = comp.get("heading_bug") or {}
+        self._cr_bug_dr.setText(str(cr_bug.get("dataref", "")))
+        self._cr_bug_fn.setCurrentIndex(
+            max(self._cr_bug_fn.findText(str(cr_bug.get("convert_function") or _NONE)), 0))
+        self._cr_bug_radius.setValue(float(cr_bug.get("radius", comp.get("radius", 150.0))))
+        self._cr_bug_pts.load([[p[0], p[1]] for p in cr_bug.get("points", [])])
+        self._cr_bug_color.set_rgba(cr_bug.get("color", [255, 255, 255, 255]))
+        bug_filled = bool(cr_bug.get("filled", True))
+        self._cr_bug_filled.blockSignals(True)
+        self._cr_bug_filled.setChecked(bug_filled)
+        self._cr_bug_filled.blockSignals(False)
+        self._cr_bug_width.setEnabled(not bug_filled)
+        self._cr_bug_width.setValue(float(cr_bug.get("width", 2.0)))
+        bug_oc = cr_bug.get("outline_color")
+        has_bug_outline = bug_oc is not None and bug_filled
+        self._cr_bug_outline_chk.blockSignals(True)
+        self._cr_bug_outline_chk.setChecked(has_bug_outline)
+        self._cr_bug_outline_chk.blockSignals(False)
+        self._cr_bug_outline_chk.setVisible(bug_filled)
+        self._cr_bug_outline_color.setEnabled(has_bug_outline)
+        self._cr_bug_outline_color.setVisible(bug_filled)
+        self._cr_bug_outline_color.set_rgba(bug_oc if bug_oc is not None else (255, 255, 255, 255))
+        self._cr_bug_outline_width.setEnabled(has_bug_outline)
+        self._cr_bug_outline_width.setVisible(bug_filled)
+        self._cr_bug_outline_width.setValue(float(cr_bug.get("outline_width", 1.0)))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -3961,6 +4068,25 @@ class PropertiesForm(QWidget):
                     track["tick_position"] = cr_tick_pos
                     track["tick_length"] = self._cr_track_tick_len.value()
                 data["track"] = track
+            cr_bdr = self._cr_bug_dr.text().strip()
+            if cr_bdr:
+                bug_filled = self._cr_bug_filled.isChecked()
+                bug: dict = {
+                    "dataref": cr_bdr,
+                    "radius": self._cr_bug_radius.value(),
+                    "points": self._cr_bug_pts.get_data(),
+                    "color": list(self._cr_bug_color.get_rgba()),
+                    "filled": bug_filled,
+                }
+                cr_bfn = self._cr_bug_fn.currentText()
+                if cr_bfn != _NONE:
+                    bug["convert_function"] = cr_bfn
+                if not bug_filled:
+                    bug["width"] = self._cr_bug_width.value()
+                elif self._cr_bug_outline_chk.isChecked():
+                    bug["outline_color"] = list(self._cr_bug_outline_color.get_rgba())
+                    bug["outline_width"] = self._cr_bug_outline_width.value()
+                data["heading_bug"] = bug
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -4484,6 +4610,12 @@ class PropertiesForm(QWidget):
         self._cr_track_color.set_rgba(None); self._cr_track_width.setValue(2.0)
         self._cr_track_start.setValue(0.0); self._cr_track_end.setValue(150.0)
         self._cr_track_tick_pos.setValue(0.0); self._cr_track_tick_len.setValue(20.0)
+        self._cr_bug_dr.clear(); self._cr_bug_fn.setCurrentIndex(0)
+        self._cr_bug_radius.setValue(150.0); self._cr_bug_pts.load([])
+        self._cr_bug_color.set_rgba(None)
+        self._cr_bug_filled.setChecked(True); self._cr_bug_width.setValue(2.0)
+        self._cr_bug_outline_chk.setChecked(False)
+        self._cr_bug_outline_color.set_rgba(None); self._cr_bug_outline_width.setValue(1.0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
