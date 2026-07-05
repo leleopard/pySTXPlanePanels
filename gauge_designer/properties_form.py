@@ -2613,6 +2613,14 @@ class PropertiesForm(QWidget):
         self._cr_label_color = _ColorButton()
         self._cr_label_color.color_changed.connect(self._emit)
         self._cr_sec.row("Label color", self._cr_label_color)
+        self._cr_label_anchor_y = _NoScrollComboBox()
+        self._cr_label_anchor_y.addItems(["baseline", "center", "top", "bottom"])
+        self._cr_label_anchor_y.setToolTip(
+            "Which part of the label glyph sits at the offset point (radius ±\n"
+            "Offset px), in the label's own radial (rotated) orientation."
+        )
+        self._cr_label_anchor_y.currentTextChanged.connect(self._emit)
+        self._cr_sec.row("Label anchor", self._cr_label_anchor_y)
 
         # -- Heading rotation --
         self._cr_sec.row_widget(_sep_label("Heading rotation (rotates the whole rose)"))
@@ -3040,7 +3048,7 @@ class PropertiesForm(QWidget):
             "tick10_length", "tick10_color", "tick10_width", "tick10_position",
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
-            "label_emphasize_interval", "label_emphasize_font_size",
+            "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
             "heading",
             # shared across all
             "viewport", "visibility",
@@ -3544,6 +3552,7 @@ class PropertiesForm(QWidget):
         self._cr_label_bold.setChecked(bool(comp.get("label_bold", False)))
         self._cr_label_italic.setChecked(bool(comp.get("label_italic", False)))
         self._cr_label_color.set_rgba(comp.get("label_color", [255, 255, 255, 255]))
+        self._cr_label_anchor_y.setCurrentText(str(comp.get("label_anchor_y", "center")))
         cr_heading = comp.get("heading") or {}
         self._cr_heading_dr.setText(str(cr_heading.get("dataref", "")))
         self._cr_heading_fn.setCurrentIndex(
@@ -3769,6 +3778,9 @@ class PropertiesForm(QWidget):
             if self._cr_label_italic.isChecked():
                 data["label_italic"] = True
             data["label_color"] = list(self._cr_label_color.get_rgba())
+            cr_anchor_y = self._cr_label_anchor_y.currentText()
+            if cr_anchor_y != "center":
+                data["label_anchor_y"] = cr_anchor_y
             cr_hdr = self._cr_heading_dr.text().strip()
             if cr_hdr:
                 heading: dict = {"dataref": cr_hdr}
@@ -4293,6 +4305,7 @@ class PropertiesForm(QWidget):
         self._cr_label_emph_interval.setValue(0.0); self._cr_label_emph_size.setValue(20.0)
         self._cr_label_bold.setChecked(False); self._cr_label_italic.setChecked(False)
         self._cr_label_color.set_rgba(None)
+        self._cr_label_anchor_y.setCurrentIndex(1)  # "center"
         self._cr_heading_dr.clear(); self._cr_heading_fn.setCurrentIndex(0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)

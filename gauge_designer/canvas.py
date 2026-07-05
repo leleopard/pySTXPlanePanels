@@ -703,17 +703,25 @@ class InstrumentCanvas(QWidget):
 
     @staticmethod
     def _paste_rotated_text(composite: Image.Image, text: str, font, color,
-                            x: float, y: float, rotation_deg: float) -> None:
-        """Draw `text` centered at (x, y), rotated `rotation_deg` (same sign
+                            x: float, y: float, rotation_deg: float,
+                            anchor_y: str = "m") -> None:
+        """Draw `text` anchored at (x, y), rotated `rotation_deg` (same sign
         convention as Arcade: positive = counter-clockwise as viewed).
-        PIL has no rotated-text draw call, so render to a small transparent
-        tile, rotate it, then alpha-paste onto `composite` centered at (x, y).
+        PIL has no rotated-text draw call, so render to a transparent tile
+        with the requested anchor point placed at the tile's own centre —
+        drawn generously oversized so the glyph never clips regardless of
+        anchor — then rotate (which pivots on the tile centre, i.e. the
+        anchor point) and alpha-paste onto `composite` centred at (x, y).
+        `anchor_y` is a PIL vertical anchor code: "a" (top/ascender),
+        "m" (middle), "s" (baseline), "d" (bottom/descender).
         """
-        pad = 4
         bbox = font.getbbox(text)
-        tw, th = bbox[2] - bbox[0] + pad * 2, bbox[3] - bbox[1] + pad * 2
+        pad = max(8, font.size)
+        tw = (bbox[2] - bbox[0]) + pad * 2
+        th = font.size * 4
         tile = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
-        ImageDraw.Draw(tile).text((tw / 2, th / 2), text, fill=color, font=font, anchor="mm")
+        cx, cy = tw / 2, th / 2
+        ImageDraw.Draw(tile).text((cx, cy), text, fill=color, font=font, anchor="m" + anchor_y)
         rotated = tile.rotate(rotation_deg, expand=True, resample=Image.BICUBIC)
         px = int(round(x - rotated.width / 2))
         py = int(round(y - rotated.height / 2))
@@ -775,6 +783,8 @@ class InstrumentCanvas(QWidget):
             emphasize_font = _pil_font(comp.get("label_font"), emphasize_size,
                                        bold=label_bold, italic=label_italic)
         label_color = _rgba(comp.get("label_color"))
+        anchor_y_pil = {"baseline": "s", "center": "m", "top": "a", "bottom": "d"}.get(
+            comp.get("label_anchor_y", "center"), "m")
         r_label = (r - label_offset) if label_position == "inside" else (r + label_offset)
         for h_deg in range(0, 360, label_interval):
             x, y = point_at(h_deg, r_label)
@@ -785,7 +795,8 @@ class InstrumentCanvas(QWidget):
             # Radial orientation: baseline tangent to the circle (perpendicular
             # to the radius), "up" pointing outward. Static preview → heading=0,
             # matching the runtime's -h rotation with heading folded in.
-            self._paste_rotated_text(composite, text, use_font, label_color, x, y, -h_deg)
+            self._paste_rotated_text(composite, text, use_font, label_color, x, y, -h_deg,
+                                     anchor_y=anchor_y_pil)
 
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:

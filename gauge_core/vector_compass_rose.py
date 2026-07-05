@@ -54,6 +54,12 @@ YAML schema
                                              # font, e.g. label every 10° but a
                                              # bigger size every 30°
       label_emphasize_font_size: 20         # font size for those headings
+      label_anchor_y: center                # baseline | center | top | bottom —
+                                             # which part of the label glyph sits at
+                                             # the offset point (radius ± offset);
+                                             # the rest of the glyph extends from
+                                             # there along the label's radial
+                                             # (rotated) orientation
 
       heading:                              # rotates the whole rose
         dataref: sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot
@@ -109,6 +115,7 @@ class VectorCompassRose(_VecBase):
         label_italic: bool = False,
         label_emphasize_interval: float | None = None,
         label_emphasize_font_size: float | None = None,
+        label_anchor_y: str = "center",
     ) -> None:
         self.name = name
         self._cx = float(center[0])
@@ -139,6 +146,11 @@ class VectorCompassRose(_VecBase):
         self._label_format = label_format
         self._label_bold = label_bold
         self._label_italic = label_italic
+        # Which part of the label glyph sits at the offset point (radius ±
+        # label_offset), in arcade.Text's own anchor_y sense — "center"
+        # (default) is the vertical middle, "baseline" the text baseline,
+        # "top"/"bottom" the ascender/descender edge.
+        self._label_anchor_y = label_anchor_y
         # Optional bigger/smaller font for headings on a coarser interval,
         # e.g. label every 10° but a bigger size every 30°. None → all
         # labels use label_font_size.
@@ -237,7 +249,7 @@ class VectorCompassRose(_VecBase):
                     color=self._label_color,
                     font_size=self._label_font_size,
                     anchor_x="center",
-                    anchor_y="center",
+                    anchor_y=self._label_anchor_y,
                     **kw,
                 ))
             t = self._label_pool[idx]
@@ -303,6 +315,7 @@ def _compass_rose_factory(
         label_italic=label_italic,
         label_emphasize_interval=comp.get("label_emphasize_interval"),
         label_emphasize_font_size=comp.get("label_emphasize_font_size"),
+        label_anchor_y=str(comp.get("label_anchor_y", "center")),
     )
 
     heading_cfg = comp.get("heading")
