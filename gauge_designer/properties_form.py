@@ -2452,17 +2452,25 @@ class PropertiesForm(QWidget):
         self._cr_sec = _Section("Compass Rose")
         self._cr_sec.setVisible(False)
 
+        # ── Layout ───────────────────────────────────────────────────────────
+        _cr_layout = _SubSection("Layout", collapsed=False)
+
         self._cr_cx = _sb(); self._cr_cy = _sb()
         for w in (self._cr_cx, self._cr_cy):
             w.valueChanged.connect(self._emit)
         y_label = "Center X  /  Y top" if is_y_down() else "Center X  /  Y"
-        self._cr_sec.row_pair(y_label, self._cr_cx, self._cr_cy)
+        _cr_layout.row_pair(y_label, self._cr_cx, self._cr_cy)
 
         self._cr_radius = QDoubleSpinBox()
         self._cr_radius.setRange(1.0, 4096.0); self._cr_radius.setDecimals(1)
         self._cr_radius.setValue(150.0)
         self._cr_radius.valueChanged.connect(self._emit)
-        self._cr_sec.row("Radius px", self._cr_radius)
+        _cr_layout.row("Radius px", self._cr_radius)
+
+        self._cr_sec.row_widget(_cr_layout)
+
+        # ── Circle ───────────────────────────────────────────────────────────
+        _cr_circle = _SubSection("Circle", collapsed=True)
 
         _cr_bg_row = QWidget()
         _cr_bg_hl = QHBoxLayout(_cr_bg_row)
@@ -2475,13 +2483,13 @@ class PropertiesForm(QWidget):
         self._cr_bg_color.color_changed.connect(self._emit)
         _cr_bg_hl.addWidget(self._cr_bg_chk)
         _cr_bg_hl.addWidget(self._cr_bg_color, 1)
-        self._cr_sec.row("Background", _cr_bg_row)
+        _cr_circle.row("Background", _cr_bg_row)
 
         self._cr_line_chk = QCheckBox("Show circle line")
         self._cr_line_chk.setChecked(True)
         self._cr_line_chk.toggled.connect(self._on_cr_line_toggled)
         self._cr_line_chk.toggled.connect(self._emit)
-        self._cr_sec.row_widget(self._cr_line_chk)
+        _cr_circle.row_widget(self._cr_line_chk)
 
         _cr_line_row = QWidget()
         _cr_line_hl = QHBoxLayout(_cr_line_row)
@@ -2494,79 +2502,88 @@ class PropertiesForm(QWidget):
         self._cr_line_width.valueChanged.connect(self._emit)
         _cr_line_hl.addWidget(self._cr_line_color)
         _cr_line_hl.addWidget(self._cr_line_width)
-        self._cr_sec.row("Line color / width", _cr_line_row)
+        _cr_circle.row("Line color / width", _cr_line_row)
 
         self._cr_segments = QSpinBox()
         self._cr_segments.setRange(8, 360); self._cr_segments.setValue(128)
         self._cr_segments.valueChanged.connect(self._emit)
-        self._cr_sec.row("Circle segments", self._cr_segments)
+        _cr_circle.row("Circle segments", self._cr_segments)
 
-        # -- 5° ticks --
-        self._cr_sec.row_widget(_sep_label("5° ticks"))
+        self._cr_sec.row_widget(_cr_circle)
+
+        # ── 5° Ticks ─────────────────────────────────────────────────────────
+        _cr_tick5 = _SubSection("5° Ticks", collapsed=True)
+
         self._cr_t5_len = QDoubleSpinBox()
         self._cr_t5_len.setRange(0.0, 200.0); self._cr_t5_len.setDecimals(1)
         self._cr_t5_len.setValue(8.0)
         self._cr_t5_len.valueChanged.connect(self._emit)
-        self._cr_sec.row("Length px", self._cr_t5_len)
+        _cr_tick5.row("Length px", self._cr_t5_len)
         self._cr_t5_color = _ColorButton()
         self._cr_t5_color.color_changed.connect(self._emit)
-        self._cr_sec.row("Color", self._cr_t5_color)
+        _cr_tick5.row("Color", self._cr_t5_color)
         self._cr_t5_width = QDoubleSpinBox()
         self._cr_t5_width.setRange(0.5, 50.0); self._cr_t5_width.setDecimals(1)
         self._cr_t5_width.setValue(1.0)
         self._cr_t5_width.valueChanged.connect(self._emit)
-        self._cr_sec.row("Width px", self._cr_t5_width)
+        _cr_tick5.row("Width px", self._cr_t5_width)
         self._cr_t5_pos = _NoScrollComboBox()
         self._cr_t5_pos.addItems(["outside", "inside"])
         self._cr_t5_pos.currentTextChanged.connect(self._emit)
-        self._cr_sec.row("Position", self._cr_t5_pos)
+        _cr_tick5.row("Position", self._cr_t5_pos)
 
-        # -- 10° ticks --
-        self._cr_sec.row_widget(_sep_label("10° ticks"))
+        self._cr_sec.row_widget(_cr_tick5)
+
+        # ── 10° Ticks ────────────────────────────────────────────────────────
+        _cr_tick10 = _SubSection("10° Ticks", collapsed=True)
+
         self._cr_t10_len = QDoubleSpinBox()
         self._cr_t10_len.setRange(0.0, 200.0); self._cr_t10_len.setDecimals(1)
         self._cr_t10_len.setValue(16.0)
         self._cr_t10_len.valueChanged.connect(self._emit)
-        self._cr_sec.row("Length px", self._cr_t10_len)
+        _cr_tick10.row("Length px", self._cr_t10_len)
         self._cr_t10_color = _ColorButton()
         self._cr_t10_color.color_changed.connect(self._emit)
-        self._cr_sec.row("Color", self._cr_t10_color)
+        _cr_tick10.row("Color", self._cr_t10_color)
         self._cr_t10_width = QDoubleSpinBox()
         self._cr_t10_width.setRange(0.5, 50.0); self._cr_t10_width.setDecimals(1)
         self._cr_t10_width.setValue(2.0)
         self._cr_t10_width.valueChanged.connect(self._emit)
-        self._cr_sec.row("Width px", self._cr_t10_width)
+        _cr_tick10.row("Width px", self._cr_t10_width)
         self._cr_t10_pos = _NoScrollComboBox()
         self._cr_t10_pos.addItems(["outside", "inside"])
         self._cr_t10_pos.currentTextChanged.connect(self._emit)
-        self._cr_sec.row("Position", self._cr_t10_pos)
+        _cr_tick10.row("Position", self._cr_t10_pos)
 
-        # -- Heading labels --
-        self._cr_sec.row_widget(_sep_label("Heading labels"))
+        self._cr_sec.row_widget(_cr_tick10)
+
+        # ── Heading Labels ───────────────────────────────────────────────────
+        _cr_labels = _SubSection("Heading Labels", collapsed=True)
+
         self._cr_label_interval = QDoubleSpinBox()
         self._cr_label_interval.setRange(1.0, 180.0); self._cr_label_interval.setDecimals(0)
         self._cr_label_interval.setValue(30.0)
         self._cr_label_interval.valueChanged.connect(self._emit)
-        self._cr_sec.row("Interval °", self._cr_label_interval)
+        _cr_labels.row("Interval °", self._cr_label_interval)
         self._cr_label_offset = QDoubleSpinBox()
         self._cr_label_offset.setRange(-200.0, 200.0); self._cr_label_offset.setDecimals(1)
         self._cr_label_offset.setValue(20.0)
         self._cr_label_offset.valueChanged.connect(self._emit)
-        self._cr_sec.row("Offset px (from arc)", self._cr_label_offset)
+        _cr_labels.row("Offset px (from arc)", self._cr_label_offset)
         self._cr_label_pos = _NoScrollComboBox()
         self._cr_label_pos.addItems(["inside", "outside"])
         self._cr_label_pos.currentTextChanged.connect(self._emit)
-        self._cr_sec.row("Position", self._cr_label_pos)
+        _cr_labels.row("Position", self._cr_label_pos)
         self._cr_label_format = QLineEdit()
         self._cr_label_format.setPlaceholderText("{:02.0f}  (applied to heading/10)")
         self._cr_label_format.setToolTip(_FORMAT_SPEC_TOOLTIP)
         self._cr_label_format.editingFinished.connect(self._emit)
-        self._cr_sec.row("Format", self._cr_label_format)
+        _cr_labels.row("Format", self._cr_label_format)
         self._cr_label_font_size = QDoubleSpinBox()
         self._cr_label_font_size.setRange(4.0, 120.0); self._cr_label_font_size.setDecimals(1)
         self._cr_label_font_size.setValue(14.0)
         self._cr_label_font_size.valueChanged.connect(self._emit)
-        self._cr_sec.row("Font size", self._cr_label_font_size)
+        _cr_labels.row("Font size", self._cr_label_font_size)
         self._cr_label_emph_interval = QDoubleSpinBox()
         self._cr_label_emph_interval.setRange(0.0, 180.0); self._cr_label_emph_interval.setDecimals(0)
         self._cr_label_emph_interval.setSpecialValueText("(none)")
@@ -2576,7 +2593,7 @@ class PropertiesForm(QWidget):
             "size every 30°. (none) disables the split; all labels use Font size."
         )
         self._cr_label_emph_interval.valueChanged.connect(self._emit)
-        self._cr_sec.row("Emphasize interval °", self._cr_label_emph_interval)
+        _cr_labels.row("Emphasize interval °", self._cr_label_emph_interval)
         self._cr_label_emph_size = QDoubleSpinBox()
         self._cr_label_emph_size.setRange(4.0, 120.0); self._cr_label_emph_size.setDecimals(1)
         self._cr_label_emph_size.setValue(20.0)
@@ -2585,7 +2602,7 @@ class PropertiesForm(QWidget):
             "Emphasize interval ° is set."
         )
         self._cr_label_emph_size.valueChanged.connect(self._emit)
-        self._cr_sec.row("Emphasize font size", self._cr_label_emph_size)
+        _cr_labels.row("Emphasize font size", self._cr_label_emph_size)
         self._cr_label_font = QLineEdit()
         self._cr_label_font.setPlaceholderText("Arial  (blank = default)")
         self._cr_label_font.editingFinished.connect(self._emit)
@@ -2598,7 +2615,7 @@ class PropertiesForm(QWidget):
         _cr_font_hl.setContentsMargins(0, 0, 0, 0); _cr_font_hl.setSpacing(4)
         _cr_font_hl.addWidget(self._cr_label_font)
         _cr_font_hl.addWidget(_cr_font_btn)
-        self._cr_sec.row("Font", _cr_font_row)
+        _cr_labels.row("Font", _cr_font_row)
         _cr_style_row = QWidget()
         _cr_style_hl = QHBoxLayout(_cr_style_row)
         _cr_style_hl.setContentsMargins(0, 0, 0, 0); _cr_style_hl.setSpacing(12)
@@ -2609,10 +2626,10 @@ class PropertiesForm(QWidget):
         _cr_style_hl.addWidget(self._cr_label_bold)
         _cr_style_hl.addWidget(self._cr_label_italic)
         _cr_style_hl.addStretch()
-        self._cr_sec.row("Label style", _cr_style_row)
+        _cr_labels.row("Label style", _cr_style_row)
         self._cr_label_color = _ColorButton()
         self._cr_label_color.color_changed.connect(self._emit)
-        self._cr_sec.row("Label color", self._cr_label_color)
+        _cr_labels.row("Label color", self._cr_label_color)
         self._cr_label_anchor_y = _NoScrollComboBox()
         self._cr_label_anchor_y.addItems(["baseline", "center", "top", "bottom"])
         self._cr_label_anchor_y.setToolTip(
@@ -2620,18 +2637,23 @@ class PropertiesForm(QWidget):
             "Offset px), in the label's own radial (rotated) orientation."
         )
         self._cr_label_anchor_y.currentTextChanged.connect(self._emit)
-        self._cr_sec.row("Label anchor", self._cr_label_anchor_y)
+        _cr_labels.row("Label anchor", self._cr_label_anchor_y)
 
-        # -- Heading rotation --
-        self._cr_sec.row_widget(_sep_label("Heading rotation (rotates the whole rose)"))
+        self._cr_sec.row_widget(_cr_labels)
+
+        # ── Heading Rotation ─────────────────────────────────────────────────
+        _cr_heading = _SubSection("Heading Rotation", collapsed=True)
+
         self._cr_heading_dr = QLineEdit()
         self._cr_heading_dr.setPlaceholderText("heading dataref  (blank = no rotation)")
         self._cr_heading_dr.editingFinished.connect(self._emit)
-        self._cr_sec.row("Heading dataref", self._dr_field(self._cr_heading_dr))
+        _cr_heading.row("Heading dataref", self._dr_field(self._cr_heading_dr))
         self._cr_heading_fn = _NoScrollComboBox()
         self._cr_heading_fn.addItems(_VALUE_FUNCS)
         self._cr_heading_fn.currentTextChanged.connect(self._emit)
-        self._cr_sec.row("Convert fn", self._cr_heading_fn)
+        _cr_heading.row("Convert fn", self._cr_heading_fn)
+
+        self._cr_sec.row_widget(_cr_heading)
 
         self._vbox.addWidget(self._cr_sec)
 
