@@ -149,6 +149,9 @@ components:
   show_fd_h_bar: true
   fd_pitch_dataref: laminar/B738/pfd/flight_director_pitch_pilot
   fd_pitch_convert_function: round_1dp
+  fd_h_visibility:
+    dataref: laminar/B738/autopilot/fd_pitch_pilot_show
+    predicate: true_if_equals_1
   fd_h_color:
   - 242
   - 161
@@ -159,6 +162,9 @@ components:
   show_fd_v_bar: true
   fd_roll_dataref: laminar/B738/pfd/flight_director_roll_pilot
   fd_roll_convert_function: round_1dp
+  fd_v_visibility:
+    dataref: laminar/B738/autopilot/fd_roll_pilot_show
+    predicate: true_if_equals_1
   fd_v_color:
   - 242
   - 161
@@ -184,8 +190,8 @@ components:
   - 255
   anchor_x: center
   visibility:
-    dataref: laminar/B738/autopilot/cmd_a_status
-    predicate: true_if_equals_1
+    dataref: laminar/B738/autopilot/pfd_fd_cmd
+    predicate: true_if_equals_2
 - name: FD status text
   type: Text
   position:
@@ -201,5 +207,5 @@ components:
   - 255
   anchor_x: center
   visibility:
-    dataref: laminar/B738/autopilot/cmd_a_status
+    dataref: laminar/B738/autopilot/pfd_fd_cmd
     predicate: true_if_equals_1

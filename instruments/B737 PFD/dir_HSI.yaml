@@ -1,0 +1,30 @@
+name: dir_HSI
+size:
+- 600
+- 600
+components:
+- name: bg_copy
+  type: ImagePanel
+  position:
+  - 300
+  - 300
+  texture: Primary_Flight_Display_of_a_Boeing_737-800.png
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 854
+  - 765
+  resize_to_container: true
+- name: rose
+  type: ImagePanel
+  texture: ''
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 100
+  - 100
+  position:
+  - 300
+  - 300

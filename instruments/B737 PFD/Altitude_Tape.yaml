@@ -19,6 +19,7 @@ components:
   visibility:
     dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
     predicate: true_if_zero
+  hidden: true
 - name: speed_tape_background
   type: FilledRect
   position:
@@ -53,10 +54,21 @@ components:
   - interval: 100
     length: 15
     width: 2
-    offset: 5
+    x_offset: 8
   - interval: 500
     length: 20
     width: 4
+    x_offset: 3
+  - interval: 1000
+    length: 62
+    width: 2
+    x_offset: 25
+    y_offset: 15
+  - interval: 1000
+    length: 62
+    width: 2
+    x_offset: 25
+    y_offset: -15
   labels:
     color:
     - 255
@@ -64,10 +76,13 @@ components:
     - 255
     interval: 200.0
     format: '{:.0f}'
-    font_size: 15.0
-    offset: 26.0
+    font_size: 16.0
+    emphasize_place: 3.0
+    emphasize_font_size: 24.0
+    offset: 81.0
     font: ST_Boeing_PFD
     side: right
+    justify: right
   bugs:
   - value:
       dataref: sim/cockpit2/autopilot/altitude_dial_ft
@@ -82,26 +97,26 @@ components:
     - 245
     - 255
     points:
-    - - 5
+    - - 7
       - 0
-    - - -1
+    - - 1
       - 7
-    - - -1
+    - - 1
       - 25
-    - - 40
+    - - 42
       - 25
-    - - 40
+    - - 42
       - -25
-    - - -1
+    - - 1
       - -25
-    - - -1
+    - - 1
       - -7
     filled: false
     width: 2.0
   viewport:
-  - 448
+  - 445
   - 115
-  - 84
+  - 88
   - 381
 - name: alt_tape_window_copy
   type: Polygon
@@ -259,19 +274,71 @@ components:
   - 46
   visibility:
     dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
-    predicate: nav_gsflg_visible
+    operator: '>='
+    value: 10000.0
 - name: AP_Alt_Dial
   type: Text
   position:
-  - 476
-  - 515
+  - 534
+  - 510
   dataref: sim/cockpit2/autopilot/altitude_dial_ft
   text_format: '{:3.0f}'
+  emphasize_place: 3.0
+  emphasize_font_size: 27.0
   font_name: ST_Boeing_PFD
-  font_size: 21.0
-  bold: true
+  font_size: 22.0
   color:
   - 242
   - 161
   - 239
   - 255
+  anchor_x: right
+- name: lessthan10K_marker
+  type: Text
+  position:
+  - 494
+  - 323
+  text: '|'
+  font_name: ST_Boeing_PFD
+  font_size: 27.0
+  bold: true
+  color:
+  - 0
+  - 170
+  - 0
+  - 255
+  anchor_x: center
+  anchor_y: top
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/altitude_ft_pilot
+    operator: <=
+    value: 10000.0
+- name: baro_setting
+  type: Text
+  position:
+  - 453
+  - 85
+  dataref: sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot
+  text_format: '{:.2f}'
+  font_name: ST_Boeing_PFD
+  font_size: 20.0
+  color:
+  - 0
+  - 170
+  - 0
+  - 255
+  anchor_y: bottom
+- name: baro_unit_txt
+  type: Text
+  position:
+  - 510
+  - 85
+  text: IN.
+  font_name: ST_Boeing_PFD
+  font_size: 16.0
+  color:
+  - 0
+  - 170
+  - 0
+  - 255
+  anchor_y: bottom

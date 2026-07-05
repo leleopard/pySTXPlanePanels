@@ -82,9 +82,15 @@ components:
     - 255
     width: 8.0
     side: right
+    offset: 18.0
     dash: 8.0
   - range:
-    - 300.0
+    - dataref: laminar/B738/pfd/max_speed
+      table:
+      - - 0
+        - 0
+      - - 999
+        - 999
     - 999.0
     color:
     - 233
@@ -93,6 +99,7 @@ components:
     - 255
     width: 8.0
     side: right
+    offset: 18.0
     dash: 8.0
   - range:
     - dataref: laminar/B738/pfd/min_speed
@@ -114,6 +121,7 @@ components:
     - 255
     width: 4.0
     side: right
+    offset: 20.0
   bugs:
   - value:
       dataref: sim/cockpit2/autopilot/airspeed_dial_kts
@@ -204,9 +212,6 @@ components:
   outline_width: 2.0
 - name: units_speed_tape
   type: VectorTape
-  position:
-  - 45
-  - 307
   scroll_axis: y
   pixels_per_unit: 24.0
   wrap: 10.0
@@ -229,6 +234,7 @@ components:
     font_size: 22.0
     offset: 0.0
     font: ST_Boeing_PFD
+    bold: true
     side: right
   viewport:
   - 44
@@ -237,9 +243,6 @@ components:
   - 47
 - name: tens_speed_tape
   type: VectorTape
-  position:
-  - 28
-  - 307
   scroll_axis: y
   pixels_per_unit: 32.0
   wrap: 10.0
@@ -262,6 +265,7 @@ components:
     font_size: 22.0
     offset: 0.0
     font: ST_Boeing_PFD
+    bold: true
     side: right
   viewport:
   - 27
@@ -270,9 +274,6 @@ components:
   - 37
 - name: hundreds_speed_tape
   type: VectorTape
-  position:
-  - 12
-  - 307
   scroll_axis: y
   pixels_per_unit: 32.0
   wrap: 10.0
@@ -295,45 +296,36 @@ components:
     font_size: 22.0
     offset: 0.0
     font: ST_Boeing_PFD
+    bold: true
     side: right
   viewport:
   - 10
   - 288
   - 17
   - 37
-- name: GS_static_text
+- name: Mach_text
   type: Text
   position:
-  - 9
-  - 53
-  text: GS
-  font_name: ST_Boeing_PFD
-  font_size: 18.0
-  color:
-  - 255
-  - 255
-  - 255
-  - 255
-- name: GS_text
-  type: Text
-  position:
-  - 39
-  - 53
-  dataref: sim/cockpit2/gauges/indicators/ground_speed_kt
-  text_format: '{:3.0f}'
+  - 83
+  - 80
+  dataref: sim/cockpit2/gauges/indicators/mach_pilot
+  text_format: '{:.3f}'
   font_name: ST_Boeing_PFD
   font_size: 21.0
+  bold: true
   color:
   - 255
   - 255
   - 255
   - 255
+  anchor_x: right
+  anchor_y: bottom
 - name: AP_Airspeed
   type: Text
   position:
   - 35
   - 515
-  dataref: sim/cockpit2/autopilot/airspeed_dial_kts
+  dataref: laminar/B738/autopilot/mcp_speed_dial_kts
   text_format: '{:3.0f}'
   font_name: ST_Boeing_PFD
   font_size: 21.0

@@ -1,0 +1,145 @@
+name: top_Status_Bar
+size:
+- 600
+- 600
+components:
+- name: bg
+  type: ImagePanel
+  position:
+  - 300
+  - 300
+  texture: Primary_Flight_Display_of_a_Boeing_737-800.png
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 854
+  - 765
+  resize_to_container: true
+  hidden: true
+- name: background
+  type: FilledRect
+  position:
+  - 269
+  - 545
+  size:
+  - 341
+  - 33
+  color:
+  - 98
+  - 88
+  - 87
+  - 255
+- name: HDG_SELECT_txt
+  type: Text
+  position:
+  - 269
+  - 543
+  text: HDG SEL
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/hdg_sel_status
+    predicate: true_if_equals_1
+- name: ALT_HOLD_txt
+  type: Text
+  position:
+  - 384
+  - 543
+  text: ALT HOLD
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/alt_hld_status
+    predicate: true_if_equals_1
+- name: V_SPEED_txt
+  type: Text
+  position:
+  - 384
+  - 543
+  text: V/S
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/vs_status
+    predicate: true_if_equals_1
+- name: MCP_SPEED_txt
+  type: Text
+  position:
+  - 160
+  - 543
+  text: MCP SPD
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/speed_status1
+    predicate: true_if_equals_1
+- name: AT_ARM_txt
+  type: Text
+  position:
+  - 160
+  - 543
+  text: ARM
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/autothrottle_status
+    predicate: true_if_equals_1
+- name: vertbar1
+  type: Line
+  start:
+  - 218
+  - 561
+  end:
+  - 218
+  - 529
+  color:
+  - 255
+  - 255
+  - 255
+  - 255
+  width: 2.0
+- name: vertbar1_copy
+  type: Line
+  start:
+  - 326
+  - 561
+  end:
+  - 326
+  - 529
+  color:
+  - 255
+  - 255
+  - 255
+  - 255
+  width: 2.0
