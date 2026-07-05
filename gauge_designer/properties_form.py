@@ -50,9 +50,18 @@ class _ColorButton(QPushButton):
     palette — Qt doesn't persist it across app restarts on its own. This
     class loads it from QSettings the first time any color button is used,
     and saves it back after every pick so custom swatches survive a restart.
+
+    The dialog's own "Add to Custom Colors" button always targets slot 0
+    (it's a fresh dialog instance on every pick, so whatever internal
+    next-slot pointer Qt/the OS keeps resets each time) — clicking it
+    repeatedly just clobbers slot 0 instead of filling the palette left to
+    right. `_reslot_custom_colors()` detects that overwrite after the
+    dialog closes, restores the clobbered slot, and re-homes the new color
+    into our own tracked next-empty slot instead.
     """
     color_changed = Signal()
     _custom_colors_loaded = False
+    _next_custom_slot = 0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -75,13 +84,30 @@ class _ColorButton(QPushButton):
                 color = QColor(raw)
                 if color.isValid():
                     QColorDialog.setCustomColor(i, color)
+        cls._next_custom_slot = int(settings.value("colorPicker/nextCustomSlot", 0))
 
-    @staticmethod
-    def _save_custom_colors() -> None:
+    @classmethod
+    def _save_custom_colors(cls) -> None:
         settings = QSettings()
         for i in range(_CUSTOM_COLOR_SLOTS):
             settings.setValue(f"colorPicker/customColor{i}",
                               QColorDialog.customColor(i).name(QColor.HexArgb))
+        settings.setValue("colorPicker/nextCustomSlot", cls._next_custom_slot)
+
+    @classmethod
+    def _reslot_custom_colors(cls, before: list) -> None:
+        # Two passes so restoring a clobbered slot can never be mistaken,
+        # on a later loop step, for a second native-dialog change (a write
+        # into next_custom_slot would otherwise get re-read as "changed"
+        # if the loop reaches that slot before this call returns).
+        after = [QColorDialog.customColor(i) for i in range(len(before))]
+        added = [after[i] for i in range(len(before)) if after[i] != before[i]]
+        for i, prev in enumerate(before):
+            if after[i] != prev:
+                QColorDialog.setCustomColor(i, prev)
+        for new_color in added:
+            QColorDialog.setCustomColor(cls._next_custom_slot, new_color)
+            cls._next_custom_slot = (cls._next_custom_slot + 1) % _CUSTOM_COLOR_SLOTS
 
     def set_rgba(self, raw) -> None:
         if raw is None:
@@ -105,10 +131,12 @@ class _ColorButton(QPushButton):
 
     def _pick(self) -> None:
         r, g, b, a = self._rgba
+        before = [QColorDialog.customColor(i) for i in range(_CUSTOM_COLOR_SLOTS)]
         c = QColorDialog.getColor(
             QColor(r, g, b, a), self, "Pick Color",
             QColorDialog.ShowAlphaChannel,
         )
+        self._reslot_custom_colors(before)
         self._save_custom_colors()
         if c.isValid():
             self._rgba = (c.red(), c.green(), c.blue(), c.alpha())
