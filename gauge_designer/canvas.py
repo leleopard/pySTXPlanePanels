@@ -353,7 +353,7 @@ class InstrumentCanvas(QWidget):
         ctype = comp.get("type", "") if comp else ""
         if ctype == "Line":
             ref = comp.get("start", [0, 0])
-        elif ctype == "Arc":
+        elif ctype in ("Arc", "VectorCompassRose"):
             ref = comp.get("center", [0, 0])
         elif ctype == "Polygon":
             ref = comp.get("origin", [0, 0])
@@ -392,7 +392,7 @@ class InstrumentCanvas(QWidget):
             elif ctype == "Polygon":
                 oo = orig.get("origin", [0, 0])
                 comp["origin"] = [int(round(oo[0] + dx_yaml)), int(round(oo[1] + dy_yaml))]
-            elif ctype == "Arc":
+            elif ctype in ("Arc", "VectorCompassRose"):
                 oc = orig.get("center", [0, 0])
                 comp["center"] = [int(round(oc[0] + dx_yaml)), int(round(oc[1] + dy_yaml))]
             elif ctype == "AttitudeIndicator":
@@ -419,7 +419,7 @@ class InstrumentCanvas(QWidget):
             ctype = comp.get("type", "")
             if ctype == "Line":
                 ref = comp.get("start", [0, 0])
-            elif ctype == "Arc":
+            elif ctype in ("Arc", "VectorCompassRose"):
                 ref = comp.get("center", [0, 0])
             elif ctype == "Polygon":
                 ref = comp.get("origin", [0, 0])
@@ -464,7 +464,7 @@ class InstrumentCanvas(QWidget):
                     if (min(x1, x2) - pad <= cx <= max(x1, x2) + pad and
                             min(y1, y2) - pad <= cy <= max(y1, y2) + pad):
                         result.append(comp.get("name"))
-                elif ctype == "Arc":
+                elif ctype in ("Arc", "VectorCompassRose"):
                     ctr = comp.get("center", [0, 0])
                     r = int(round(float(comp.get("radius", 50)))) + 8
                     ax, ay = int(ctr[0]), h - int(ctr[1])
@@ -583,6 +583,8 @@ class InstrumentCanvas(QWidget):
                     self._render_vectortape(comp, composite, draw, w, h)
                 elif ctype == "AttitudeIndicator":
                     self._render_ai(comp, composite, draw, w, h)
+                elif ctype == "VectorCompassRose":
+                    self._render_compassrose(comp, draw, h)
                 elif ctype == "RotaryEncoder":
                     self._render_rotary_encoder(comp, composite, draw, h)
                 elif ctype == "Text":
@@ -624,6 +626,11 @@ class InstrumentCanvas(QWidget):
                     bbox = [cx_p - r, cy_p - r, cx_p + r, cy_p + r]
                     sa, ea = float(comp.get("start_angle", 0)), float(comp.get("end_angle", 360))
                     draw.arc(bbox, -ea, -sa, fill=SEL, width=4)
+                elif ctype == "VectorCompassRose":
+                    ctr = comp.get("center", [0, 0])
+                    r = int(round(float(comp.get("radius", 50))))
+                    cx_p, cy_p = int(ctr[0]), h - int(ctr[1])
+                    draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r], outline=SEL, width=3)
                 elif ctype in ("FilledRect", "RotaryEncoder"):
                     pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
                     cx_p, cy_p = int(pos[0]), h - int(pos[1])
@@ -693,6 +700,63 @@ class InstrumentCanvas(QWidget):
         c = (255, 220, 0, 255)
         draw.line([(cx - 10, cy), (cx + 10, cy)], fill=c, width=1)
         draw.line([(cx, cy - 10), (cx, cy + 10)], fill=c, width=1)
+
+    def _render_compassrose(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        """Static preview at heading=0 — matches the runtime's neutral orientation."""
+        ctr = comp.get("center", [0, 0])
+        r = float(comp.get("radius", 100))
+        cx_p, cy_p = float(ctr[0]), canvas_h - float(ctr[1])
+
+        def point_at(heading_deg: float, radius: float) -> tuple[float, float]:
+            angle = math.radians(90.0 - heading_deg)
+            # PIL y is flipped relative to Arcade's y-up: subtract, not add.
+            return cx_p + radius * math.cos(angle), cy_p - radius * math.sin(angle)
+
+        bg = comp.get("background_color")
+        if bg is not None:
+            draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r], fill=_rgba(bg))
+        if comp.get("show_line", True):
+            line_w = max(1, int(round(float(comp.get("line_width", 2.0)))))
+            draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r],
+                         outline=_rgba(comp.get("line_color")), width=line_w)
+
+        tick5_len  = float(comp.get("tick5_length", 8.0))
+        tick5_col  = _rgba(comp.get("tick5_color"))
+        tick5_w    = max(1, int(round(float(comp.get("tick5_width", 1.0)))))
+        tick5_pos  = comp.get("tick5_position", "outside")
+        tick10_len = float(comp.get("tick10_length", 16.0))
+        tick10_col = _rgba(comp.get("tick10_color"))
+        tick10_w   = max(1, int(round(float(comp.get("tick10_width", 2.0)))))
+        tick10_pos = comp.get("tick10_position", "outside")
+
+        for h_deg in range(0, 360, 5):
+            is_major = (h_deg % 10) == 0
+            length   = tick10_len if is_major else tick5_len
+            position = tick10_pos if is_major else tick5_pos
+            color    = tick10_col if is_major else tick5_col
+            width    = tick10_w if is_major else tick5_w
+            r0, r1 = (r - length, r) if position == "inside" else (r, r + length)
+            x0, y0 = point_at(h_deg, r0)
+            x1, y1 = point_at(h_deg, r1)
+            draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
+
+        label_interval = max(1, int(float(comp.get("label_interval", 30))))
+        label_offset   = float(comp.get("label_offset", 20.0))
+        label_position = comp.get("label_position", "inside")
+        label_fmt      = comp.get("label_format", "{:02.0f}")
+        font_size = max(8, int(float(comp.get("label_font_size", 14))))
+        font = _pil_font(comp.get("label_font"), font_size,
+                         bold=bool(comp.get("label_bold", False)),
+                         italic=bool(comp.get("label_italic", False)))
+        label_color = _rgba(comp.get("label_color"))
+        r_label = (r - label_offset) if label_position == "inside" else (r + label_offset)
+        for h_deg in range(0, 360, label_interval):
+            x, y = point_at(h_deg, r_label)
+            text = label_fmt.format(h_deg / 10.0)
+            try:
+                draw.text((x, y), text, fill=label_color, font=font, anchor="mm")
+            except TypeError:
+                draw.text((x, y), text, fill=label_color, font=font)
 
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:

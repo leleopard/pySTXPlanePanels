@@ -134,7 +134,7 @@ def _str_to_pts(s: str) -> list:
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
                "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector",
-               "AttitudeIndicator", "CircularGauge",
+               "AttitudeIndicator", "CircularGauge", "VectorCompassRose",
                "RotaryEncoder"]
 
 
@@ -982,6 +982,7 @@ class PropertiesForm(QWidget):
         self._mk_vectortape_sec()
         self._mk_ai_sec()
         self._mk_circulargauge_sec()
+        self._mk_compassrose_sec()
         self._mk_rotary_encoder_sec()
         self._mk_rotation()
         self._mk_translation()
@@ -2447,6 +2448,186 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._cg_sec)
 
+    def _mk_compassrose_sec(self):
+        self._cr_sec = _Section("Compass Rose")
+        self._cr_sec.setVisible(False)
+
+        self._cr_cx = _sb(); self._cr_cy = _sb()
+        for w in (self._cr_cx, self._cr_cy):
+            w.valueChanged.connect(self._emit)
+        y_label = "Center X  /  Y top" if is_y_down() else "Center X  /  Y"
+        self._cr_sec.row_pair(y_label, self._cr_cx, self._cr_cy)
+
+        self._cr_radius = QDoubleSpinBox()
+        self._cr_radius.setRange(1.0, 4096.0); self._cr_radius.setDecimals(1)
+        self._cr_radius.setValue(150.0)
+        self._cr_radius.valueChanged.connect(self._emit)
+        self._cr_sec.row("Radius px", self._cr_radius)
+
+        _cr_bg_row = QWidget()
+        _cr_bg_hl = QHBoxLayout(_cr_bg_row)
+        _cr_bg_hl.setContentsMargins(0, 0, 0, 0); _cr_bg_hl.setSpacing(6)
+        self._cr_bg_chk = QCheckBox()
+        self._cr_bg_chk.toggled.connect(lambda on: self._cr_bg_color.setEnabled(on))
+        self._cr_bg_chk.toggled.connect(self._emit)
+        self._cr_bg_color = _ColorButton()
+        self._cr_bg_color.setEnabled(False)
+        self._cr_bg_color.color_changed.connect(self._emit)
+        _cr_bg_hl.addWidget(self._cr_bg_chk)
+        _cr_bg_hl.addWidget(self._cr_bg_color, 1)
+        self._cr_sec.row("Background", _cr_bg_row)
+
+        self._cr_line_chk = QCheckBox("Show circle line")
+        self._cr_line_chk.setChecked(True)
+        self._cr_line_chk.toggled.connect(self._on_cr_line_toggled)
+        self._cr_line_chk.toggled.connect(self._emit)
+        self._cr_sec.row_widget(self._cr_line_chk)
+
+        _cr_line_row = QWidget()
+        _cr_line_hl = QHBoxLayout(_cr_line_row)
+        _cr_line_hl.setContentsMargins(0, 0, 0, 0); _cr_line_hl.setSpacing(4)
+        self._cr_line_color = _ColorButton()
+        self._cr_line_color.color_changed.connect(self._emit)
+        self._cr_line_width = QDoubleSpinBox()
+        self._cr_line_width.setRange(0.5, 50.0); self._cr_line_width.setDecimals(1)
+        self._cr_line_width.setValue(2.0)
+        self._cr_line_width.valueChanged.connect(self._emit)
+        _cr_line_hl.addWidget(self._cr_line_color)
+        _cr_line_hl.addWidget(self._cr_line_width)
+        self._cr_sec.row("Line color / width", _cr_line_row)
+
+        self._cr_segments = QSpinBox()
+        self._cr_segments.setRange(8, 360); self._cr_segments.setValue(128)
+        self._cr_segments.valueChanged.connect(self._emit)
+        self._cr_sec.row("Circle segments", self._cr_segments)
+
+        # -- 5° ticks --
+        self._cr_sec.row_widget(_sep_label("5° ticks"))
+        self._cr_t5_len = QDoubleSpinBox()
+        self._cr_t5_len.setRange(0.0, 200.0); self._cr_t5_len.setDecimals(1)
+        self._cr_t5_len.setValue(8.0)
+        self._cr_t5_len.valueChanged.connect(self._emit)
+        self._cr_sec.row("Length px", self._cr_t5_len)
+        self._cr_t5_color = _ColorButton()
+        self._cr_t5_color.color_changed.connect(self._emit)
+        self._cr_sec.row("Color", self._cr_t5_color)
+        self._cr_t5_width = QDoubleSpinBox()
+        self._cr_t5_width.setRange(0.5, 50.0); self._cr_t5_width.setDecimals(1)
+        self._cr_t5_width.setValue(1.0)
+        self._cr_t5_width.valueChanged.connect(self._emit)
+        self._cr_sec.row("Width px", self._cr_t5_width)
+        self._cr_t5_pos = _NoScrollComboBox()
+        self._cr_t5_pos.addItems(["outside", "inside"])
+        self._cr_t5_pos.currentTextChanged.connect(self._emit)
+        self._cr_sec.row("Position", self._cr_t5_pos)
+
+        # -- 10° ticks --
+        self._cr_sec.row_widget(_sep_label("10° ticks"))
+        self._cr_t10_len = QDoubleSpinBox()
+        self._cr_t10_len.setRange(0.0, 200.0); self._cr_t10_len.setDecimals(1)
+        self._cr_t10_len.setValue(16.0)
+        self._cr_t10_len.valueChanged.connect(self._emit)
+        self._cr_sec.row("Length px", self._cr_t10_len)
+        self._cr_t10_color = _ColorButton()
+        self._cr_t10_color.color_changed.connect(self._emit)
+        self._cr_sec.row("Color", self._cr_t10_color)
+        self._cr_t10_width = QDoubleSpinBox()
+        self._cr_t10_width.setRange(0.5, 50.0); self._cr_t10_width.setDecimals(1)
+        self._cr_t10_width.setValue(2.0)
+        self._cr_t10_width.valueChanged.connect(self._emit)
+        self._cr_sec.row("Width px", self._cr_t10_width)
+        self._cr_t10_pos = _NoScrollComboBox()
+        self._cr_t10_pos.addItems(["outside", "inside"])
+        self._cr_t10_pos.currentTextChanged.connect(self._emit)
+        self._cr_sec.row("Position", self._cr_t10_pos)
+
+        # -- Heading labels --
+        self._cr_sec.row_widget(_sep_label("Heading labels"))
+        self._cr_label_interval = QDoubleSpinBox()
+        self._cr_label_interval.setRange(1.0, 180.0); self._cr_label_interval.setDecimals(0)
+        self._cr_label_interval.setValue(30.0)
+        self._cr_label_interval.valueChanged.connect(self._emit)
+        self._cr_sec.row("Interval °", self._cr_label_interval)
+        self._cr_label_offset = QDoubleSpinBox()
+        self._cr_label_offset.setRange(-200.0, 200.0); self._cr_label_offset.setDecimals(1)
+        self._cr_label_offset.setValue(20.0)
+        self._cr_label_offset.valueChanged.connect(self._emit)
+        self._cr_sec.row("Offset px (from arc)", self._cr_label_offset)
+        self._cr_label_pos = _NoScrollComboBox()
+        self._cr_label_pos.addItems(["inside", "outside"])
+        self._cr_label_pos.currentTextChanged.connect(self._emit)
+        self._cr_sec.row("Position", self._cr_label_pos)
+        self._cr_label_format = QLineEdit()
+        self._cr_label_format.setPlaceholderText("{:02.0f}  (applied to heading/10)")
+        self._cr_label_format.setToolTip(_FORMAT_SPEC_TOOLTIP)
+        self._cr_label_format.editingFinished.connect(self._emit)
+        self._cr_sec.row("Format", self._cr_label_format)
+        self._cr_label_font_size = QDoubleSpinBox()
+        self._cr_label_font_size.setRange(4.0, 120.0); self._cr_label_font_size.setDecimals(1)
+        self._cr_label_font_size.setValue(14.0)
+        self._cr_label_font_size.valueChanged.connect(self._emit)
+        self._cr_sec.row("Font size", self._cr_label_font_size)
+        self._cr_label_font = QLineEdit()
+        self._cr_label_font.setPlaceholderText("Arial  (blank = default)")
+        self._cr_label_font.editingFinished.connect(self._emit)
+        _cr_font_btn = QPushButton("…")
+        _cr_font_btn.setFixedWidth(28)
+        _cr_font_btn.setToolTip("Choose font")
+        _cr_font_btn.clicked.connect(self._pick_cr_label_font)
+        _cr_font_row = QWidget()
+        _cr_font_hl = QHBoxLayout(_cr_font_row)
+        _cr_font_hl.setContentsMargins(0, 0, 0, 0); _cr_font_hl.setSpacing(4)
+        _cr_font_hl.addWidget(self._cr_label_font)
+        _cr_font_hl.addWidget(_cr_font_btn)
+        self._cr_sec.row("Font", _cr_font_row)
+        _cr_style_row = QWidget()
+        _cr_style_hl = QHBoxLayout(_cr_style_row)
+        _cr_style_hl.setContentsMargins(0, 0, 0, 0); _cr_style_hl.setSpacing(12)
+        self._cr_label_bold = QCheckBox("Bold")
+        self._cr_label_bold.toggled.connect(self._emit)
+        self._cr_label_italic = QCheckBox("Italic")
+        self._cr_label_italic.toggled.connect(self._emit)
+        _cr_style_hl.addWidget(self._cr_label_bold)
+        _cr_style_hl.addWidget(self._cr_label_italic)
+        _cr_style_hl.addStretch()
+        self._cr_sec.row("Label style", _cr_style_row)
+        self._cr_label_color = _ColorButton()
+        self._cr_label_color.color_changed.connect(self._emit)
+        self._cr_sec.row("Label color", self._cr_label_color)
+
+        # -- Heading rotation --
+        self._cr_sec.row_widget(_sep_label("Heading rotation (rotates the whole rose)"))
+        self._cr_heading_dr = QLineEdit()
+        self._cr_heading_dr.setPlaceholderText("heading dataref  (blank = no rotation)")
+        self._cr_heading_dr.editingFinished.connect(self._emit)
+        self._cr_sec.row("Heading dataref", self._dr_field(self._cr_heading_dr))
+        self._cr_heading_fn = _NoScrollComboBox()
+        self._cr_heading_fn.addItems(_VALUE_FUNCS)
+        self._cr_heading_fn.currentTextChanged.connect(self._emit)
+        self._cr_sec.row("Convert fn", self._cr_heading_fn)
+
+        self._vbox.addWidget(self._cr_sec)
+
+    def _on_cr_line_toggled(self, on: bool) -> None:
+        self._cr_line_color.setEnabled(on)
+        self._cr_line_width.setEnabled(on)
+
+    def _pick_cr_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
+        current_name = self._cr_label_font.text().strip() or "Arial"
+        current_size = int(self._cr_label_font_size.value())
+        initial = QFont(current_name, current_size)
+        initial.setBold(self._cr_label_bold.isChecked())
+        initial.setItalic(self._cr_label_italic.isChecked())
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._cr_label_font.setText(strip_style_suffix(font.family()))
+            self._cr_label_font_size.setValue(float(font.pointSize()))
+            self._cr_label_bold.setChecked(font.bold())
+            self._cr_label_italic.setChecked(font.italic())
+            self._emit()
+
     def _mk_rotary_encoder_sec(self):
         self._re_sec = _Section("Rotary Encoder")
         self._re_sec.setVisible(False)
@@ -2821,10 +3002,10 @@ class PropertiesForm(QWidget):
             "slip_width", "slip_height", "slip_filled", "slip_line_width",
             "slip_offset", "slip_scale", "slip_convert_function",
             "show_fd_h_bar", "fd_pitch_dataref", "fd_pitch_convert_function",
-            "fd_h_vis_dataref", "fd_h_vis_predicate",
+            "fd_h_visibility",
             "fd_h_color", "fd_h_length", "fd_h_width", "fd_h_scale",
             "show_fd_v_bar", "fd_roll_dataref", "fd_roll_convert_function",
-            "fd_v_vis_dataref", "fd_v_vis_predicate",
+            "fd_v_visibility",
             "fd_v_color", "fd_v_length", "fd_v_width", "fd_v_scale",
             # RotaryEncoder
             "command_cw", "command_ccw", "drag_px_per_step", "show_touch_zones", "hit_padding",
@@ -2834,6 +3015,13 @@ class PropertiesForm(QWidget):
             # CircularGauge
             "arc_color", "arc_width", "needle_length", "needle_width",
             "needle_color", "needle_angle",
+            # VectorCompassRose
+            "background_color", "show_line", "line_color", "line_width",
+            "tick5_length", "tick5_color", "tick5_width", "tick5_position",
+            "tick10_length", "tick10_color", "tick10_width", "tick10_position",
+            "label_interval", "label_offset", "label_position",
+            "label_font", "label_bold", "label_italic", "label_format", "label_color",
+            "heading",
             # shared across all
             "viewport", "visibility",
         }
@@ -3296,6 +3484,48 @@ class PropertiesForm(QWidget):
         self._cg_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
         self._cg_needle_angle.load(comp.get("needle_angle", -220.0))
 
+        # VectorCompassRose
+        cr_ctr = comp.get("center", [0, 0])
+        self._cr_cx.setValue(int(cr_ctr[0]))
+        self._cr_cy.setValue(flip_y(int(cr_ctr[1]), self._ref_height))
+        self._cr_radius.setValue(float(comp.get("radius", 150.0)))
+        cr_bg = comp.get("background_color")
+        self._cr_bg_chk.blockSignals(True)
+        self._cr_bg_chk.setChecked(cr_bg is not None)
+        self._cr_bg_chk.blockSignals(False)
+        self._cr_bg_color.setEnabled(cr_bg is not None)
+        self._cr_bg_color.set_rgba(cr_bg if cr_bg is not None else [20, 20, 30, 255])
+        _cr_show_line = bool(comp.get("show_line", True))
+        self._cr_line_chk.blockSignals(True)
+        self._cr_line_chk.setChecked(_cr_show_line)
+        self._cr_line_chk.blockSignals(False)
+        self._cr_line_color.set_rgba(comp.get("line_color", [255, 255, 255, 255]))
+        self._cr_line_width.setValue(float(comp.get("line_width", 2.0)))
+        self._cr_line_color.setEnabled(_cr_show_line)
+        self._cr_line_width.setEnabled(_cr_show_line)
+        self._cr_segments.setValue(int(comp.get("num_segments", 128)))
+        self._cr_t5_len.setValue(float(comp.get("tick5_length", 8.0)))
+        self._cr_t5_color.set_rgba(comp.get("tick5_color", [255, 255, 255, 255]))
+        self._cr_t5_width.setValue(float(comp.get("tick5_width", 1.0)))
+        self._cr_t5_pos.setCurrentText(str(comp.get("tick5_position", "outside")))
+        self._cr_t10_len.setValue(float(comp.get("tick10_length", 16.0)))
+        self._cr_t10_color.set_rgba(comp.get("tick10_color", [255, 255, 255, 255]))
+        self._cr_t10_width.setValue(float(comp.get("tick10_width", 2.0)))
+        self._cr_t10_pos.setCurrentText(str(comp.get("tick10_position", "outside")))
+        self._cr_label_interval.setValue(float(comp.get("label_interval", 30.0)))
+        self._cr_label_offset.setValue(float(comp.get("label_offset", 20.0)))
+        self._cr_label_pos.setCurrentText(str(comp.get("label_position", "inside")))
+        self._cr_label_format.setText(str(comp.get("label_format", "")))
+        self._cr_label_font_size.setValue(float(comp.get("label_font_size", 14.0)))
+        self._cr_label_font.setText(str(comp.get("label_font", "")))
+        self._cr_label_bold.setChecked(bool(comp.get("label_bold", False)))
+        self._cr_label_italic.setChecked(bool(comp.get("label_italic", False)))
+        self._cr_label_color.set_rgba(comp.get("label_color", [255, 255, 255, 255]))
+        cr_heading = comp.get("heading") or {}
+        self._cr_heading_dr.setText(str(cr_heading.get("dataref", "")))
+        self._cr_heading_fn.setCurrentIndex(
+            max(self._cr_heading_fn.findText(str(cr_heading.get("convert_function") or _NONE)), 0))
+
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
             vp = comp.get("viewport")
@@ -3348,7 +3578,8 @@ class PropertiesForm(QWidget):
 
         # Position only for types that use a single centre point
         # VectorTape uses position spinboxes for viewport origin (written below with viewport)
-        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "CircularGauge", "VectorTape"):
+        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "CircularGauge",
+                      "VectorCompassRose", "VectorTape"):
             data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
         if ct == "Line":
@@ -3473,6 +3704,51 @@ class PropertiesForm(QWidget):
                 data["needle_width"] = nw
             data["needle_color"] = list(self._cg_needle_color.get_rgba())
             data["needle_angle"] = self._cg_needle_angle.get_data()
+
+        elif ct == "VectorCompassRose":
+            data["center"] = [self._cr_cx.value(), flip_y(self._cr_cy.value(), self._ref_height)]
+            data["radius"] = self._cr_radius.value()
+            if self._cr_bg_chk.isChecked():
+                data["background_color"] = list(self._cr_bg_color.get_rgba())
+            if not self._cr_line_chk.isChecked():
+                data["show_line"] = False
+            data["line_color"] = list(self._cr_line_color.get_rgba())
+            lw = self._cr_line_width.value()
+            if lw != 2.0:
+                data["line_width"] = lw
+            segs = self._cr_segments.value()
+            if segs != 128:
+                data["num_segments"] = segs
+            data["tick5_length"] = self._cr_t5_len.value()
+            data["tick5_color"] = list(self._cr_t5_color.get_rgba())
+            data["tick5_width"] = self._cr_t5_width.value()
+            data["tick5_position"] = self._cr_t5_pos.currentText()
+            data["tick10_length"] = self._cr_t10_len.value()
+            data["tick10_color"] = list(self._cr_t10_color.get_rgba())
+            data["tick10_width"] = self._cr_t10_width.value()
+            data["tick10_position"] = self._cr_t10_pos.currentText()
+            data["label_interval"] = self._cr_label_interval.value()
+            data["label_offset"] = self._cr_label_offset.value()
+            data["label_position"] = self._cr_label_pos.currentText()
+            cr_fmt = self._cr_label_format.text().strip()
+            if cr_fmt:
+                data["label_format"] = cr_fmt
+            data["label_font_size"] = self._cr_label_font_size.value()
+            cr_font = self._cr_label_font.text().strip()
+            if cr_font:
+                data["label_font"] = cr_font
+            if self._cr_label_bold.isChecked():
+                data["label_bold"] = True
+            if self._cr_label_italic.isChecked():
+                data["label_italic"] = True
+            data["label_color"] = list(self._cr_label_color.get_rgba())
+            cr_hdr = self._cr_heading_dr.text().strip()
+            if cr_hdr:
+                heading: dict = {"dataref": cr_hdr}
+                cr_hfn = self._cr_heading_fn.currentText()
+                if cr_hfn != _NONE:
+                    heading["convert_function"] = cr_hfn
+                data["heading"] = heading
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -3973,6 +4249,23 @@ class PropertiesForm(QWidget):
         self._cg_needle_len.setValue(80.0); self._cg_needle_width.setValue(2.0)
         self._cg_needle_color.set_rgba(None)
         self._cg_needle_angle.load(-220.0)
+        # VectorCompassRose
+        self._cr_cx.setValue(0); self._cr_cy.setValue(0)
+        self._cr_radius.setValue(150.0)
+        self._cr_bg_chk.setChecked(False); self._cr_bg_color.set_rgba(None)
+        self._cr_line_chk.setChecked(True)
+        self._cr_line_color.set_rgba(None); self._cr_line_width.setValue(2.0)
+        self._cr_segments.setValue(128)
+        self._cr_t5_len.setValue(8.0); self._cr_t5_color.set_rgba(None)
+        self._cr_t5_width.setValue(1.0); self._cr_t5_pos.setCurrentIndex(0)
+        self._cr_t10_len.setValue(16.0); self._cr_t10_color.set_rgba(None)
+        self._cr_t10_width.setValue(2.0); self._cr_t10_pos.setCurrentIndex(0)
+        self._cr_label_interval.setValue(30.0); self._cr_label_offset.setValue(20.0)
+        self._cr_label_pos.setCurrentIndex(0); self._cr_label_format.clear()
+        self._cr_label_font_size.setValue(14.0); self._cr_label_font.clear()
+        self._cr_label_bold.setChecked(False); self._cr_label_italic.setChecked(False)
+        self._cr_label_color.set_rgba(None)
+        self._cr_heading_dr.clear(); self._cr_heading_fn.setCurrentIndex(0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
@@ -4156,10 +4449,12 @@ class PropertiesForm(QWidget):
         is_vec  = ct == "Vector"
         is_ai   = ct == "AttitudeIndicator"
         is_cg   = ct == "CircularGauge"
+        is_cr   = ct == "VectorCompassRose"
         is_re   = ct == "RotaryEncoder"
 
         # Position: hide for types that define geometry without a single centre point
-        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai and not is_cg)
+        self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai
+                                  and not is_cg and not is_cr)
 
         # Texture section visible for image types; atlas detail only for ImagePanel
         self._tex_sec.setVisible(is_img)
@@ -4178,6 +4473,7 @@ class PropertiesForm(QWidget):
         self._vt_sec.setVisible(is_vt)
         self._ai_sec.setVisible(is_ai)
         self._cg_sec.setVisible(is_cg)
+        self._cr_sec.setVisible(is_cr)
         self._re_sec.setVisible(is_re)
 
         # Rotation and Translation: ImagePanel only
