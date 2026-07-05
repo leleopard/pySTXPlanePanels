@@ -105,6 +105,20 @@ YAML schema
         outline_color: null                # optional outline drawn on top when filled: true
         outline_width: 1.0
 
+      heading_marker:                        # optional: fixed lubber-line/index polygon at
+                                             # top-dead-centre — no dataref, since it never
+                                             # rotates (the rose rotates underneath it, so
+                                             # whatever heading ends up at the top is read off
+                                             # this marker)
+        radius: 210                         # px from centre where the marker's local origin sits
+        points: [[0, 0], [-8, 18], [8, 18]]   # relative to that origin, in plain screen space
+                                             # (no rotation applied)
+        color: [255, 255, 0, 255]
+        filled: true
+        width: 2.0                         # stroke width when filled: false
+        outline_color: null                # optional outline drawn on top when filled: true
+        outline_width: 1.0
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -242,6 +256,19 @@ class VectorCompassRose(_VecBase):
         self._bug_dr: Any | None = None
         self._bug_convert: Callable | None = None
 
+        # Heading marker (optional; enabled by calling set_heading_marker())
+        # — a fixed lubber-line/index polygon at top-dead-centre. Unlike the
+        # heading bug, it never rotates and has no dataref: the rose rotates
+        # underneath it, so whatever heading is at the top is read off it.
+        self._show_marker = False
+        self._marker_radius = 0.0
+        self._marker_points: list[tuple[float, float]] = []
+        self._marker_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._marker_filled = True
+        self._marker_width = 2.0
+        self._marker_outline_color: tuple[int, int, int, int] | None = None
+        self._marker_outline_width = 1.0
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
@@ -295,6 +322,25 @@ class VectorCompassRose(_VecBase):
         if convert_fn:
             self._bug_convert = get_convert(convert_fn)
 
+    def set_heading_marker(
+        self,
+        radius: float,
+        points: list[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        filled: bool,
+        width: float,
+        outline_color: tuple[int, int, int, int] | None,
+        outline_width: float,
+    ) -> None:
+        self._show_marker = True
+        self._marker_radius = float(radius)
+        self._marker_points = [(float(x), float(y)) for x, y in points]
+        self._marker_color = color
+        self._marker_filled = bool(filled)
+        self._marker_width = float(width)
+        self._marker_outline_color = outline_color
+        self._marker_outline_width = float(outline_width)
+
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
         self._radius *= scale
@@ -317,6 +363,10 @@ class VectorCompassRose(_VecBase):
         self._bug_points = [(x * scale, y * scale) for x, y in self._bug_points]
         self._bug_width *= scale
         self._bug_outline_width *= scale
+        self._marker_radius *= scale
+        self._marker_points = [(x * scale, y * scale) for x, y in self._marker_points]
+        self._marker_width *= scale
+        self._marker_outline_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -445,6 +495,21 @@ class VectorCompassRose(_VecBase):
         if self._show_bug:
             self._draw_heading_bug()
 
+        if self._show_marker:
+            self._draw_heading_marker()
+
+    def _draw_heading_marker(self) -> None:
+        # Fixed top-dead-centre, straight up from the rose centre — no
+        # rotation, since this marker doesn't move; the rose rotates under it.
+        cx, cy = self._cx, self._cy + self._marker_radius
+        pts = [(cx + px, cy + py) for px, py in self._marker_points]
+        if self._marker_filled:
+            arcade.draw_polygon_filled(pts, self._marker_color)
+            if self._marker_outline_color is not None:
+                arcade.draw_polygon_outline(pts, self._marker_outline_color, self._marker_outline_width)
+        else:
+            arcade.draw_polygon_outline(pts, self._marker_color, self._marker_width)
+
     def _draw_heading_bug(self) -> None:
         cx, cy = self._point_at(self._bug_heading, self._bug_radius)
         # Radial orientation, like the ticks: point_at()'s outward direction
@@ -560,6 +625,19 @@ def _compass_rose_factory(
             outline_width=float(bug_cfg.get("outline_width", 1.0)),
             dataref=bug_cfg["dataref"],
             convert_fn=bug_cfg.get("convert_function"),
+        )
+
+    marker_cfg = comp.get("heading_marker")
+    if marker_cfg:
+        moc = marker_cfg.get("outline_color")
+        rose.set_heading_marker(
+            radius=float(marker_cfg.get("radius", comp.get("radius", 150.0))),
+            points=[tuple(p) for p in marker_cfg["points"]],
+            color=_as_color(marker_cfg.get("color", [255, 255, 255, 255])),
+            filled=bool(marker_cfg.get("filled", True)),
+            width=float(marker_cfg.get("width", 2.0)),
+            outline_color=_as_color(moc) if moc is not None else None,
+            outline_width=float(marker_cfg.get("outline_width", 1.0)),
         )
 
     if "visibility" in comp:

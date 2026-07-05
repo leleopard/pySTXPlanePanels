@@ -872,6 +872,26 @@ class InstrumentCanvas(QWidget):
                 bwidth = max(1, int(round(float(bug_cfg.get("width", 1.0)))))
                 draw.line(bug_pts + [bug_pts[0]], fill=bcolor, width=bwidth)
 
+        marker_cfg = comp.get("heading_marker")
+        if marker_cfg and marker_cfg.get("points"):
+            # Fixed top-dead-centre, heading=0 for the static preview — no
+            # rotation (the marker never turns). Points are y-up like the
+            # rest of the schema; negate only the Y offset to match PIL's
+            # y-down space (same rule used above for the bug/track offsets).
+            marker_radius = float(marker_cfg.get("radius", comp.get("radius", r)))
+            mcx, mcy = point_at(0.0, marker_radius)
+            marker_pts = [(mcx + px, mcy - py) for px, py in marker_cfg["points"]]
+            mcolor = _rgba(marker_cfg.get("color"))
+            if bool(marker_cfg.get("filled", True)):
+                draw.polygon(marker_pts, fill=mcolor)
+                moc = marker_cfg.get("outline_color")
+                if moc is not None:
+                    mow = max(1, int(round(float(marker_cfg.get("outline_width", 1.0)))))
+                    draw.polygon(marker_pts, outline=_rgba(moc), width=mow)
+            else:
+                mwidth = max(1, int(round(float(marker_cfg.get("width", 1.0)))))
+                draw.line(marker_pts + [marker_pts[0]], fill=mcolor, width=mwidth)
+
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])

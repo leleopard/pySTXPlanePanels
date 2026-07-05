@@ -2846,7 +2846,83 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_bug)
 
+        # ── Heading Marker ───────────────────────────────────────────────────
+        _cr_marker = _SubSection("Heading Marker", collapsed=True)
+        _cr_marker.row_widget(_sep_label(
+            "Fixed lubber-line/index at top-dead-centre — no dataref; the\n"
+            "rose rotates underneath it."
+        ))
+
+        self._cr_marker_radius = QDoubleSpinBox()
+        self._cr_marker_radius.setRange(-4096.0, 4096.0); self._cr_marker_radius.setDecimals(1)
+        self._cr_marker_radius.setValue(150.0)
+        self._cr_marker_radius.setToolTip(
+            "Distance from the rose centre where the marker's local origin sits\n"
+            "(usually the rose radius, so it sits right at the arc)."
+        )
+        self._cr_marker_radius.valueChanged.connect(self._emit)
+        _cr_marker.row("Radius px", self._cr_marker_radius)
+
+        self._cr_marker_pts = _PointsTableEditor()
+        self._cr_marker_pts.changed.connect(self._emit)
+        self._cr_marker_pts.setToolTip(
+            "Relative to the marker's own origin, in plain screen space\n"
+            "(no rotation applied — the marker never turns)."
+        )
+        _cr_marker.row("Points (relative to origin)", self._cr_marker_pts)
+
+        self._cr_marker_color = _ColorButton()
+        self._cr_marker_color.color_changed.connect(self._emit)
+        _cr_marker.row("Fill color", self._cr_marker_color)
+
+        self._cr_marker_filled = QCheckBox("Filled")
+        self._cr_marker_filled.setChecked(True)
+        self._cr_marker_filled.toggled.connect(self._on_cr_marker_filled_toggled)
+        self._cr_marker_filled.toggled.connect(self._emit)
+        _cr_marker.row_widget(self._cr_marker_filled)
+
+        self._cr_marker_width = QDoubleSpinBox()
+        self._cr_marker_width.setRange(0.5, 50.0); self._cr_marker_width.setDecimals(1)
+        self._cr_marker_width.setValue(2.0)
+        self._cr_marker_width.setEnabled(False)  # shown only when not filled
+        self._cr_marker_width.valueChanged.connect(self._emit)
+        _cr_marker.row("Outline width", self._cr_marker_width)
+
+        self._cr_marker_outline_chk = QCheckBox("Add outline")
+        self._cr_marker_outline_chk.toggled.connect(self._on_cr_marker_outline_toggled)
+        self._cr_marker_outline_chk.toggled.connect(self._emit)
+        _cr_marker.row_widget(self._cr_marker_outline_chk)
+
+        self._cr_marker_outline_color = _ColorButton()
+        self._cr_marker_outline_color.set_rgba((255, 255, 255, 255))
+        self._cr_marker_outline_color.setEnabled(False)
+        self._cr_marker_outline_color.color_changed.connect(self._emit)
+        _cr_marker.row("Outline color", self._cr_marker_outline_color)
+
+        self._cr_marker_outline_width = QDoubleSpinBox()
+        self._cr_marker_outline_width.setRange(0.5, 50.0); self._cr_marker_outline_width.setDecimals(1)
+        self._cr_marker_outline_width.setValue(1.0)
+        self._cr_marker_outline_width.setEnabled(False)
+        self._cr_marker_outline_width.valueChanged.connect(self._emit)
+        _cr_marker.row("Outline width ", self._cr_marker_outline_width)
+
+        self._cr_sec.row_widget(_cr_marker)
+
         self._vbox.addWidget(self._cr_sec)
+
+    def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
+        self._cr_marker_width.setEnabled(not filled)
+        self._cr_marker_outline_chk.setVisible(filled)
+        self._cr_marker_outline_color.setVisible(filled)
+        self._cr_marker_outline_width.setVisible(filled)
+        if not filled:
+            self._cr_marker_outline_chk.blockSignals(True)
+            self._cr_marker_outline_chk.setChecked(False)
+            self._cr_marker_outline_chk.blockSignals(False)
+
+    def _on_cr_marker_outline_toggled(self, on: bool) -> None:
+        self._cr_marker_outline_color.setEnabled(on)
+        self._cr_marker_outline_width.setEnabled(on)
 
     def _on_cr_bug_filled_toggled(self, filled: bool) -> None:
         self._cr_bug_width.setEnabled(not filled)
@@ -3277,7 +3353,7 @@ class PropertiesForm(QWidget):
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
-            "heading", "track", "heading_bug",
+            "heading", "track", "heading_bug", "heading_marker",
             # shared across all
             "viewport", "visibility",
         }
@@ -3820,6 +3896,29 @@ class PropertiesForm(QWidget):
         self._cr_bug_outline_width.setEnabled(has_bug_outline)
         self._cr_bug_outline_width.setVisible(bug_filled)
         self._cr_bug_outline_width.setValue(float(cr_bug.get("outline_width", 1.0)))
+        cr_marker = comp.get("heading_marker") or {}
+        self._cr_marker_radius.setValue(float(cr_marker.get("radius", comp.get("radius", 150.0))))
+        self._cr_marker_pts.load([[p[0], p[1]] for p in cr_marker.get("points", [])])
+        self._cr_marker_color.set_rgba(cr_marker.get("color", [255, 255, 255, 255]))
+        marker_filled = bool(cr_marker.get("filled", True))
+        self._cr_marker_filled.blockSignals(True)
+        self._cr_marker_filled.setChecked(marker_filled)
+        self._cr_marker_filled.blockSignals(False)
+        self._cr_marker_width.setEnabled(not marker_filled)
+        self._cr_marker_width.setValue(float(cr_marker.get("width", 2.0)))
+        marker_oc = cr_marker.get("outline_color")
+        has_marker_outline = marker_oc is not None and marker_filled
+        self._cr_marker_outline_chk.blockSignals(True)
+        self._cr_marker_outline_chk.setChecked(has_marker_outline)
+        self._cr_marker_outline_chk.blockSignals(False)
+        self._cr_marker_outline_chk.setVisible(marker_filled)
+        self._cr_marker_outline_color.setEnabled(has_marker_outline)
+        self._cr_marker_outline_color.setVisible(marker_filled)
+        self._cr_marker_outline_color.set_rgba(
+            marker_oc if marker_oc is not None else (255, 255, 255, 255))
+        self._cr_marker_outline_width.setEnabled(has_marker_outline)
+        self._cr_marker_outline_width.setVisible(marker_filled)
+        self._cr_marker_outline_width.setValue(float(cr_marker.get("outline_width", 1.0)))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -4087,6 +4186,21 @@ class PropertiesForm(QWidget):
                     bug["outline_color"] = list(self._cr_bug_outline_color.get_rgba())
                     bug["outline_width"] = self._cr_bug_outline_width.value()
                 data["heading_bug"] = bug
+            cr_marker_pts = self._cr_marker_pts.get_data()
+            if cr_marker_pts:
+                marker_filled = self._cr_marker_filled.isChecked()
+                marker: dict = {
+                    "radius": self._cr_marker_radius.value(),
+                    "points": cr_marker_pts,
+                    "color": list(self._cr_marker_color.get_rgba()),
+                    "filled": marker_filled,
+                }
+                if not marker_filled:
+                    marker["width"] = self._cr_marker_width.value()
+                elif self._cr_marker_outline_chk.isChecked():
+                    marker["outline_color"] = list(self._cr_marker_outline_color.get_rgba())
+                    marker["outline_width"] = self._cr_marker_outline_width.value()
+                data["heading_marker"] = marker
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -4616,6 +4730,11 @@ class PropertiesForm(QWidget):
         self._cr_bug_filled.setChecked(True); self._cr_bug_width.setValue(2.0)
         self._cr_bug_outline_chk.setChecked(False)
         self._cr_bug_outline_color.set_rgba(None); self._cr_bug_outline_width.setValue(1.0)
+        self._cr_marker_radius.setValue(150.0); self._cr_marker_pts.load([])
+        self._cr_marker_color.set_rgba(None)
+        self._cr_marker_filled.setChecked(True); self._cr_marker_width.setValue(2.0)
+        self._cr_marker_outline_chk.setChecked(False)
+        self._cr_marker_outline_color.set_rgba(None); self._cr_marker_outline_width.setValue(1.0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
