@@ -18,6 +18,7 @@ from pathlib import Path
 import gauge_core.convert as _convert_reg  # noqa: F401 — registers convert functions
 import gauge_core.component as _component_reg  # noqa: F401
 from gauge_core.registry import known_converts
+from gauge_core.needle_gauge import _parse_spacing_row as _ng_pad_spacing_row
 from gauge_designer.ui_utils import flip_y, is_y_down, QSpinBox, QDoubleSpinBox
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QFormLayout, QHBoxLayout,
@@ -2550,12 +2551,16 @@ class PropertiesForm(QWidget):
         self._ng_orientation.currentTextChanged.connect(self._emit)
         lform.addRow("Orientation", self._ng_orientation)
 
-        self._ng_spacing_table = _TableEditor("Value", "Offset px", use_spinboxes=True, decimals=2)
+        self._ng_spacing_table = _TableEditor(
+            "Value", "Offset px", "Length px", "Width px",
+            use_spinboxes=True, decimals=2,
+        )
         self._ng_spacing_table.setToolTip(
-            "Value -> pixel offset from centre, interpolated piecewise-\n"
-            "linearly between rows. Not uniform spacing — hand-tune this\n"
-            "to match a real gauge's scale (e.g. a VSI tape where spacing\n"
-            "compresses at higher values)."
+            "One row = one fully-styled tick: value, pixel offset from\n"
+            "centre, length, and width. No interpolation and no interval-\n"
+            "based generation — exactly the rows you enter are what gets\n"
+            "drawn, so a gauge with hand-tuned, non-uniform spacing (e.g. a\n"
+            "VSI tape where spacing compresses at higher values) is exact."
         )
         self._ng_spacing_table.changed.connect(self._emit)
         lform.addRow("Spacing table", self._ng_spacing_table)
@@ -2573,23 +2578,13 @@ class PropertiesForm(QWidget):
         self._ng_tick_color.color_changed.connect(self._emit)
         lform.addRow("Tick color", self._ng_tick_color)
 
-        self._ng_ticks = _TableEditor("Interval", "Length px", "Width px",
-                                      use_spinboxes=True, decimals=2,
-                                      value_range=(0.0, 99999.0))
-        self._ng_ticks.setToolTip(
-            "One row per tick group, e.g. a minor-tick row every 1 unit\n"
-            "plus a thicker major-tick row every 2 units. Positioned via\n"
-            "the Spacing table above, not a fixed pixels-per-unit."
+        self._ng_show_labels = QCheckBox("Show labels")
+        self._ng_show_labels.setChecked(True)
+        self._ng_show_labels.setToolTip(
+            "One label per Spacing table row, at that row's value and position."
         )
-        self._ng_ticks.changed.connect(self._emit)
-        lform.addRow("Ticks", self._ng_ticks)
-
-        self._ng_label_interval = QDoubleSpinBox()
-        self._ng_label_interval.setRange(0.0, 1000.0); self._ng_label_interval.setDecimals(2)
-        self._ng_label_interval.setValue(1.0)
-        self._ng_label_interval.setSpecialValueText("(no labels)")
-        self._ng_label_interval.valueChanged.connect(self._emit)
-        lform.addRow("Label interval", self._ng_label_interval)
+        self._ng_show_labels.toggled.connect(self._emit)
+        lform.addRow(self._ng_show_labels)
 
         self._ng_label_format = QLineEdit()
         self._ng_label_format.setPlaceholderText("{:.0f}")
@@ -3950,15 +3945,11 @@ class PropertiesForm(QWidget):
         self._ng_segments.setValue(int(comp.get("num_segments", 64)))
         ng_lin = comp.get("linear") or {}
         self._ng_orientation.setCurrentText(str(ng_lin.get("orientation", "vertical")))
-        self._ng_spacing_table.load(ng_lin.get("spacing_table", []))
+        self._ng_spacing_table.load([_ng_pad_spacing_row(row) for row in ng_lin.get("spacing_table", [])])
         self._ng_tick_side.setCurrentText(str(ng_lin.get("tick_side", "left")))
         self._ng_tick_color.set_rgba(ng_lin.get("tick_color", [255, 255, 255, 255]))
-        self._ng_ticks.load([
-            [t.get("interval", 1.0), t.get("length", 10.0), t.get("width", 1.0)]
-            for t in ng_lin.get("ticks", [])
-        ])
         ng_labels = ng_lin.get("labels") or {}
-        self._ng_label_interval.setValue(float(ng_labels.get("interval", 1.0)))
+        self._ng_show_labels.setChecked(bool(ng_lin.get("labels")))
         self._ng_label_format.setText(str(ng_labels.get("format", "")))
         self._ng_label_font_size.setValue(float(ng_labels.get("font_size", 14.0)))
         self._ng_label_color.set_rgba(ng_labels.get("color", [255, 255, 255, 255]))
@@ -4243,14 +4234,9 @@ class PropertiesForm(QWidget):
                     "spacing_table": self._ng_spacing_table.get_data(),
                     "tick_side": self._ng_tick_side.currentText(),
                     "tick_color": list(self._ng_tick_color.get_rgba()),
-                    "ticks": [
-                        {"interval": row[0], "length": row[1], "width": row[2]}
-                        for row in self._ng_ticks.get_data()
-                    ],
                 }
-                li = self._ng_label_interval.value()
-                if li > 0:
-                    labels: dict = {"interval": li}
+                if self._ng_show_labels.isChecked():
+                    labels: dict = {}
                     fmt = self._ng_label_format.text().strip()
                     if fmt:
                         labels["format"] = fmt
@@ -4880,8 +4866,8 @@ class PropertiesForm(QWidget):
         self._ng_spacing_table.load([])
         self._ng_tick_side.setCurrentIndex(0)
         self._ng_tick_color.set_rgba(None)
-        self._ng_ticks.load([])
-        self._ng_label_interval.setValue(1.0); self._ng_label_format.clear()
+        self._ng_show_labels.setChecked(True)
+        self._ng_label_format.clear()
         self._ng_label_font_size.setValue(14.0); self._ng_label_color.set_rgba(None)
         self._ng_label_offset.setValue(8.0)
         self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)

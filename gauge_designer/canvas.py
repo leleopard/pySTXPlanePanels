@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
 
 from gauge_core.emphasize import split_at_place
-from gauge_core.lookup import lookup_piecewise
+from gauge_core.needle_gauge import _parse_spacing_row as _ng_pad_spacing_row
 from gauge_designer.ui_utils import is_y_down
 
 
@@ -751,50 +751,37 @@ class InstrumentCanvas(QWidget):
 
     def _render_needlegauge_linear(self, comp: dict, draw: ImageDraw.ImageDraw,
                                    cx_p: float, cy_p: float) -> None:
+        """One spacing_table row = one fully-styled tick — no interval-based
+        generation, no interpolation. See gauge_core/needle_gauge.py."""
         lin = comp.get("linear") or {}
-        table = [[float(p[0]), float(p[1])] for p in lin.get("spacing_table", [])]
+        table = [_ng_pad_spacing_row(p) for p in lin.get("spacing_table", [])]
         if not table:
             return
         vertical = str(lin.get("orientation", "vertical")) == "vertical"
         side = str(lin.get("tick_side", "left"))
-        default_color = _rgba(lin.get("tick_color"))
-        v_min, v_max = table[0][0], table[-1][0]
+        tick_color = _rgba(lin.get("tick_color"))
 
-        for group in lin.get("ticks", []):
-            interval = float(group.get("interval", 1.0))
-            if interval <= 0:
-                continue
-            length = float(group.get("length", 10.0))
-            width = max(1, int(round(float(group.get("width", 1.0)))))
-            gcolor = _rgba(group["color"]) if group.get("color") is not None else default_color
-            v = v_min
-            while v <= v_max + interval * 0.001:
-                off = lookup_piecewise(table, v)
-                if vertical:
-                    x0, x1 = (cx_p - length, cx_p) if side == "left" else (cx_p, cx_p + length)
-                    y = cy_p - off
-                    draw.line([(x0, y), (x1, y)], fill=gcolor, width=width)
-                else:
-                    y0, y1 = (cy_p - length, cy_p) if side == "top" else (cy_p, cy_p + length)
-                    x = cx_p + off
-                    draw.line([(x, y0), (x, y1)], fill=gcolor, width=width)
-                v += interval
+        for value, off, length, width in table:
+            width = max(1, int(round(width)))
+            if vertical:
+                x0, x1 = (cx_p - length, cx_p) if side == "left" else (cx_p, cx_p + length)
+                y = cy_p - off
+                draw.line([(x0, y), (x1, y)], fill=tick_color, width=width)
+            else:
+                y0, y1 = (cy_p - length, cy_p) if side == "top" else (cy_p, cy_p + length)
+                x = cx_p + off
+                draw.line([(x, y0), (x, y1)], fill=tick_color, width=width)
 
         labels = lin.get("labels")
         if not labels:
-            return
-        interval = float(labels.get("interval", 1.0))
-        if interval <= 0:
             return
         fmt = labels.get("format") or "{:.0f}"
         fsize = max(8, int(float(labels.get("font_size", 14.0))))
         font = _pil_font(None, fsize)
         lcolor = _rgba(labels.get("color"))
         offset = float(labels.get("offset", 8.0))
-        v = v_min
-        while v <= v_max + interval * 0.001:
-            off = lookup_piecewise(table, v)
-            text = fmt.format(v)
+        for value, off, _length, _width in table:
+            text = fmt.format(value)
             if vertical:
                 ly = cy_p - off
                 if side == "left":
@@ -807,7 +794,6 @@ class InstrumentCanvas(QWidget):
                     draw.text((lx, cy_p - offset), text, fill=lcolor, font=font, anchor="mb")
                 else:
                     draw.text((lx, cy_p + offset), text, fill=lcolor, font=font, anchor="mt")
-            v += interval
 
     @staticmethod
     def _crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:

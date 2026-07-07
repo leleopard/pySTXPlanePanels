@@ -8,13 +8,18 @@ gradation type). The scale around it is either:
 - circular (default): a fixed arc, same as this component's original
   behaviour. Tick/label support for this mode is a deferred follow-up.
 - linear: a vertical or horizontal tape of ticks + labels next to which the
-  needle sweeps (e.g. a VSI-style vertical speed tape). Tick/label pixel
-  position is driven by an explicit user-authored `spacing_table`
-  (value -> pixel offset from centre, interpolated piecewise-linearly via
-  lookup_piecewise) rather than a uniform-pixels-per-unit or log formula —
-  real-world tapes like a VSI are hand-tuned, not a clean mathematical
-  curve. The needle's own value->angle table is calibrated independently
-  of the tick spacing table.
+  needle sweeps (e.g. a VSI-style vertical speed tape). Every row of the
+  `spacing_table` is one fully-styled tick (value, pixel offset from
+  centre, length, width) — no interval-based generation and no
+  interpolation between rows, so the table is exactly what gets drawn, one
+  row in, one tick out. This is a deliberate simplification: an earlier
+  version walked from the table's min to max value at a fixed interval,
+  interpolating a position for any value that wasn't an explicit
+  breakpoint — which meant adding a single new row (e.g. extending the
+  table from 1,2 to 1,2,6) silently grew *unwanted* interpolated ticks at
+  3, 4, 5 too. Labels use the same one-row-one-label rule. The needle's
+  own value->angle table remains a separate, independently-calibrated
+  lookup (unchanged mechanism).
 
 Angle convention (Arcade): 0° = right (3 o'clock), CCW positive.
 
@@ -45,25 +50,17 @@ YAML schema
       # Linear mode only:
       linear:
         orientation: vertical       # vertical | horizontal
-        spacing_table:              # value -> px offset from centre
-          - [-6, -132]
-          - [-2, -68]
-          - [-1, -40]
-          - [0, 0]
-          - [1, 40]
-          - [2, 68]
-          - [6, 132]
+        spacing_table:              # one row = one tick: [value, px offset from centre, length px, width px]
+          - [-6, -132, 18, 2.0]
+          - [-2, -68, 10, 1.5]
+          - [-1, -40, 10, 1.5]
+          - [0, 0, 18, 2.0]
+          - [1, 40, 10, 1.5]
+          - [2, 68, 10, 1.5]
+          - [6, 132, 18, 2.0]
         tick_side: left             # left|right (vertical) or top|bottom (horizontal)
-        tick_color: [255, 255, 255, 255]   # shared default; a group may override via color:
-        ticks:
-          - interval: 1             # minor ticks, positioned via spacing_table
-            length: 10
-            width: 1.5
-          - interval: 2             # a second group, e.g. thicker major ticks
-            length: 18
-            width: 2.0
-        labels:
-          interval: 1
+        tick_color: [255, 255, 255, 255]   # shared by every tick
+        labels:                      # optional; one label per spacing_table row
           format: "{:.0f}"
           font_size: 14
           color: [255, 255, 255, 255]
@@ -122,13 +119,13 @@ class NeedleGauge(_VecBase):
         self._needle_table: list = []
         self._needle_convert: Callable | None = None
 
-        # Linear mode (optional; enabled by calling set_linear()).
+        # Linear mode (optional; enabled by calling set_linear()). Each
+        # spacing_table row is [value, offset, length, width] — one row,
+        # one fully-styled tick, no interval-based generation.
         self._orientation = "vertical"
         self._spacing_table: list = []
         self._tick_side = "left"
-        self._ticks: list[dict] = []
         self._tick_color: tuple[int, int, int, int] = (255, 255, 255, 255)
-        self._label_interval = 1.0
         self._label_format = "{:.0f}"
         self._label_font_size = 14.0
         self._label_color: tuple[int, int, int, int] = (255, 255, 255, 255)
@@ -154,18 +151,15 @@ class NeedleGauge(_VecBase):
         orientation: str,
         spacing_table: list,
         tick_side: str,
-        ticks: list[dict],
         labels: dict | None,
         tick_color: tuple[int, int, int, int] | None = None,
     ) -> None:
         self._orientation = orientation
         self._spacing_table = spacing_table
         self._tick_side = tick_side
-        self._ticks = ticks
         if tick_color is not None:
             self._tick_color = tick_color
         if labels:
-            self._label_interval = float(labels.get("interval", 1.0))
             self._label_format = str(labels.get("format", "{:.0f}"))
             self._label_font_size = float(labels.get("font_size", 14.0))
             self._label_color = _as_color(labels.get("color"))
@@ -178,10 +172,10 @@ class NeedleGauge(_VecBase):
         self._arc_width *= scale
         self._needle_length *= scale
         self._needle_width *= scale
-        self._spacing_table = [[v, off * scale] for v, off in self._spacing_table]
-        for group in self._ticks:
-            group["length"] = float(group.get("length", 10.0)) * scale
-            group["width"] = float(group.get("width", 1.0)) * scale
+        self._spacing_table = [
+            [v, off * scale, length * scale, width * scale]
+            for v, off, length, width in self._spacing_table
+        ]
         self._label_font_size *= scale
         self._label_offset *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
@@ -220,48 +214,27 @@ class NeedleGauge(_VecBase):
             self._segments,
         )
 
-    def _value_to_offset(self, value: float) -> float:
-        return lookup_piecewise(self._spacing_table, value)
-
     def _draw_linear(self) -> None:
         if not self._spacing_table:
             return
-        v_min = self._spacing_table[0][0]
-        v_max = self._spacing_table[-1][0]
         vertical = self._orientation == "vertical"
         side = self._tick_side
 
-        for group in self._ticks:
-            interval = float(group.get("interval", 1.0))
-            if interval <= 0:
-                continue
-            length = float(group.get("length", 10.0))
-            width = float(group.get("width", 1.0))
-            color = group.get("color") or self._tick_color
-            v = v_min
-            while v <= v_max + interval * 0.001:
-                off = self._value_to_offset(v)
-                if vertical:
-                    x0, x1 = (self._cx - length, self._cx) if side == "left" else (self._cx, self._cx + length)
-                    y = self._cy + off
-                    arcade.draw_line(x0, y, x1, y, color, width)
-                else:
-                    y0, y1 = (self._cy, self._cy + length) if side == "top" else (self._cy - length, self._cy)
-                    x = self._cx + off
-                    arcade.draw_line(x, y0, x, y1, color, width)
-                v += interval
+        for value, off, length, width in self._spacing_table:
+            if vertical:
+                x0, x1 = (self._cx - length, self._cx) if side == "left" else (self._cx, self._cx + length)
+                y = self._cy + off
+                arcade.draw_line(x0, y, x1, y, self._tick_color, width)
+            else:
+                y0, y1 = (self._cy, self._cy + length) if side == "top" else (self._cy - length, self._cy)
+                x = self._cx + off
+                arcade.draw_line(x, y0, x, y1, self._tick_color, width)
 
         if self._show_labels:
-            self._draw_linear_labels(v_min, v_max, vertical, side)
+            self._draw_linear_labels(vertical, side)
 
-    def _draw_linear_labels(self, v_min: float, v_max: float, vertical: bool, side: str) -> None:
-        interval = self._label_interval
-        if interval <= 0:
-            return
-        idx = 0
-        v = v_min
-        while v <= v_max + interval * 0.001:
-            off = self._value_to_offset(v)
+    def _draw_linear_labels(self, vertical: bool, side: str) -> None:
+        for idx, (value, off, _length, _width) in enumerate(self._spacing_table):
             if idx >= len(self._label_pool):
                 self._label_pool.append(arcade.Text(
                     "", 0, 0,
@@ -270,7 +243,7 @@ class NeedleGauge(_VecBase):
                     anchor_x="center", anchor_y="center",
                 ))
             t = self._label_pool[idx]
-            t.text = self._label_format.format(v)
+            t.text = self._label_format.format(value)
             if vertical:
                 if side == "left":
                     t.x, t.anchor_x = self._cx - self._label_offset, "right"
@@ -284,8 +257,6 @@ class NeedleGauge(_VecBase):
                 else:
                     t.y, t.anchor_y = self._cy - self._label_offset, "top"
             t.draw()
-            idx += 1
-            v += interval
 
     def _draw_needle(self) -> None:
         angle_rad = math.radians(self._needle_angle)
@@ -293,6 +264,14 @@ class NeedleGauge(_VecBase):
         ey = self._cy + self._needle_length * math.sin(angle_rad)
         arcade.draw_line(self._cx, self._cy, ex, ey,
                          self._needle_color, self._needle_width)
+
+
+def _parse_spacing_row(row: list) -> list[float]:
+    """[value, offset] or [value, offset, length, width]; length/width
+    default to a sane minor-tick style when a row omits them."""
+    if len(row) >= 4:
+        return [float(row[0]), float(row[1]), float(row[2]), float(row[3])]
+    return [float(row[0]), float(row[1]), 10.0, 1.5]
 
 
 def _needle_gauge_factory(
@@ -329,21 +308,11 @@ def _needle_gauge_factory(
 
     linear_cfg = comp.get("linear")
     if linear_cfg:
-        ticks = [
-            {
-                "interval": float(t.get("interval", 1.0)),
-                "length": float(t.get("length", 10.0)),
-                "width": float(t.get("width", 1.0)),
-                "color": _as_color(t["color"]) if t.get("color") is not None else None,
-            }
-            for t in linear_cfg.get("ticks", [])
-        ]
         tick_color = linear_cfg.get("tick_color")
         ng.set_linear(
             orientation=str(linear_cfg.get("orientation", "vertical")),
-            spacing_table=[[float(p[0]), float(p[1])] for p in linear_cfg.get("spacing_table", [])],
+            spacing_table=[_parse_spacing_row(p) for p in linear_cfg.get("spacing_table", [])],
             tick_side=str(linear_cfg.get("tick_side", "left")),
-            ticks=ticks,
             labels=linear_cfg.get("labels"),
             tick_color=_as_color(tick_color) if tick_color is not None else None,
         )
