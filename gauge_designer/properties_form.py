@@ -2592,11 +2592,37 @@ class PropertiesForm(QWidget):
         self._ng_label_format.editingFinished.connect(self._emit)
         lform.addRow("Label format", self._ng_label_format)
 
+        self._ng_label_font = QLineEdit()
+        self._ng_label_font.setPlaceholderText("Arial  (blank = default)")
+        self._ng_label_font.editingFinished.connect(self._emit)
+        _ng_font_btn = QPushButton("…")
+        _ng_font_btn.setFixedWidth(28)
+        _ng_font_btn.setToolTip("Choose font")
+        _ng_font_btn.clicked.connect(self._pick_ng_label_font)
+        _ng_font_row = QWidget()
+        _ng_font_hl = QHBoxLayout(_ng_font_row)
+        _ng_font_hl.setContentsMargins(0, 0, 0, 0); _ng_font_hl.setSpacing(4)
+        _ng_font_hl.addWidget(self._ng_label_font)
+        _ng_font_hl.addWidget(_ng_font_btn)
+        lform.addRow("Label font", _ng_font_row)
+
         self._ng_label_font_size = QDoubleSpinBox()
         self._ng_label_font_size.setRange(4.0, 120.0); self._ng_label_font_size.setDecimals(1)
         self._ng_label_font_size.setValue(14.0)
         self._ng_label_font_size.valueChanged.connect(self._emit)
         lform.addRow("Label font size", self._ng_label_font_size)
+
+        _ng_style_row = QWidget()
+        _ng_style_hl = QHBoxLayout(_ng_style_row)
+        _ng_style_hl.setContentsMargins(0, 0, 0, 0); _ng_style_hl.setSpacing(12)
+        self._ng_label_bold = QCheckBox("Bold")
+        self._ng_label_bold.toggled.connect(self._emit)
+        self._ng_label_italic = QCheckBox("Italic")
+        self._ng_label_italic.toggled.connect(self._emit)
+        _ng_style_hl.addWidget(self._ng_label_bold)
+        _ng_style_hl.addWidget(self._ng_label_italic)
+        _ng_style_hl.addStretch()
+        lform.addRow("Label style", _ng_style_row)
 
         self._ng_label_color = _ColorButton()
         self._ng_label_color.color_changed.connect(self._emit)
@@ -3071,6 +3097,22 @@ class PropertiesForm(QWidget):
     def _on_cr_line_toggled(self, on: bool) -> None:
         self._cr_line_color.setEnabled(on)
         self._cr_line_width.setEnabled(on)
+
+    def _pick_ng_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
+        current_name = self._ng_label_font.text().strip() or "Arial"
+        current_size = int(self._ng_label_font_size.value())
+        initial = QFont(current_name, current_size)
+        initial.setBold(self._ng_label_bold.isChecked())
+        initial.setItalic(self._ng_label_italic.isChecked())
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._ng_label_font.setText(strip_style_suffix(font.family()))
+            self._ng_label_font_size.setValue(float(font.pointSize()))
+            self._ng_label_bold.setChecked(font.bold())
+            self._ng_label_italic.setChecked(font.italic())
+            self._emit()
 
     def _pick_cr_label_font(self) -> None:
         from PySide6.QtGui import QFont
@@ -3951,7 +3993,10 @@ class PropertiesForm(QWidget):
         ng_labels = ng_lin.get("labels") or {}
         self._ng_show_labels.setChecked(bool(ng_lin.get("labels")))
         self._ng_label_format.setText(str(ng_labels.get("format", "")))
+        self._ng_label_font.setText(str(ng_labels.get("font", "")))
         self._ng_label_font_size.setValue(float(ng_labels.get("font_size", 14.0)))
+        self._ng_label_bold.setChecked(bool(ng_labels.get("bold", False)))
+        self._ng_label_italic.setChecked(bool(ng_labels.get("italic", False)))
         self._ng_label_color.set_rgba(ng_labels.get("color", [255, 255, 255, 255]))
         self._ng_label_offset.setValue(float(ng_labels.get("offset", 8.0)))
         self._ng_needle_len.setValue(float(comp.get("needle_length", 80.0)))
@@ -4240,7 +4285,14 @@ class PropertiesForm(QWidget):
                     fmt = self._ng_label_format.text().strip()
                     if fmt:
                         labels["format"] = fmt
+                    font = self._ng_label_font.text().strip()
+                    if font:
+                        labels["font"] = font
                     labels["font_size"] = self._ng_label_font_size.value()
+                    if self._ng_label_bold.isChecked():
+                        labels["bold"] = True
+                    if self._ng_label_italic.isChecked():
+                        labels["italic"] = True
                     labels["color"] = list(self._ng_label_color.get_rgba())
                     labels["offset"] = self._ng_label_offset.value()
                     lin["labels"] = labels
@@ -4868,7 +4920,9 @@ class PropertiesForm(QWidget):
         self._ng_tick_color.set_rgba(None)
         self._ng_show_labels.setChecked(True)
         self._ng_label_format.clear()
+        self._ng_label_font.clear()
         self._ng_label_font_size.setValue(14.0); self._ng_label_color.set_rgba(None)
+        self._ng_label_bold.setChecked(False); self._ng_label_italic.setChecked(False)
         self._ng_label_offset.setValue(8.0)
         self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)
         self._ng_needle_color.set_rgba(None)

@@ -777,7 +777,9 @@ class InstrumentCanvas(QWidget):
             return
         fmt = labels.get("format") or "{:.0f}"
         fsize = max(8, int(float(labels.get("font_size", 14.0))))
-        font = _pil_font(None, fsize)
+        font = _pil_font(labels.get("font"), fsize,
+                         bold=bool(labels.get("bold", False)),
+                         italic=bool(labels.get("italic", False)))
         lcolor = _rgba(labels.get("color"))
         offset = float(labels.get("offset", 8.0))
         for value, off, _length, _width in table:

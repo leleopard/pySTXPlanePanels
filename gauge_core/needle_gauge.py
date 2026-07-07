@@ -62,7 +62,10 @@ YAML schema
         tick_color: [255, 255, 255, 255]   # shared by every tick
         labels:                      # optional; one label per spacing_table row
           format: "{:.0f}"
+          font: ST_Boeing_PFD        # optional; blank = designer/OS default
           font_size: 14
+          bold: false
+          italic: false
           color: [255, 255, 255, 255]
           offset: 8                 # gap from centre past the tick
 """
@@ -75,6 +78,7 @@ from typing import Any, Callable
 
 import arcade
 
+from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component, resolve_predicate_name
 from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
@@ -127,7 +131,10 @@ class NeedleGauge(_VecBase):
         self._tick_side = "left"
         self._tick_color: tuple[int, int, int, int] = (255, 255, 255, 255)
         self._label_format = "{:.0f}"
+        self._label_font: str | None = None
         self._label_font_size = 14.0
+        self._label_bold = False
+        self._label_italic = False
         self._label_color: tuple[int, int, int, int] = (255, 255, 255, 255)
         self._label_offset = 8.0
         self._show_labels = False
@@ -153,6 +160,9 @@ class NeedleGauge(_VecBase):
         tick_side: str,
         labels: dict | None,
         tick_color: tuple[int, int, int, int] | None = None,
+        label_font: str | None = None,
+        label_bold: bool = False,
+        label_italic: bool = False,
     ) -> None:
         self._orientation = orientation
         self._spacing_table = spacing_table
@@ -161,10 +171,14 @@ class NeedleGauge(_VecBase):
             self._tick_color = tick_color
         if labels:
             self._label_format = str(labels.get("format", "{:.0f}"))
+            self._label_font = label_font
             self._label_font_size = float(labels.get("font_size", 14.0))
+            self._label_bold = label_bold
+            self._label_italic = label_italic
             self._label_color = _as_color(labels.get("color"))
             self._label_offset = float(labels.get("offset", 8.0))
             self._show_labels = True
+            self._label_pool.clear()  # font changed; pool objects are stale
 
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
@@ -236,11 +250,15 @@ class NeedleGauge(_VecBase):
     def _draw_linear_labels(self, vertical: bool, side: str) -> None:
         for idx, (value, off, _length, _width) in enumerate(self._spacing_table):
             if idx >= len(self._label_pool):
+                kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
+                if self._label_font:
+                    kw["font_name"] = self._label_font
                 self._label_pool.append(arcade.Text(
                     "", 0, 0,
                     color=self._label_color,
                     font_size=self._label_font_size,
                     anchor_x="center", anchor_y="center",
+                    **kw,
                 ))
             t = self._label_pool[idx]
             t.text = self._label_format.format(value)
@@ -309,12 +327,22 @@ def _needle_gauge_factory(
     linear_cfg = comp.get("linear")
     if linear_cfg:
         tick_color = linear_cfg.get("tick_color")
+        labels_cfg = linear_cfg.get("labels") or {}
+        label_font, label_bold, label_italic = resolve_font_for_arcade(
+            labels_cfg.get("font"), base_dir,
+            bold=bool(labels_cfg.get("bold", False)),
+            italic=bool(labels_cfg.get("italic", False)),
+            explicit_file=labels_cfg.get("font_file"),
+        )
         ng.set_linear(
             orientation=str(linear_cfg.get("orientation", "vertical")),
             spacing_table=[_parse_spacing_row(p) for p in linear_cfg.get("spacing_table", [])],
             tick_side=str(linear_cfg.get("tick_side", "left")),
             labels=linear_cfg.get("labels"),
             tick_color=_as_color(tick_color) if tick_color is not None else None,
+            label_font=label_font,
+            label_bold=label_bold,
+            label_italic=label_italic,
         )
 
     if "visibility" in comp:
