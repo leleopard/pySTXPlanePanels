@@ -165,7 +165,7 @@ def _collect_from_instrument(
                               convert_fn=endpoint.get("convert_function"))
 
         # Dict-valued fields that may contain a dataref+table
-        # (Vector direction/length, CircularGauge needle_angle, …)
+        # (Vector direction/length, NeedleGauge needle_angle, …)
         for field in ("direction", "length", "needle_angle"):
             val = comp.get(field)
             if isinstance(val, dict) and "dataref" in val:

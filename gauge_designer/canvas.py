@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
 
 from gauge_core.emphasize import split_at_place
+from gauge_core.lookup import lookup_piecewise
 from gauge_designer.ui_utils import is_y_down
 
 
@@ -587,6 +588,8 @@ class InstrumentCanvas(QWidget):
                     self._render_compassrose(comp, composite, draw, h)
                 elif ctype == "RotaryEncoder":
                     self._render_rotary_encoder(comp, composite, draw, h)
+                elif ctype == "NeedleGauge":
+                    self._render_needlegauge(comp, draw, h)
                 elif ctype == "Text":
                     self._render_text(comp, draw, h)
             except Exception:
@@ -631,6 +634,23 @@ class InstrumentCanvas(QWidget):
                     r = int(round(float(comp.get("radius", 50))))
                     cx_p, cy_p = int(ctr[0]), h - int(ctr[1])
                     draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r], outline=SEL, width=3)
+                elif ctype == "NeedleGauge":
+                    ctr = comp.get("center", [0, 0])
+                    cx_p, cy_p = int(ctr[0]), h - int(ctr[1])
+                    if str(comp.get("gradation_type", "circular")) == "linear":
+                        lin = comp.get("linear") or {}
+                        table = lin.get("spacing_table", [])
+                        half = max((abs(p[1]) for p in table), default=50)
+                        vertical = str(lin.get("orientation", "vertical")) == "vertical"
+                        if vertical:
+                            draw.rectangle([cx_p - 40, cy_p - int(half) - 10,
+                                           cx_p + 40, cy_p + int(half) + 10], outline=SEL, width=2)
+                        else:
+                            draw.rectangle([cx_p - int(half) - 10, cy_p - 40,
+                                           cx_p + int(half) + 10, cy_p + 40], outline=SEL, width=2)
+                    else:
+                        r = int(round(float(comp.get("radius", 50))))
+                        draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r], outline=SEL, width=3)
                 elif ctype in ("FilledRect", "RotaryEncoder"):
                     pos = comp.get("position", [0, 0]); sz = comp.get("size", [100, 100])
                     cx_p, cy_p = int(pos[0]), h - int(pos[1])
@@ -693,6 +713,101 @@ class InstrumentCanvas(QWidget):
         # Arcade uses CCW angles in y-up space; PIL uses CW angles in y-down space.
         # Flipping y negates all angles, so swap and negate: pil_start=-ea, pil_end=-sa.
         draw.arc(bbox, -ea, -sa, fill=color, width=width)
+
+    def _render_needlegauge(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+        ctr = comp.get("center", [0, 0])
+        cx_p, cy_p = float(ctr[0]), canvas_h - float(ctr[1])
+        grad = str(comp.get("gradation_type", "circular"))
+
+        if grad == "linear":
+            self._render_needlegauge_linear(comp, draw, cx_p, cy_p)
+        else:
+            r = float(comp.get("radius", 100.0))
+            sa = float(comp.get("start_angle", -220.0))
+            ea = float(comp.get("end_angle", 40.0))
+            acolor = _rgba(comp.get("arc_color") or comp.get("color"))
+            awidth = max(1, int(round(float(comp.get("arc_width", 2.0)))))
+            bbox = [cx_p - r, cy_p - r, cx_p + r, cy_p + r]
+            draw.arc(bbox, -ea, -sa, fill=acolor, width=awidth)
+
+        # Needle — no live dataref value in the static preview, so use a
+        # representative mid-scale angle when dataref-driven.
+        angle_cfg = comp.get("needle_angle", -220.0)
+        if isinstance(angle_cfg, dict):
+            table = angle_cfg.get("table") or [[0, 0]]
+            angles = [row[1] for row in table]
+            angle = (min(angles) + max(angles)) / 2.0
+        else:
+            angle = float(angle_cfg)
+        length = float(comp.get("needle_length", 150.0))
+        ncolor = _rgba(comp.get("needle_color") or comp.get("color"))
+        nwidth = max(1, int(round(float(comp.get("needle_width", 2.0)))))
+        angle_rad = math.radians(angle)
+        ex = cx_p + length * math.cos(angle_rad)
+        # PIL y is flipped vs. Arcade; negate the sin term (same rule the
+        # Arc/Vector selection-highlight code above already applies).
+        ey = cy_p - length * math.sin(angle_rad)
+        draw.line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
+
+    def _render_needlegauge_linear(self, comp: dict, draw: ImageDraw.ImageDraw,
+                                   cx_p: float, cy_p: float) -> None:
+        lin = comp.get("linear") or {}
+        table = [[float(p[0]), float(p[1])] for p in lin.get("spacing_table", [])]
+        if not table:
+            return
+        vertical = str(lin.get("orientation", "vertical")) == "vertical"
+        side = str(lin.get("tick_side", "left"))
+        default_color = _rgba(lin.get("tick_color"))
+        v_min, v_max = table[0][0], table[-1][0]
+
+        for group in lin.get("ticks", []):
+            interval = float(group.get("interval", 1.0))
+            if interval <= 0:
+                continue
+            length = float(group.get("length", 10.0))
+            width = max(1, int(round(float(group.get("width", 1.0)))))
+            gcolor = _rgba(group["color"]) if group.get("color") is not None else default_color
+            v = v_min
+            while v <= v_max + interval * 0.001:
+                off = lookup_piecewise(table, v)
+                if vertical:
+                    x0, x1 = (cx_p - length, cx_p) if side == "left" else (cx_p, cx_p + length)
+                    y = cy_p - off
+                    draw.line([(x0, y), (x1, y)], fill=gcolor, width=width)
+                else:
+                    y0, y1 = (cy_p - length, cy_p) if side == "top" else (cy_p, cy_p + length)
+                    x = cx_p + off
+                    draw.line([(x, y0), (x, y1)], fill=gcolor, width=width)
+                v += interval
+
+        labels = lin.get("labels")
+        if not labels:
+            return
+        interval = float(labels.get("interval", 1.0))
+        if interval <= 0:
+            return
+        fmt = labels.get("format") or "{:.0f}"
+        fsize = max(8, int(float(labels.get("font_size", 14.0))))
+        font = _pil_font(None, fsize)
+        lcolor = _rgba(labels.get("color"))
+        offset = float(labels.get("offset", 8.0))
+        v = v_min
+        while v <= v_max + interval * 0.001:
+            off = lookup_piecewise(table, v)
+            text = fmt.format(v)
+            if vertical:
+                ly = cy_p - off
+                if side == "left":
+                    draw.text((cx_p - offset, ly), text, fill=lcolor, font=font, anchor="rm")
+                else:
+                    draw.text((cx_p + offset, ly), text, fill=lcolor, font=font, anchor="lm")
+            else:
+                lx = cx_p + off
+                if side == "top":
+                    draw.text((lx, cy_p - offset), text, fill=lcolor, font=font, anchor="mb")
+                else:
+                    draw.text((lx, cy_p + offset), text, fill=lcolor, font=font, anchor="mt")
+            v += interval
 
     @staticmethod
     def _crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:

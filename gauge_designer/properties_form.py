@@ -196,7 +196,7 @@ def _str_to_pts(s: str) -> list:
 
 _COMP_TYPES = ["ImagePanel", "SpriteSheet", "ScrollingTape", "Text",
                "Line", "Arc", "FilledRect", "Polygon", "VectorTape", "Vector",
-               "AttitudeIndicator", "CircularGauge", "VectorCompassRose",
+               "AttitudeIndicator", "NeedleGauge", "VectorCompassRose",
                "RotaryEncoder"]
 
 
@@ -1043,7 +1043,7 @@ class PropertiesForm(QWidget):
         self._mk_vector_sec()
         self._mk_vectortape_sec()
         self._mk_ai_sec()
-        self._mk_circulargauge_sec()
+        self._mk_needlegauge_sec()
         self._mk_compassrose_sec()
         self._mk_rotary_encoder_sec()
         self._mk_rotation()
@@ -2440,75 +2440,169 @@ class PropertiesForm(QWidget):
 
         self._vbox.addWidget(self._ai_sec)
 
-    def _mk_circulargauge_sec(self):
-        self._cg_sec = _Section("Circular Gauge")
-        self._cg_sec.setVisible(False)
+    def _mk_needlegauge_sec(self):
+        self._ng_sec = _Section("Needle Gauge")
+        self._ng_sec.setVisible(False)
 
-        self._cg_cx = _sb(); self._cg_cy = _sb()
-        for w in (self._cg_cx, self._cg_cy):
+        self._ng_cx = _sb(); self._ng_cy = _sb()
+        for w in (self._ng_cx, self._ng_cy):
             w.valueChanged.connect(self._emit)
         y_label = "Center X  /  Y top" if is_y_down() else "Center X  /  Y"
-        self._cg_sec.row_pair(y_label, self._cg_cx, self._cg_cy)
+        self._ng_sec.row_pair(y_label, self._ng_cx, self._ng_cy)
 
-        self._cg_radius = QDoubleSpinBox()
-        self._cg_radius.setRange(0.0, 4096.0); self._cg_radius.setDecimals(1)
-        self._cg_radius.setValue(100.0)
-        self._cg_radius.valueChanged.connect(self._emit)
-        self._cg_sec.row("Radius px", self._cg_radius)
+        self._ng_grad_type = _NoScrollComboBox()
+        self._ng_grad_type.addItems(["circular", "linear"])
+        self._ng_grad_type.currentIndexChanged.connect(self._on_ng_grad_type_changed)
+        self._ng_grad_type.currentIndexChanged.connect(self._emit)
+        self._ng_sec.row("Gradation type", self._ng_grad_type)
 
-        self._cg_arc_start = QDoubleSpinBox()
-        self._cg_arc_start.setRange(-360.0, 360.0); self._cg_arc_start.setDecimals(1)
-        self._cg_arc_start.setValue(-220.0)
-        self._cg_arc_start.valueChanged.connect(self._emit)
-        self._cg_sec.row("Arc start °", self._cg_arc_start)
+        self._ng_grad_stack = QStackedWidget()
 
-        self._cg_arc_end = QDoubleSpinBox()
-        self._cg_arc_end.setRange(-360.0, 360.0); self._cg_arc_end.setDecimals(1)
-        self._cg_arc_end.setValue(40.0)
-        self._cg_arc_end.valueChanged.connect(self._emit)
-        self._cg_sec.row("Arc end °", self._cg_arc_end)
+        # ── Circular page (unchanged from the original CircularGauge) ──────
+        circ_page = QWidget()
+        cform = QFormLayout(circ_page)
+        cform.setContentsMargins(0, 2, 0, 2)
+        cform.setHorizontalSpacing(8); cform.setVerticalSpacing(6)
 
-        _cg_angle_hint = QLabel("Angles: 0° = right, CCW positive.")
-        _cg_angle_hint.setStyleSheet("color: #999; font-size: 10px;")
-        self._cg_sec.row_widget(_cg_angle_hint)
+        self._ng_radius = QDoubleSpinBox()
+        self._ng_radius.setRange(0.0, 4096.0); self._ng_radius.setDecimals(1)
+        self._ng_radius.setValue(100.0)
+        self._ng_radius.valueChanged.connect(self._emit)
+        cform.addRow("Radius px", self._ng_radius)
 
-        self._cg_arc_color = _ColorButton()
-        self._cg_arc_color.color_changed.connect(self._emit)
-        self._cg_sec.row("Arc color", self._cg_arc_color)
+        self._ng_arc_start = QDoubleSpinBox()
+        self._ng_arc_start.setRange(-360.0, 360.0); self._ng_arc_start.setDecimals(1)
+        self._ng_arc_start.setValue(-220.0)
+        self._ng_arc_start.valueChanged.connect(self._emit)
+        cform.addRow("Arc start °", self._ng_arc_start)
 
-        self._cg_arc_width = QDoubleSpinBox()
-        self._cg_arc_width.setRange(0.5, 50.0); self._cg_arc_width.setDecimals(1)
-        self._cg_arc_width.setValue(2.0)
-        self._cg_arc_width.valueChanged.connect(self._emit)
-        self._cg_sec.row("Arc width px", self._cg_arc_width)
+        self._ng_arc_end = QDoubleSpinBox()
+        self._ng_arc_end.setRange(-360.0, 360.0); self._ng_arc_end.setDecimals(1)
+        self._ng_arc_end.setValue(40.0)
+        self._ng_arc_end.valueChanged.connect(self._emit)
+        cform.addRow("Arc end °", self._ng_arc_end)
 
-        self._cg_segments = QSpinBox()
-        self._cg_segments.setRange(8, 256); self._cg_segments.setValue(64)
-        self._cg_segments.valueChanged.connect(self._emit)
-        self._cg_sec.row("Arc segments", self._cg_segments)
+        _ng_angle_hint = QLabel("Angles: 0° = right, CCW positive.")
+        _ng_angle_hint.setStyleSheet("color: #999; font-size: 10px;")
+        cform.addRow(_ng_angle_hint)
 
-        self._cg_needle_len = QDoubleSpinBox()
-        self._cg_needle_len.setRange(0.0, 4096.0); self._cg_needle_len.setDecimals(1)
-        self._cg_needle_len.setValue(80.0)
-        self._cg_needle_len.valueChanged.connect(self._emit)
-        self._cg_sec.row("Needle length px", self._cg_needle_len)
+        self._ng_arc_color = _ColorButton()
+        self._ng_arc_color.color_changed.connect(self._emit)
+        cform.addRow("Arc color", self._ng_arc_color)
 
-        self._cg_needle_width = QDoubleSpinBox()
-        self._cg_needle_width.setRange(0.5, 50.0); self._cg_needle_width.setDecimals(1)
-        self._cg_needle_width.setValue(2.0)
-        self._cg_needle_width.valueChanged.connect(self._emit)
-        self._cg_sec.row("Needle width px", self._cg_needle_width)
+        self._ng_arc_width = QDoubleSpinBox()
+        self._ng_arc_width.setRange(0.5, 50.0); self._ng_arc_width.setDecimals(1)
+        self._ng_arc_width.setValue(2.0)
+        self._ng_arc_width.valueChanged.connect(self._emit)
+        cform.addRow("Arc width px", self._ng_arc_width)
 
-        self._cg_needle_color = _ColorButton()
-        self._cg_needle_color.color_changed.connect(self._emit)
-        self._cg_sec.row("Needle color", self._cg_needle_color)
+        self._ng_segments = QSpinBox()
+        self._ng_segments.setRange(8, 256); self._ng_segments.setValue(64)
+        self._ng_segments.valueChanged.connect(self._emit)
+        cform.addRow("Arc segments", self._ng_segments)
+
+        # ── Linear page (new) ───────────────────────────────────────────────
+        lin_page = QWidget()
+        lform = QFormLayout(lin_page)
+        lform.setContentsMargins(0, 2, 0, 2)
+        lform.setHorizontalSpacing(8); lform.setVerticalSpacing(6)
+
+        self._ng_orientation = _NoScrollComboBox()
+        self._ng_orientation.addItems(["vertical", "horizontal"])
+        self._ng_orientation.currentTextChanged.connect(self._emit)
+        lform.addRow("Orientation", self._ng_orientation)
+
+        self._ng_spacing_table = _TableEditor("Value", "Offset px")
+        self._ng_spacing_table.setToolTip(
+            "Value -> pixel offset from centre, interpolated piecewise-\n"
+            "linearly between rows. Not uniform spacing — hand-tune this\n"
+            "to match a real gauge's scale (e.g. a VSI tape where spacing\n"
+            "compresses at higher values)."
+        )
+        self._ng_spacing_table.changed.connect(self._emit)
+        lform.addRow("Spacing table", self._ng_spacing_table)
+
+        self._ng_tick_side = _NoScrollComboBox()
+        self._ng_tick_side.addItems(["left", "right", "top", "bottom"])
+        self._ng_tick_side.setToolTip(
+            "left/right apply when Orientation is vertical;\n"
+            "top/bottom apply when Orientation is horizontal."
+        )
+        self._ng_tick_side.currentTextChanged.connect(self._emit)
+        lform.addRow("Tick side", self._ng_tick_side)
+
+        self._ng_tick_color = _ColorButton()
+        self._ng_tick_color.color_changed.connect(self._emit)
+        lform.addRow("Tick color", self._ng_tick_color)
+
+        self._ng_ticks = _TableEditor("Interval", "Length px", "Width px")
+        self._ng_ticks.setToolTip(
+            "One row per tick group, e.g. a minor-tick row every 1 unit\n"
+            "plus a thicker major-tick row every 2 units. Positioned via\n"
+            "the Spacing table above, not a fixed pixels-per-unit."
+        )
+        self._ng_ticks.changed.connect(self._emit)
+        lform.addRow("Ticks", self._ng_ticks)
+
+        self._ng_label_interval = QDoubleSpinBox()
+        self._ng_label_interval.setRange(0.0, 1000.0); self._ng_label_interval.setDecimals(2)
+        self._ng_label_interval.setValue(1.0)
+        self._ng_label_interval.setSpecialValueText("(no labels)")
+        self._ng_label_interval.valueChanged.connect(self._emit)
+        lform.addRow("Label interval", self._ng_label_interval)
+
+        self._ng_label_format = QLineEdit()
+        self._ng_label_format.setPlaceholderText("{:.0f}")
+        self._ng_label_format.setToolTip(_FORMAT_SPEC_TOOLTIP)
+        self._ng_label_format.editingFinished.connect(self._emit)
+        lform.addRow("Label format", self._ng_label_format)
+
+        self._ng_label_font_size = QDoubleSpinBox()
+        self._ng_label_font_size.setRange(4.0, 120.0); self._ng_label_font_size.setDecimals(1)
+        self._ng_label_font_size.setValue(14.0)
+        self._ng_label_font_size.valueChanged.connect(self._emit)
+        lform.addRow("Label font size", self._ng_label_font_size)
+
+        self._ng_label_color = _ColorButton()
+        self._ng_label_color.color_changed.connect(self._emit)
+        lform.addRow("Label color", self._ng_label_color)
+
+        self._ng_label_offset = QDoubleSpinBox()
+        self._ng_label_offset.setRange(0.0, 500.0); self._ng_label_offset.setDecimals(1)
+        self._ng_label_offset.setValue(8.0)
+        self._ng_label_offset.valueChanged.connect(self._emit)
+        lform.addRow("Label offset px", self._ng_label_offset)
+
+        self._ng_grad_stack.addWidget(circ_page)   # index 0
+        self._ng_grad_stack.addWidget(lin_page)    # index 1
+        self._ng_sec.row_widget(self._ng_grad_stack)
+
+        # ── Needle (shared by both gradation types) ─────────────────────────
+        self._ng_needle_len = QDoubleSpinBox()
+        self._ng_needle_len.setRange(0.0, 4096.0); self._ng_needle_len.setDecimals(1)
+        self._ng_needle_len.setValue(80.0)
+        self._ng_needle_len.valueChanged.connect(self._emit)
+        self._ng_sec.row("Needle length px", self._ng_needle_len)
+
+        self._ng_needle_width = QDoubleSpinBox()
+        self._ng_needle_width.setRange(0.5, 50.0); self._ng_needle_width.setDecimals(1)
+        self._ng_needle_width.setValue(2.0)
+        self._ng_needle_width.valueChanged.connect(self._emit)
+        self._ng_sec.row("Needle width px", self._ng_needle_width)
+
+        self._ng_needle_color = _ColorButton()
+        self._ng_needle_color.color_changed.connect(self._emit)
+        self._ng_sec.row("Needle color", self._ng_needle_color)
 
         # Static angle or dataref-driven — reuses _BandEndpointWidget
-        self._cg_needle_angle = _BandEndpointWidget("Needle angle °")
-        self._cg_needle_angle.changed.connect(self._emit)
-        self._cg_sec.row_widget(self._cg_needle_angle)
+        self._ng_needle_angle = _BandEndpointWidget("Needle angle °")
+        self._ng_needle_angle.changed.connect(self._emit)
+        self._ng_sec.row_widget(self._ng_needle_angle)
 
-        self._vbox.addWidget(self._cg_sec)
+        self._vbox.addWidget(self._ng_sec)
+
+    def _on_ng_grad_type_changed(self, idx: int) -> None:
+        self._ng_grad_stack.setCurrentIndex(idx)
 
     def _mk_compassrose_sec(self):
         self._cr_sec = _Section("Compass Rose")
@@ -3343,9 +3437,9 @@ class PropertiesForm(QWidget):
             "background_texture", "background_origin", "background_cliprect",
             "face_texture", "face_origin", "face_cliprect", "face_size",
             "face_offset", "face_rotation_center", "face_rotation",
-            # CircularGauge
-            "arc_color", "arc_width", "needle_length", "needle_width",
-            "needle_color", "needle_angle",
+            # NeedleGauge
+            "gradation_type", "arc_color", "arc_width", "needle_length", "needle_width",
+            "needle_color", "needle_angle", "linear",
             # VectorCompassRose
             "background_color", "show_line", "line_color", "line_width",
             "tick5_length", "tick5_color", "tick5_width", "tick5_position",
@@ -3801,20 +3895,38 @@ class PropertiesForm(QWidget):
         self._re_face_fn.setCurrentIndex(max(fn_idx, 0))
         self._re_face_tbl.load(fr.get("table", []))
 
-        # CircularGauge
-        cg_ctr = comp.get("center", [0, 0])
-        self._cg_cx.setValue(int(cg_ctr[0]))
-        self._cg_cy.setValue(flip_y(int(cg_ctr[1]), self._ref_height))
-        self._cg_radius.setValue(float(comp.get("radius", 100.0)))
-        self._cg_arc_start.setValue(float(comp.get("start_angle", -220.0)))
-        self._cg_arc_end.setValue(float(comp.get("end_angle", 40.0)))
-        self._cg_arc_color.set_rgba(comp.get("arc_color") or comp.get("color"))
-        self._cg_arc_width.setValue(float(comp.get("arc_width", 2.0)))
-        self._cg_segments.setValue(int(comp.get("num_segments", 64)))
-        self._cg_needle_len.setValue(float(comp.get("needle_length", 80.0)))
-        self._cg_needle_width.setValue(float(comp.get("needle_width", 2.0)))
-        self._cg_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
-        self._cg_needle_angle.load(comp.get("needle_angle", -220.0))
+        # NeedleGauge
+        ng_ctr = comp.get("center", [0, 0])
+        self._ng_cx.setValue(int(ng_ctr[0]))
+        self._ng_cy.setValue(flip_y(int(ng_ctr[1]), self._ref_height))
+        ng_grad = str(comp.get("gradation_type", "circular"))
+        self._ng_grad_type.setCurrentIndex(max(self._ng_grad_type.findText(ng_grad), 0))
+        self._ng_grad_stack.setCurrentIndex(1 if ng_grad == "linear" else 0)
+        self._ng_radius.setValue(float(comp.get("radius", 100.0)))
+        self._ng_arc_start.setValue(float(comp.get("start_angle", -220.0)))
+        self._ng_arc_end.setValue(float(comp.get("end_angle", 40.0)))
+        self._ng_arc_color.set_rgba(comp.get("arc_color") or comp.get("color"))
+        self._ng_arc_width.setValue(float(comp.get("arc_width", 2.0)))
+        self._ng_segments.setValue(int(comp.get("num_segments", 64)))
+        ng_lin = comp.get("linear") or {}
+        self._ng_orientation.setCurrentText(str(ng_lin.get("orientation", "vertical")))
+        self._ng_spacing_table.load(ng_lin.get("spacing_table", []))
+        self._ng_tick_side.setCurrentText(str(ng_lin.get("tick_side", "left")))
+        self._ng_tick_color.set_rgba(ng_lin.get("tick_color", [255, 255, 255, 255]))
+        self._ng_ticks.load([
+            [t.get("interval", 1.0), t.get("length", 10.0), t.get("width", 1.0)]
+            for t in ng_lin.get("ticks", [])
+        ])
+        ng_labels = ng_lin.get("labels") or {}
+        self._ng_label_interval.setValue(float(ng_labels.get("interval", 1.0)))
+        self._ng_label_format.setText(str(ng_labels.get("format", "")))
+        self._ng_label_font_size.setValue(float(ng_labels.get("font_size", 14.0)))
+        self._ng_label_color.set_rgba(ng_labels.get("color", [255, 255, 255, 255]))
+        self._ng_label_offset.setValue(float(ng_labels.get("offset", 8.0)))
+        self._ng_needle_len.setValue(float(comp.get("needle_length", 80.0)))
+        self._ng_needle_width.setValue(float(comp.get("needle_width", 2.0)))
+        self._ng_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
+        self._ng_needle_angle.load(comp.get("needle_angle", -220.0))
 
         # VectorCompassRose
         cr_ctr = comp.get("center", [0, 0])
@@ -3972,7 +4084,7 @@ class PropertiesForm(QWidget):
 
         # Position only for types that use a single centre point
         # VectorTape uses position spinboxes for viewport origin (written below with viewport)
-        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "CircularGauge",
+        if ct not in ("Line", "Arc", "Polygon", "AttitudeIndicator", "NeedleGauge",
                       "VectorCompassRose", "VectorTape"):
             data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
@@ -4080,24 +4192,50 @@ class PropertiesForm(QWidget):
                         fr["convert_function"] = fn
                     data["face_rotation"] = fr
 
-        elif ct == "CircularGauge":
-            data["center"] = [self._cg_cx.value(), flip_y(self._cg_cy.value(), self._ref_height)]
-            data["radius"] = self._cg_radius.value()
-            data["start_angle"] = self._cg_arc_start.value()
-            data["end_angle"] = self._cg_arc_end.value()
-            data["arc_color"] = list(self._cg_arc_color.get_rgba())
-            aw = self._cg_arc_width.value()
-            if aw != 2.0:
-                data["arc_width"] = aw
-            s = self._cg_segments.value()
-            if s != 64:
-                data["num_segments"] = s
-            data["needle_length"] = self._cg_needle_len.value()
-            nw = self._cg_needle_width.value()
+        elif ct == "NeedleGauge":
+            data["center"] = [self._ng_cx.value(), flip_y(self._ng_cy.value(), self._ref_height)]
+            grad = self._ng_grad_type.currentText()
+            if grad != "circular":
+                data["gradation_type"] = grad
+            if grad == "linear":
+                lin: dict = {
+                    "orientation": self._ng_orientation.currentText(),
+                    "spacing_table": self._ng_spacing_table.get_data(),
+                    "tick_side": self._ng_tick_side.currentText(),
+                    "tick_color": list(self._ng_tick_color.get_rgba()),
+                    "ticks": [
+                        {"interval": row[0], "length": row[1], "width": row[2]}
+                        for row in self._ng_ticks.get_data()
+                    ],
+                }
+                li = self._ng_label_interval.value()
+                if li > 0:
+                    labels: dict = {"interval": li}
+                    fmt = self._ng_label_format.text().strip()
+                    if fmt:
+                        labels["format"] = fmt
+                    labels["font_size"] = self._ng_label_font_size.value()
+                    labels["color"] = list(self._ng_label_color.get_rgba())
+                    labels["offset"] = self._ng_label_offset.value()
+                    lin["labels"] = labels
+                data["linear"] = lin
+            else:
+                data["radius"] = self._ng_radius.value()
+                data["start_angle"] = self._ng_arc_start.value()
+                data["end_angle"] = self._ng_arc_end.value()
+                data["arc_color"] = list(self._ng_arc_color.get_rgba())
+                aw = self._ng_arc_width.value()
+                if aw != 2.0:
+                    data["arc_width"] = aw
+                s = self._ng_segments.value()
+                if s != 64:
+                    data["num_segments"] = s
+            data["needle_length"] = self._ng_needle_len.value()
+            nw = self._ng_needle_width.value()
             if nw != 2.0:
                 data["needle_width"] = nw
-            data["needle_color"] = list(self._cg_needle_color.get_rgba())
-            data["needle_angle"] = self._cg_needle_angle.get_data()
+            data["needle_color"] = list(self._ng_needle_color.get_rgba())
+            data["needle_angle"] = self._ng_needle_angle.get_data()
 
         elif ct == "VectorCompassRose":
             data["center"] = [self._cr_cx.value(), flip_y(self._cr_cy.value(), self._ref_height)]
@@ -4673,7 +4811,6 @@ class PropertiesForm(QWidget):
         self._vec_cap_width.setValue(10.0); self._vec_cap_width.setEnabled(False)
         self._vec_cap_height.setValue(5.0); self._vec_cap_height.setEnabled(False)
         self._vec_cap_filled.setChecked(True); self._vec_cap_filled.setEnabled(False)
-        # CircularGauge
         # RotaryEncoder
         self._re_w.setValue(60); self._re_h.setValue(60)
         self._re_cmd_cw.clear(); self._re_cmd_ccw.clear()
@@ -4692,15 +4829,24 @@ class PropertiesForm(QWidget):
         self._re_face_dr.clear()
         self._re_face_fn.setCurrentIndex(0)
         self._re_face_tbl.load([])
-        # CircularGauge
-        self._cg_cx.setValue(0); self._cg_cy.setValue(0)
-        self._cg_radius.setValue(100.0)
-        self._cg_arc_start.setValue(-220.0); self._cg_arc_end.setValue(40.0)
-        self._cg_arc_color.set_rgba(None); self._cg_arc_width.setValue(2.0)
-        self._cg_segments.setValue(64)
-        self._cg_needle_len.setValue(80.0); self._cg_needle_width.setValue(2.0)
-        self._cg_needle_color.set_rgba(None)
-        self._cg_needle_angle.load(-220.0)
+        # NeedleGauge
+        self._ng_cx.setValue(0); self._ng_cy.setValue(0)
+        self._ng_grad_type.setCurrentIndex(0); self._ng_grad_stack.setCurrentIndex(0)
+        self._ng_radius.setValue(100.0)
+        self._ng_arc_start.setValue(-220.0); self._ng_arc_end.setValue(40.0)
+        self._ng_arc_color.set_rgba(None); self._ng_arc_width.setValue(2.0)
+        self._ng_segments.setValue(64)
+        self._ng_orientation.setCurrentIndex(0)
+        self._ng_spacing_table.load([])
+        self._ng_tick_side.setCurrentIndex(0)
+        self._ng_tick_color.set_rgba(None)
+        self._ng_ticks.load([])
+        self._ng_label_interval.setValue(1.0); self._ng_label_format.clear()
+        self._ng_label_font_size.setValue(14.0); self._ng_label_color.set_rgba(None)
+        self._ng_label_offset.setValue(8.0)
+        self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)
+        self._ng_needle_color.set_rgba(None)
+        self._ng_needle_angle.load(-220.0)
         # VectorCompassRose
         self._cr_cx.setValue(0); self._cr_cy.setValue(0)
         self._cr_radius.setValue(150.0)
@@ -4917,13 +5063,13 @@ class PropertiesForm(QWidget):
         is_text = ct == "Text"
         is_vec  = ct == "Vector"
         is_ai   = ct == "AttitudeIndicator"
-        is_cg   = ct == "CircularGauge"
+        is_ng   = ct == "NeedleGauge"
         is_cr   = ct == "VectorCompassRose"
         is_re   = ct == "RotaryEncoder"
 
         # Position: hide for types that define geometry without a single centre point
         self._pos_sec.setVisible(not is_line and not is_arc and not is_poly and not is_ai
-                                  and not is_cg and not is_cr)
+                                  and not is_ng and not is_cr)
 
         # Texture section visible for image types; atlas detail only for ImagePanel
         self._tex_sec.setVisible(is_img)
@@ -4941,7 +5087,7 @@ class PropertiesForm(QWidget):
         self._vec_sec.setVisible(is_vec)
         self._vt_sec.setVisible(is_vt)
         self._ai_sec.setVisible(is_ai)
-        self._cg_sec.setVisible(is_cg)
+        self._ng_sec.setVisible(is_ng)
         self._cr_sec.setVisible(is_cr)
         self._re_sec.setVisible(is_re)
 
