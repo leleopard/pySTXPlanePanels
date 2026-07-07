@@ -211,17 +211,29 @@ def _coerce_num(text: str):
 # ── Table editor ─────────────────────────────────────────────────────────────
 
 class _TableEditor(QWidget):
+    """Generic N-column numeric table.
+
+    By default cells are plain text (parsed via _coerce_num). Pass
+    use_spinboxes=True for QDoubleSpinBox cells instead — safer numeric
+    entry (no stray text, scroll/arrow increments), used where every column
+    in the table is purely numeric (e.g. a value->pixel breakpoint table).
+    """
     changed = Signal()
 
-    def __init__(self, *headers, parent=None):
+    def __init__(self, *headers, parent=None, use_spinboxes: bool = False,
+                 decimals: int = 2, value_range: tuple = (-99999.0, 99999.0)):
         super().__init__(parent)
+        self._use_spinboxes = use_spinboxes
+        self._decimals = decimals
+        self._value_range = value_range
         n = max(2, len(headers))
         self._tbl = QTableWidget(0, n)
         self._tbl.setHorizontalHeaderLabels(list(headers) if headers else ["Col 0", "Col 1"])
         self._tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._tbl.setFixedHeight(110)
-        self._tbl.itemChanged.connect(lambda: self.changed.emit())
+        if not use_spinboxes:
+            self._tbl.itemChanged.connect(lambda: self.changed.emit())
 
         add = QPushButton("+");  add.setFixedWidth(26); add.clicked.connect(self._add)
         rm  = QPushButton("−");  rm.setFixedWidth(26);  rm.clicked.connect(self._rm)
@@ -236,6 +248,14 @@ class _TableEditor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(2)
         layout.addWidget(self._tbl); layout.addLayout(btns)
 
+    def _make_spin(self, value=0.0) -> QDoubleSpinBox:
+        sb = QDoubleSpinBox()
+        sb.setRange(*self._value_range)
+        sb.setDecimals(self._decimals)
+        sb.setValue(float(value))          # set before connecting: no spurious emit
+        sb.valueChanged.connect(lambda: self.changed.emit())
+        return sb
+
     def load(self, data: list):
         self._tbl.blockSignals(True)
         self._tbl.setRowCount(0)
@@ -245,16 +265,24 @@ class _TableEditor(QWidget):
                 r = self._tbl.rowCount()
                 self._tbl.insertRow(r)
                 for c in range(min(n, len(row))):
-                    self._tbl.setItem(r, c, QTableWidgetItem(str(row[c])))
+                    if self._use_spinboxes:
+                        self._tbl.setCellWidget(r, c, self._make_spin(row[c]))
+                    else:
+                        self._tbl.setItem(r, c, QTableWidgetItem(str(row[c])))
         self._tbl.blockSignals(False)
 
     def get_data(self) -> list:
         out = []
         n = self._tbl.columnCount()
         for r in range(self._tbl.rowCount()):
-            items = [self._tbl.item(r, c) for c in range(n)]
-            if all(items):
-                out.append([_coerce_num(item.text()) for item in items])
+            if self._use_spinboxes:
+                widgets = [self._tbl.cellWidget(r, c) for c in range(n)]
+                if all(widgets):
+                    out.append([w.value() for w in widgets])
+            else:
+                items = [self._tbl.item(r, c) for c in range(n)]
+                if all(items):
+                    out.append([_coerce_num(item.text()) for item in items])
         return out
 
     def _add(self):
@@ -262,7 +290,10 @@ class _TableEditor(QWidget):
         r = self._tbl.rowCount()
         self._tbl.insertRow(r)
         for c in range(self._tbl.columnCount()):
-            self._tbl.setItem(r, c, QTableWidgetItem("0"))
+            if self._use_spinboxes:
+                self._tbl.setCellWidget(r, c, self._make_spin(0.0))
+            else:
+                self._tbl.setItem(r, c, QTableWidgetItem("0"))
         self._tbl.blockSignals(False)
         self.changed.emit()
 
@@ -276,12 +307,19 @@ class _TableEditor(QWidget):
         n = self._tbl.columnCount()
         self._tbl.blockSignals(True)
         for c in range(n):
-            a = self._tbl.item(r_a, c)
-            b = self._tbl.item(r_b, c)
-            text_a = a.text() if a else ""
-            text_b = b.text() if b else ""
-            self._tbl.setItem(r_a, c, QTableWidgetItem(text_b))
-            self._tbl.setItem(r_b, c, QTableWidgetItem(text_a))
+            if self._use_spinboxes:
+                wa, wb = self._tbl.cellWidget(r_a, c), self._tbl.cellWidget(r_b, c)
+                va = wa.value() if wa else 0.0
+                vb = wb.value() if wb else 0.0
+                self._tbl.setCellWidget(r_a, c, self._make_spin(vb))
+                self._tbl.setCellWidget(r_b, c, self._make_spin(va))
+            else:
+                a = self._tbl.item(r_a, c)
+                b = self._tbl.item(r_b, c)
+                text_a = a.text() if a else ""
+                text_b = b.text() if b else ""
+                self._tbl.setItem(r_a, c, QTableWidgetItem(text_b))
+                self._tbl.setItem(r_b, c, QTableWidgetItem(text_a))
         self._tbl.blockSignals(False)
         self.changed.emit()
 
@@ -2512,7 +2550,7 @@ class PropertiesForm(QWidget):
         self._ng_orientation.currentTextChanged.connect(self._emit)
         lform.addRow("Orientation", self._ng_orientation)
 
-        self._ng_spacing_table = _TableEditor("Value", "Offset px")
+        self._ng_spacing_table = _TableEditor("Value", "Offset px", use_spinboxes=True, decimals=2)
         self._ng_spacing_table.setToolTip(
             "Value -> pixel offset from centre, interpolated piecewise-\n"
             "linearly between rows. Not uniform spacing — hand-tune this\n"
@@ -2535,7 +2573,9 @@ class PropertiesForm(QWidget):
         self._ng_tick_color.color_changed.connect(self._emit)
         lform.addRow("Tick color", self._ng_tick_color)
 
-        self._ng_ticks = _TableEditor("Interval", "Length px", "Width px")
+        self._ng_ticks = _TableEditor("Interval", "Length px", "Width px",
+                                      use_spinboxes=True, decimals=2,
+                                      value_range=(0.0, 99999.0))
         self._ng_ticks.setToolTip(
             "One row per tick group, e.g. a minor-tick row every 1 unit\n"
             "plus a thicker major-tick row every 2 units. Positioned via\n"
