@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 
 import gauge_core.convert as _convert_reg  # noqa: F401 — registers convert functions
 from gauge_core.lookup import lookup_piecewise
+from gauge_core.panel import iter_leaf_instrument_entries
 from gauge_core.mock_source import DEFAULT_MOCK_PORT
 from gauge_core.registry import get_convert
 
@@ -204,21 +205,15 @@ def collect_datarefs(yaml_path: Path) -> list[_DatarefInfo]:
         # Panel YAML: instrument paths are relative to the project root
         # (parent of the panels/ directory).
         base = _find_panels_project_root(yaml_path)
-        for entry in data.get("instruments", []):
-            inst_entries = (
-                entry["grid"].get("instruments", [])
-                if "grid" in entry
-                else [entry]
-            )
-            for inst_entry in inst_entries:
-                inst_path = (base / inst_entry["file"]).resolve()
-                try:
-                    with open(inst_path, encoding="utf-8") as f:
-                        inst_data = yaml.safe_load(f)
-                except Exception:
-                    continue
-                inst_name = inst_data.get("name", inst_path.stem)
-                _collect_from_instrument(inst_data, inst_name, registry)
+        for inst_entry in iter_leaf_instrument_entries(data.get("instruments", [])):
+            inst_path = (base / inst_entry["file"]).resolve()
+            try:
+                with open(inst_path, encoding="utf-8") as f:
+                    inst_data = yaml.safe_load(f)
+            except Exception:
+                continue
+            inst_name = inst_data.get("name", inst_path.stem)
+            _collect_from_instrument(inst_data, inst_name, registry)
     else:
         # Single instrument YAML
         inst_name = data.get("name", yaml_path.stem)

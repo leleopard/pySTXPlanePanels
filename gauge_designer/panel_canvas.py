@@ -18,6 +18,13 @@ from PySide6.QtGui import QPixmap, QPainter
 from gauge_designer.ui_utils import flip_y
 
 
+def _rgba(raw: list) -> tuple[int, int, int, int]:
+    """Accept [r,g,b] or [r,g,b,a] in 0-255; default alpha = 255."""
+    if len(raw) == 3:
+        return (int(raw[0]), int(raw[1]), int(raw[2]), 255)
+    return (int(raw[0]), int(raw[1]), int(raw[2]), int(raw[3]))
+
+
 _PALETTE = [
     (70, 130, 190, 170),
     (70, 170, 90,  170),
@@ -218,6 +225,13 @@ class PanelCanvas(QWidget):
                 left, top = gx, ph - gy - gh
                 if left <= cx < left + gw and top <= cy < top + gh:
                     hit = i
+            elif "container" in entry:
+                c = entry["container"]
+                ccx, ccy = c.get("position", [0, 0])
+                cw, ch = c.get("size", [300, 300])
+                left, top = ccx, ph - ccy - ch
+                if left <= cx < left + cw and top <= cy < top + ch:
+                    hit = i
             else:
                 ix, iy = entry.get("position", [0, 0])
                 iw, ih = self._inst_size(entry.get("file", ""))
@@ -297,6 +311,16 @@ class PanelCanvas(QWidget):
                 for j, inst_entry in enumerate(g.get("instruments", [])):
                     col = j % cols
                     row = j // cols
+                    if "container" in inst_entry:
+                        c_cfg = inst_entry["container"]
+                        cw_, ch_ = c_cfg.get("size", [200, 200])
+                        cl = int(gx + col * cw + (cw - cw_) / 2)
+                        ct = int(ph - gy - (rows - row) * ch + (ch - ch_) / 2)
+                        self._draw_container_box(
+                            draw, c_cfg, cl, ct, int(cw_), int(ch_),
+                            False, sel_outline, def_outline,
+                        )
+                        continue
                     iw, ih = self._inst_size(inst_entry.get("file", ""))
                     sc = float(inst_entry.get("scale", 1.0))
                     iw = int(round(iw * sc))
@@ -312,6 +336,15 @@ class PanelCanvas(QWidget):
                     draw.rectangle([il, it, ir, ib], outline=(180, 180, 180, 180), width=1)
                     inst_label = Path(inst_entry.get("file", "?")).stem
                     draw.text((il + 5, it + 5), inst_label, fill=(255, 255, 255, 230), font=_FONT)
+            elif "container" in entry:
+                c = entry["container"]
+                ccx, ccy = c.get("position", [0, 0])
+                cw, ch = c.get("size", [300, 300])
+                cl = int(ccx)
+                ct = int(ph - ccy - ch)
+                self._draw_container_box(
+                    draw, c, cl, ct, int(cw), int(ch), is_sel, sel_outline, def_outline,
+                )
             else:
                 ix, iy = entry.get("position", [0, 0])
                 iw, ih = self._inst_size(entry.get("file", ""))
@@ -338,3 +371,42 @@ class PanelCanvas(QWidget):
         pixmap = QPixmap()
         pixmap.loadFromData(buf.getvalue())
         return pixmap
+
+    def _draw_container_box(
+        self, draw: ImageDraw.ImageDraw, c_cfg: dict,
+        left: int, top: int, w: int, h: int,
+        is_sel: bool, sel_outline: tuple, def_outline: tuple,
+    ) -> None:
+        """Draw a container's box + its children, given the box's already-
+        resolved PIL (top, left) and size — shared by the top-level branch
+        and the grid-cell branch (a grid cell may itself be a container).
+        """
+        right, bottom = left + w - 1, top + h - 1
+        bg = c_cfg.get("background_color")
+        # Real runtime color when set (what-you-see-is-what-you-get, unlike
+        # Grid's arbitrary designer-only tint) — else a violet tint distinct
+        # from Grid's blue so an unconfigured container still reads as one.
+        fill = _rgba(bg) if bg is not None else (60, 30, 70, 120)
+        draw.rectangle([left, top, right, bottom], fill=fill,
+                       outline=sel_outline if is_sel else def_outline,
+                       width=3 if is_sel else 1)
+
+        name = c_cfg.get("name", "")
+        label = f"[{name}]" if name else "[Container]"
+        draw.text((left + 5, top + 5), label, fill=(230, 190, 255, 220), font=_FONT)
+
+        for inst_entry in c_cfg.get("instruments", []):
+            ix, iy = inst_entry.get("position", [0, 0])
+            iw, ih = self._inst_size(inst_entry.get("file", ""))
+            sc = float(inst_entry.get("scale", 1.0))
+            iw = int(round(iw * sc))
+            ih = int(round(ih * sc))
+            il = int(left + ix)
+            it = int(top + h - iy - ih)
+            ir = il + iw - 1
+            ib = it + ih - 1
+            cfill = _PALETTE[abs(hash(inst_entry.get("file", "?"))) % len(_PALETTE)]
+            draw.rectangle([il, it, ir, ib], fill=cfill)
+            draw.rectangle([il, it, ir, ib], outline=(180, 180, 180, 180), width=1)
+            inst_label = Path(inst_entry.get("file", "?")).stem
+            draw.text((il + 5, it + 5), inst_label, fill=(255, 255, 255, 230), font=_FONT)

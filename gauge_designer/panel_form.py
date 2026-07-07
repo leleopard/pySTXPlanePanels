@@ -1,17 +1,23 @@
 """Properties forms for panel entries.
 
-Three form types:
-  PanelForm          — plain instrument entry (file, position, scale)
+Four form types:
+  PanelForm          — plain instrument entry (file, position, scale); also
+                        reused as-is for an instrument inside a Container,
+                        since the field set (file/position/scale, position
+                        relative to the container's own origin) is identical.
   GridForm           — grid layout entry (name, position, columns, rows, cell size)
   GridInstrumentForm — instrument within a grid (file, col, row, scale)
+  ContainerForm       — container entry (name, position, size, optional
+                        background color)
 """
 
 from pathlib import Path
 
 from gauge_designer.ui_utils import is_y_down, QSpinBox, QDoubleSpinBox
+from gauge_designer.properties_form import _ColorButton
 from PySide6.QtWidgets import (
     QWidget, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QFileDialog,
+    QLabel, QLineEdit, QPushButton, QFileDialog, QCheckBox,
 )
 from PySide6.QtCore import Signal
 
@@ -312,3 +318,119 @@ class GridInstrumentForm(QWidget):
             rel = path
         self._file.setText(rel)
         self._emit()
+
+
+# ---------------------------------------------------------------------------
+
+
+class ContainerForm(QWidget):
+    """Properties form for a container entry.
+
+    Position is hidden when the container is itself a grid cell (its
+    position is computed by the grid, exactly like a plain grid-child
+    instrument never shows a position field) — see set_position_editable().
+    """
+    changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._ref_height: int = 920
+        self._loading = False
+
+        self._form = QFormLayout(self)
+        form = self._form
+        form.setContentsMargins(6, 4, 6, 4)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(6)
+
+        self._name = QLineEdit()
+        self._name.editingFinished.connect(self._emit)
+        form.addRow("Name", self._name)
+
+        self._pos_row = QWidget()
+        prl = QHBoxLayout(self._pos_row); prl.setContentsMargins(0,0,0,0); prl.setSpacing(4)
+        self._pos_x = QSpinBox(); self._pos_x.setRange(-9999, 9999); self._pos_x.setFixedWidth(80)
+        self._pos_y = QSpinBox(); self._pos_y.setRange(-9999, 9999); self._pos_y.setFixedWidth(80)
+        for w in (self._pos_x, self._pos_y):
+            w.valueChanged.connect(self._emit)
+        prl.addWidget(self._pos_x); prl.addWidget(QLabel("/")); prl.addWidget(self._pos_y)
+        prl.addStretch()
+        form.addRow("Position X / Y", self._pos_row)
+
+        sz_row = QWidget()
+        szl = QHBoxLayout(sz_row); szl.setContentsMargins(0,0,0,0); szl.setSpacing(4)
+        self._size_w = QSpinBox(); self._size_w.setRange(1, 9999); self._size_w.setFixedWidth(80)
+        self._size_h = QSpinBox(); self._size_h.setRange(1, 9999); self._size_h.setFixedWidth(80)
+        for w in (self._size_w, self._size_h):
+            w.valueChanged.connect(self._emit)
+        szl.addWidget(self._size_w); szl.addWidget(QLabel("×")); szl.addWidget(self._size_h)
+        szl.addStretch()
+        form.addRow("Size W × H", sz_row)
+
+        bg_row = QWidget()
+        bgl = QHBoxLayout(bg_row); bgl.setContentsMargins(0,0,0,0); bgl.setSpacing(6)
+        self._bg_chk = QCheckBox()
+        self._bg_chk.toggled.connect(lambda on: self._bg_color.setEnabled(on))
+        self._bg_chk.toggled.connect(self._emit)
+        self._bg_color = _ColorButton()
+        self._bg_color.setEnabled(False)
+        self._bg_color.color_changed.connect(self._emit)
+        bgl.addWidget(self._bg_chk)
+        bgl.addWidget(self._bg_color, 1)
+        form.addRow("Background", bg_row)
+
+    def set_position_editable(self, editable: bool) -> None:
+        self._form.setRowVisible(self._pos_row, editable)
+
+    def _y_disp(self, y: int, own_h: int) -> int:
+        """Convert YAML y-up (bottom-left origin) ↔ display y (self-inverse).
+        In y-down mode the displayed origin is the top-left of the container.
+        """
+        if is_y_down():
+            return self._ref_height - y - own_h
+        return y
+
+    def set_ref_height(self, h: int):
+        self._ref_height = h
+
+    def load(self, container_cfg: dict):
+        self._loading = True
+        self._name.setText(container_cfg.get("name", ""))
+        size = container_cfg.get("size", [200, 200])
+        self._size_w.setValue(int(size[0]))
+        self._size_h.setValue(int(size[1]))
+        pos = container_cfg.get("position", [0, 0])
+        self._pos_x.setValue(int(pos[0]))
+        self._pos_y.setValue(self._y_disp(int(pos[1]), int(size[1])))
+        bg = container_cfg.get("background_color")
+        self._bg_chk.setChecked(bg is not None)
+        self._bg_color.setEnabled(bg is not None)
+        self._bg_color.set_rgba(bg if bg is not None else (30, 30, 40, 200))
+        self._loading = False
+
+    def get_data(self) -> dict:
+        own_h = self._size_h.value()
+        data: dict = {
+            "position": [self._pos_x.value(), self._y_disp(self._pos_y.value(), own_h)],
+            "size": [self._size_w.value(), own_h],
+        }
+        name = self._name.text().strip()
+        if name:
+            data["name"] = name
+        if self._bg_chk.isChecked():
+            data["background_color"] = list(self._bg_color.get_rgba())
+        return data
+
+    def clear(self):
+        self._loading = True
+        self._name.clear()
+        self._pos_x.setValue(0); self._pos_y.setValue(0)
+        self._size_w.setValue(200); self._size_h.setValue(200)
+        self._bg_chk.setChecked(False)
+        self._bg_color.setEnabled(False)
+        self._bg_color.set_rgba((30, 30, 40, 200))
+        self._loading = False
+
+    def _emit(self):
+        if not self._loading:
+            self.changed.emit()

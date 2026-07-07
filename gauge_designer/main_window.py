@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QSettings, Qt, QSize
 from PySide6.QtGui import QAction
 
+from gauge_core.panel import iter_leaf_instrument_entries
 from gauge_designer.instrument_view import InstrumentView
 from gauge_designer.panel_view import PanelView
 from gauge_designer.preview import PreviewBar
@@ -41,31 +42,34 @@ def _find_panels_root(yaml_path: str) -> str:
 
 def _has_instrument_ref(data: dict, ref_rel: str) -> bool:
     """Return True if any instrument entry in data references ref_rel."""
-    for entry in data.get("instruments", []):
-        targets = (
-            entry.get("grid", {}).get("instruments", [])
-            if "grid" in entry else [entry]
-        )
-        if any(inst.get("file", "").replace("\\", "/") == ref_rel for inst in targets):
-            return True
-    return False
+    return any(
+        inst.get("file", "").replace("\\", "/") == ref_rel
+        for inst in iter_leaf_instrument_entries(data.get("instruments", []))
+    )
+
+
+def _filter_instrument_refs(entries: list[dict], ref_rel: str) -> list[dict]:
+    """Recursively drop any leaf entry referencing ref_rel. Grid/container
+    wrappers are kept (even if emptied out) with their own instruments list
+    filtered the same way, at any nesting depth."""
+    result = []
+    for entry in entries:
+        if "grid" in entry:
+            entry["grid"]["instruments"] = _filter_instrument_refs(
+                entry["grid"].get("instruments", []), ref_rel)
+            result.append(entry)
+        elif "container" in entry:
+            entry["container"]["instruments"] = _filter_instrument_refs(
+                entry["container"].get("instruments", []), ref_rel)
+            result.append(entry)
+        elif entry.get("file", "").replace("\\", "/") != ref_rel:
+            result.append(entry)
+    return result
 
 
 def _remove_instrument_refs(data: dict, ref_rel: str) -> None:
     """Remove all instrument entries referencing ref_rel from data (in-place)."""
-    result = []
-    for entry in data.get("instruments", []):
-        if "grid" in entry:
-            grid = entry["grid"]
-            grid["instruments"] = [
-                gi for gi in grid.get("instruments", [])
-                if gi.get("file", "").replace("\\", "/") != ref_rel
-            ]
-            result.append(entry)
-        else:
-            if entry.get("file", "").replace("\\", "/") != ref_rel:
-                result.append(entry)
-    data["instruments"] = result
+    data["instruments"] = _filter_instrument_refs(data.get("instruments", []), ref_rel)
 
 
 def _rewrite_refs(data: dict, old_rel: str, new_rel: str) -> bool:
@@ -75,16 +79,14 @@ def _rewrite_refs(data: dict, old_rel: str, new_rel: str) -> bool:
     Returns True if any reference was changed.
     """
     changed = False
-    for entry in data.get("instruments", []):
-        targets = entry.get("grid", {}).get("instruments", []) if "grid" in entry else [entry]
-        for inst in targets:
-            current = inst.get("file", "").replace("\\", "/")
-            if current == old_rel:
-                inst["file"] = new_rel
-                changed = True
-            elif current.startswith(old_rel + "/"):
-                inst["file"] = new_rel + current[len(old_rel):]
-                changed = True
+    for inst in iter_leaf_instrument_entries(data.get("instruments", [])):
+        current = inst.get("file", "").replace("\\", "/")
+        if current == old_rel:
+            inst["file"] = new_rel
+            changed = True
+        elif current.startswith(old_rel + "/"):
+            inst["file"] = new_rel + current[len(old_rel):]
+            changed = True
     return changed
 
 
@@ -334,6 +336,18 @@ class MainWindow(QMainWindow):
 
         tb.addSeparator()
 
+        self._add_container_btn = QPushButton()
+        self._add_container_btn.setIcon(make_svg_icon("file-table-box-outline", self._ICON_GREY, size=36))
+        self._add_container_btn.setIconSize(QSize(36, 36))
+        self._add_container_btn.setFixedSize(48, 48)
+        self._add_container_btn.setStyleSheet(_btn_style)
+        self._add_container_btn.setToolTip("Add Container")
+        self._add_container_btn.setEnabled(False)
+        self._add_container_btn.clicked.connect(self._on_add_container_clicked)
+        tb.addWidget(self._add_container_btn)
+
+        tb.addSeparator()
+
         self._script_btn = QPushButton()
         self._script_btn.setIcon(make_svg_icon("script-text-play-outline", self._ICON_GREY, size=36))
         self._script_btn.setIconSize(QSize(36, 36))
@@ -417,6 +431,20 @@ class MainWindow(QMainWindow):
         self._save_all_btn.setEnabled(any_dirty)
         color = _HEADER_COLOR if any_dirty else self._ICON_GREY
         self._save_all_btn.setIcon(make_svg_icon("content-save-all-outline", color, size=36))
+
+    def _update_add_container_btn(self):
+        from gauge_designer.ui_utils import _HEADER_COLOR
+        enabled = (
+            self._tabs.currentIndex() == _TAB_PANEL
+            and self._panel_path is not None
+        )
+        self._add_container_btn.setEnabled(enabled)
+        color = _HEADER_COLOR if enabled else self._ICON_GREY
+        self._add_container_btn.setIcon(make_svg_icon("file-table-box-outline", color, size=36))
+
+    def _on_add_container_clicked(self):
+        if self._tabs.currentIndex() == _TAB_PANEL:
+            self._panel_view._add_container()
 
     def _update_script_btn(self):
         from gauge_designer.ui_utils import _HEADER_COLOR
@@ -670,6 +698,7 @@ class MainWindow(QMainWindow):
         self._update_save_btn(dirty)
         self._update_save_all_btn()
         self._update_script_btn()
+        self._update_add_container_btn()
         self._update_play_btn()
         self._update_run_btn()
         self._refresh_ctx_actions()
@@ -799,6 +828,7 @@ class MainWindow(QMainWindow):
         self._update_save_btn(False)
         self._update_save_all_btn()
         self._update_script_btn()
+        self._update_add_container_btn()
         self._update_play_btn()
         self._update_run_btn()
         self._update_title()
@@ -927,6 +957,7 @@ class MainWindow(QMainWindow):
         self._update_save_btn(False)
         self._update_save_all_btn()
         self._update_script_btn()
+        self._update_add_container_btn()
         self._update_title()
         self.statusBar().showMessage(f"Saved: {path}")
 

@@ -19,12 +19,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSettings, QSize
 from gauge_designer.ui_utils import QSpinBox, QDoubleSpinBox, is_y_down
 
-from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm
+from gauge_designer.panel_form import PanelForm, GridForm, GridInstrumentForm, ContainerForm
 from gauge_designer.panel_canvas import PanelCanvas
 from gauge_designer.properties_form import _ColorButton
 from gauge_designer.ui_utils import header_label, make_svg_icon
 
-_ROLE_TYPE = Qt.UserRole          # "instrument" | "grid"
+_ROLE_TYPE = Qt.UserRole          # "instrument" | "grid" | "container"
 
 _DEFAULT_PANELS_ROOT = Path(__file__).parent.parent / "panels"
 
@@ -119,6 +119,8 @@ class _InstrumentTree(QTreeWidget):
     the whole tree ourselves in _handle_tree_drop.
     """
 
+    _DRAGGABLE_ROLES = ("instrument", "container")
+
     def __init__(self, panel_view: "PanelView", parent=None):
         super().__init__(parent)
         self._pv = panel_view
@@ -129,22 +131,35 @@ class _InstrumentTree(QTreeWidget):
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
 
+    def item_path(self, item: QTreeWidgetItem) -> tuple[int, ...]:
+        """Walk an item's parent chain to reconstruct its full index path."""
+        path: list[int] = []
+        while item is not None:
+            parent = item.parent()
+            if parent is None:
+                path.append(self.indexOfTopLevelItem(item))
+            else:
+                path.append(parent.indexOfChild(item))
+            item = parent
+        return tuple(reversed(path))
+
     def dragEnterEvent(self, event):
-        if self.currentItem() and self.currentItem().data(0, _ROLE_TYPE) == "instrument":
+        current = self.currentItem()
+        if current and current.data(0, _ROLE_TYPE) in self._DRAGGABLE_ROLES:
             event.accept()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event):
         source = self.currentItem()
-        if source is None or source.data(0, _ROLE_TYPE) != "instrument":
+        if source is None or source.data(0, _ROLE_TYPE) not in self._DRAGGABLE_ROLES:
             event.ignore()
             return
         super().dragMoveEvent(event)
 
     def dropEvent(self, event):
         source = self.currentItem()
-        if source is None or source.data(0, _ROLE_TYPE) != "instrument":
+        if source is None or source.data(0, _ROLE_TYPE) not in self._DRAGGABLE_ROLES:
             event.ignore()
             return
 
@@ -155,14 +170,12 @@ class _InstrumentTree(QTreeWidget):
             event.ignore()
             return
 
-        src_parent = source.parent()
-        if src_parent is None:
-            src_path = (self.indexOfTopLevelItem(source),)
-        else:
-            src_path = (self.indexOfTopLevelItem(src_parent),
-                        src_parent.indexOfChild(source))
+        src_path = self.item_path(source)
+        target_path = self.item_path(target) if target is not None else None
 
-        self._pv._handle_tree_drop(src_path, target, drop_pos)
+        if not self._pv._handle_tree_drop(src_path, target_path, drop_pos):
+            event.ignore()
+            return
         event.setDropAction(Qt.IgnoreAction)
         event.accept()
 
@@ -368,9 +381,13 @@ class PanelView(QWidget):
         self._grid_inst_form = GridInstrumentForm()
         self._grid_inst_form.changed.connect(self._on_grid_inst_form_changed)
 
+        self._container_form = ContainerForm()
+        self._container_form.changed.connect(self._on_container_form_changed)
+
         self._stack.addWidget(self._inst_form)        # index 0
         self._stack.addWidget(self._grid_form)        # index 1
         self._stack.addWidget(self._grid_inst_form)   # index 2
+        self._stack.addWidget(self._container_form)   # index 3
 
         ml.addWidget(self._stack)
         ml.addStretch()
@@ -570,6 +587,7 @@ class PanelView(QWidget):
         self._inst_form.set_yaml_dir(self._yaml_dir)
         self._inst_form.set_ref_height(int(h))
         self._grid_form.set_ref_height(int(h))
+        self._container_form.set_ref_height(int(h))
         self._grid_inst_form.set_yaml_dir(self._yaml_dir)
         self._rebuild_tree()
         self._canvas.load(panel_data, self._yaml_dir)
@@ -679,11 +697,16 @@ class PanelView(QWidget):
                             g = entry["grid"]
                             pos = g.get("position", [0, 0])
                             g["position"] = [pos[0], float(pos[1]) + delta]
+                        elif "container" in entry:
+                            c = entry["container"]
+                            pos = c.get("position", [0, 0])
+                            c["position"] = [pos[0], float(pos[1]) + delta]
                         else:
                             pos = entry.get("position", [0, 0])
                             entry["position"] = [float(pos[0]), float(pos[1]) + delta]
             self._inst_form.set_ref_height(new_h)
             self._grid_form.set_ref_height(new_h)
+            self._container_form.set_ref_height(new_h)
             self._canvas.set_size(self._panel_w.value(), new_h)
             self.changed.emit()
 
@@ -790,41 +813,73 @@ class PanelView(QWidget):
         if self._add_context == "panel":
             self._duplicate_panel()
 
+    # ── Path helpers (generalize over arbitrary grid/container nesting) ────
+
+    @staticmethod
+    def _entry_children(entry: dict) -> list | None:
+        """The nested instruments list for a grid/container entry, or None
+        for a leaf instrument. Uses setdefault so the returned list is
+        always the one actually stored in the dict (safe to mutate)."""
+        if "grid" in entry:
+            return entry["grid"].setdefault("instruments", [])
+        if "container" in entry:
+            return entry["container"].setdefault("instruments", [])
+        return None
+
+    def _entry_at_path(self, path: tuple[int, ...]) -> dict | None:
+        entries = self._instruments
+        entry = None
+        for idx in path:
+            if entries is None or idx >= len(entries):
+                return None
+            entry = entries[idx]
+            entries = self._entry_children(entry)
+        return entry
+
+    def _children_list_for_path(self, path: tuple[int, ...]) -> list:
+        """The list containing the entry at `path` (i.e. its siblings)."""
+        if len(path) <= 1:
+            return self._instruments
+        parent_entry = self._entry_at_path(path[:-1])
+        return self._entry_children(parent_entry)
+
+    def _item_at_path(self, path: tuple[int, ...]) -> QTreeWidgetItem | None:
+        if not path:
+            return None
+        item = self._tree.topLevelItem(path[0])
+        for idx in path[1:]:
+            if item is None:
+                return None
+            item = item.child(idx)
+        return item
+
+    @staticmethod
+    def _shift_path_after_pop(
+        path: tuple[int, ...] | None, popped_parent_path: tuple[int, ...], popped_idx: int,
+    ) -> tuple[int, ...] | None:
+        """Adjust `path` after popping index `popped_idx` from the list at
+        `popped_parent_path`, if `path` referenced a later sibling in that
+        same list (only the one matching segment shifts; deeper segments,
+        if any, are relative to whatever entry ends up at the corrected
+        position and are left untouched)."""
+        if path is None:
+            return None
+        depth = len(popped_parent_path)
+        if len(path) > depth and path[:depth] == popped_parent_path and path[depth] > popped_idx:
+            return path[:depth] + (path[depth] - 1,) + path[depth + 1:]
+        return path
+
     # ── Tree helpers ────────────────────────────────────────────────────────
 
     def _rebuild_tree(self, select_path: tuple | None = None):
         self._tree.blockSignals(True)
         self._tree.clear()
-        grid_items: list[QTreeWidgetItem] = []
-        for i, entry in enumerate(self._instruments):
-            if "grid" in entry:
-                g = entry["grid"]
-                name = g.get("name", "") or f"Grid {i}"
-                item = QTreeWidgetItem([f"[{name}]"])
-                item.setData(0, _ROLE_TYPE, "grid")
-                item.setFlags(
-                    Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDropEnabled
-                )
-                for inst_e in g.get("instruments", []):
-                    child = QTreeWidgetItem([Path(inst_e.get("file", "?")).stem])
-                    child.setData(0, _ROLE_TYPE, "instrument")
-                    child.setFlags(
-                        Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
-                    )
-                    item.addChild(child)
-                self._tree.addTopLevelItem(item)
-                grid_items.append(item)
-            else:
-                item = QTreeWidgetItem([Path(entry.get("file", "?")).stem])
-                item.setData(0, _ROLE_TYPE, "instrument")
-                item.setFlags(
-                    Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
-                )
-                self._tree.addTopLevelItem(item)
-        # Expand grid nodes AFTER unblocking so Qt lays out all children.
+        expand_items: list[QTreeWidgetItem] = []
+        self._add_tree_children(None, self._instruments, expand_items)
+        # Expand group nodes AFTER unblocking so Qt lays out all children.
         self._tree.blockSignals(False)
-        for g_item in grid_items:
-            g_item.setExpanded(True)
+        for item in expand_items:
+            item.setExpanded(True)
         if select_path is not None:
             self._select_path(select_path)
         else:
@@ -832,14 +887,47 @@ class PanelView(QWidget):
             self._stack.setCurrentIndex(0)
             self._inst_form.clear()
 
-    def _select_path(self, path: tuple):
-        if len(path) == 1:
-            item = self._tree.topLevelItem(path[0])
-        elif len(path) == 2:
-            parent = self._tree.topLevelItem(path[0])
-            item = parent.child(path[1]) if parent else None
+    def _add_tree_children(
+        self, parent_item: QTreeWidgetItem | None, entries: list[dict],
+        expand_items: list[QTreeWidgetItem],
+    ) -> None:
+        for entry in entries:
+            if "grid" in entry:
+                g = entry["grid"]
+                name = g.get("name", "") or "Grid"
+                item = QTreeWidgetItem([f"[{name}]"])
+                item.setData(0, _ROLE_TYPE, "grid")
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDropEnabled)
+                self._add_tree_item(parent_item, item)
+                self._add_tree_children(item, g.get("instruments", []), expand_items)
+                expand_items.append(item)
+            elif "container" in entry:
+                c = entry["container"]
+                name = c.get("name", "") or "Container"
+                item = QTreeWidgetItem([f"[{name}]"])
+                item.setData(0, _ROLE_TYPE, "container")
+                # Containers, unlike grids, are themselves draggable (into a grid cell).
+                item.setFlags(
+                    Qt.ItemIsEnabled | Qt.ItemIsSelectable
+                    | Qt.ItemIsDropEnabled | Qt.ItemIsDragEnabled
+                )
+                self._add_tree_item(parent_item, item)
+                self._add_tree_children(item, c.get("instruments", []), expand_items)
+                expand_items.append(item)
+            else:
+                item = QTreeWidgetItem([Path(entry.get("file", "?")).stem])
+                item.setData(0, _ROLE_TYPE, "instrument")
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled)
+                self._add_tree_item(parent_item, item)
+
+    def _add_tree_item(self, parent_item: QTreeWidgetItem | None, item: QTreeWidgetItem) -> None:
+        if parent_item is None:
+            self._tree.addTopLevelItem(item)
         else:
-            item = None
+            parent_item.addChild(item)
+
+    def _select_path(self, path: tuple):
+        item = self._item_at_path(path)
         if item:
             self._tree.setCurrentItem(item)
             self._tree.scrollToItem(item)
@@ -852,77 +940,117 @@ class PanelView(QWidget):
             self._canvas.set_selected(-1)
             return
 
-        parent = current.parent()
-        if parent is None:
-            i = self._tree.indexOfTopLevelItem(current)
-            self._sel_path = (i,)
-            entry = self._instruments[i]
-            if "grid" in entry:
-                self._stack.setCurrentIndex(1)
-                self._grid_form.load(entry["grid"])
+        path = self._tree.item_path(current)
+        self._sel_path = path
+        entry = self._entry_at_path(path)
+        if entry is None:
+            return
+
+        if "grid" in entry:
+            self._stack.setCurrentIndex(1)
+            self._grid_form.load(entry["grid"])
+        elif "container" in entry:
+            c = entry["container"]
+            top_level = len(path) == 1
+            self._container_form.set_position_editable(top_level)
+            self._container_form.set_ref_height(
+                self._panel_h.value() if top_level else int(c.get("size", [0, 300])[1])
+            )
+            self._stack.setCurrentIndex(3)
+            self._container_form.load(c)
+        else:
+            # Leaf instrument — its properties form depends on the parent.
+            parent_path = path[:-1]
+            parent_entry = self._entry_at_path(parent_path) if parent_path else None
+            if parent_entry is not None and "grid" in parent_entry:
+                self._stack.setCurrentIndex(2)
+                self._grid_inst_form.load(entry)
             else:
+                # Top-level, or a container child: PanelForm covers both —
+                # only the reference height (panel vs. container) differs.
+                if parent_entry is not None and "container" in parent_entry:
+                    ref_h = int(parent_entry["container"].get("size", [0, 300])[1])
+                else:
+                    ref_h = self._panel_h.value()
                 scale = float(entry.get("scale", 1.0))
                 _, ih = self._canvas.inst_size(entry.get("file", ""), scale)
+                self._inst_form.set_ref_height(ref_h)
                 self._inst_form.set_item_height(ih)
                 self._stack.setCurrentIndex(0)
                 self._inst_form.load(entry)
-            self._canvas.set_selected(i)
-        else:
-            i = self._tree.indexOfTopLevelItem(parent)
-            j = parent.indexOfChild(current)
-            self._sel_path = (i, j)
-            grid_insts = self._instruments[i]["grid"]["instruments"]
-            self._stack.setCurrentIndex(2)
-            self._grid_inst_form.load(grid_insts[j])
-            self._canvas.set_selected(i)
+
+        self._canvas.set_selected(path[0])
 
     # ── Form changes ───────────────────────────────────────────────────────
 
     def _on_inst_form_changed(self):
-        if self._loading or self._sel_path is None or len(self._sel_path) != 1:
+        if self._loading or self._sel_path is None:
             return
-        i = self._sel_path[0]
-        if "grid" in self._instruments[i]:
+        entry = self._entry_at_path(self._sel_path)
+        if entry is None or "grid" in entry or "container" in entry:
             return
         updated = self._inst_form.get_data()
-        self._instruments[i].clear()
-        self._instruments[i].update(updated)
-        item = self._tree.topLevelItem(i)
+        entry.clear()
+        entry.update(updated)
+        item = self._item_at_path(self._sel_path)
         if item:
             item.setText(0, Path(updated.get("file", "?")).stem)
         self._canvas.refresh()
         self.changed.emit()
 
     def _on_grid_form_changed(self):
-        if self._loading or self._sel_path is None or len(self._sel_path) != 1:
+        if self._loading or self._sel_path is None:
             return
-        i = self._sel_path[0]
-        if "grid" not in self._instruments[i]:
+        entry = self._entry_at_path(self._sel_path)
+        if entry is None or "grid" not in entry:
             return
         updated = self._grid_form.get_data()
-        grid = self._instruments[i]["grid"]
+        grid = entry["grid"]
         insts = grid.pop("instruments", [])
         grid.clear()
         grid.update(updated)
         grid["instruments"] = insts
-        item = self._tree.topLevelItem(i)
+        item = self._item_at_path(self._sel_path)
         if item:
-            name = updated.get("name", "") or f"Grid {i}"
+            name = updated.get("name", "") or "Grid"
+            item.setText(0, f"[{name}]")
+        self._canvas.refresh()
+        self.changed.emit()
+
+    def _on_container_form_changed(self):
+        if self._loading or self._sel_path is None:
+            return
+        entry = self._entry_at_path(self._sel_path)
+        if entry is None or "container" not in entry:
+            return
+        updated = self._container_form.get_data()
+        if len(self._sel_path) > 1:
+            updated.pop("position", None)  # nested in a grid: grid computes it
+        container = entry["container"]
+        insts = container.pop("instruments", [])
+        container.clear()
+        container.update(updated)
+        container["instruments"] = insts
+        item = self._item_at_path(self._sel_path)
+        if item:
+            name = updated.get("name", "") or "Container"
             item.setText(0, f"[{name}]")
         self._canvas.refresh()
         self.changed.emit()
 
     def _on_grid_inst_form_changed(self):
-        if self._loading or self._sel_path is None or len(self._sel_path) != 2:
+        if self._loading or self._sel_path is None or len(self._sel_path) < 2:
             return
-        i, j = self._sel_path
+        entry = self._entry_at_path(self._sel_path)
+        parent_entry = self._entry_at_path(self._sel_path[:-1])
+        if entry is None or parent_entry is None or "grid" not in parent_entry:
+            return
         updated = self._grid_inst_form.get_data()
-        grid_insts = self._instruments[i]["grid"]["instruments"]
-        grid_insts[j].clear()
-        grid_insts[j].update(updated)
-        parent = self._tree.topLevelItem(i)
-        if parent and parent.child(j):
-            parent.child(j).setText(0, Path(updated.get("file", "?")).stem)
+        entry.clear()
+        entry.update(updated)
+        item = self._item_at_path(self._sel_path)
+        if item:
+            item.setText(0, Path(updated.get("file", "?")).stem)
         self._canvas.refresh()
         self.changed.emit()
 
@@ -959,91 +1087,112 @@ class PanelView(QWidget):
     def _handle_tree_drop(
         self,
         src_path: tuple,
-        target_item,
+        target_path: tuple | None,
         drop_pos: QAbstractItemView.DropIndicatorPosition,
-    ):
-        # Fast path: same-grid reorder — swap list positions.
+    ) -> bool:
+        """Move the entry at src_path to wherever target_path indicates.
+
+        Returns True if the drop was performed, False if it was rejected
+        (so the caller can event.ignore() and leave the tree untouched).
+        Generalizes over arbitrary grid/container nesting via the path
+        helpers above — see the plan doc for the full validation matrix:
+        instrument <-> top-level / grid / container all work; a container
+        may itself become a grid cell; a container can never be dropped
+        into another container, into itself, or into its own descendant.
+        """
+        src_entry = self._entry_at_path(src_path)
+        if src_entry is None:
+            return False
+        is_container = "container" in src_entry
+        src_parent_path = src_path[:-1]
+        src_idx = src_path[-1]
+
+        if is_container and target_path is not None and target_path[: len(src_path)] == src_path:
+            return False  # can't drop a container into itself or its own descendant
+
+        # Fast path: reorder among existing siblings, one level deep or more
+        # (grid/container children) — top-level drags always use the slower
+        # general path below, matching the pre-existing top-level UX.
         if (
-            len(src_path) == 2
-            and target_item is not None
-            and target_item.parent() is not None
+            len(src_path) > 1
+            and target_path is not None
+            and len(target_path) == len(src_path)
+            and target_path[:-1] == src_parent_path
+            and target_path[-1] != src_idx
         ):
-            src_top, src_child = src_path
-            tpar = target_item.parent()
-            tgt_top = self._tree.indexOfTopLevelItem(tpar)
-            tgt_child = tpar.indexOfChild(target_item)
-            if tgt_top == src_top and tgt_child != src_child:
-                insts = self._instruments[src_top]["grid"]["instruments"]
-                insts[src_child], insts[tgt_child] = insts[tgt_child], insts[src_child]
-                self._rebuild_tree(select_path=(src_top, tgt_child))
-                self._canvas.refresh()
-                self.changed.emit()
-                return
+            siblings = self._children_list_for_path(src_path)
+            j = target_path[-1]
+            siblings[src_idx], siblings[j] = siblings[j], siblings[src_idx]
+            self._rebuild_tree(select_path=src_parent_path + (j,))
+            self._canvas.refresh()
+            self.changed.emit()
+            return True
 
-        if len(src_path) == 1:
-            src_top = src_path[0]
-            entry = self._instruments[src_top]
-            inst_file = entry.get("file", "")
-            inst_scale = entry.get("scale", 1.0)
-            src_is_toplevel = True
+        # Classify the target -> (dst_parent_path, dst_kind, insert_idx).
+        if target_path is None:
+            dst_parent_path, dst_kind, insert_idx = (), "toplevel", len(self._instruments)
         else:
-            src_top, src_child = src_path
-            grid_insts = self._instruments[src_top]["grid"]["instruments"]
-            entry = grid_insts[src_child]
-            inst_file = entry.get("file", "")
-            inst_scale = entry.get("scale", 1.0)
-            src_is_toplevel = False
-
-        if target_item is None:
-            target_type = "toplevel_append"
-            target_top = len(self._instruments)
-            target_grid_top = -1
-        else:
-            tpar = target_item.parent()
-            if tpar is None:
-                target_top = self._tree.indexOfTopLevelItem(target_item)
-                if target_item.data(0, _ROLE_TYPE) == "grid":
-                    target_type = "into_grid"
-                    target_grid_top = target_top
-                else:
-                    target_type = "toplevel_insert"
-                    if drop_pos == QAbstractItemView.BelowItem:
-                        target_top += 1
-                    target_grid_top = -1
+            target_entry = self._entry_at_path(target_path)
+            if target_entry is not None and "grid" in target_entry:
+                dst_parent_path, dst_kind = target_path, "grid"
+                insert_idx = len(self._entry_children(target_entry))
+            elif target_entry is not None and "container" in target_entry:
+                if is_container:
+                    return False  # no container-in-container
+                dst_parent_path, dst_kind = target_path, "container"
+                insert_idx = len(self._entry_children(target_entry))
+            elif len(target_path) > 1:
+                parent_path = target_path[:-1]
+                parent_entry = self._entry_at_path(parent_path)
+                dst_kind = "grid" if "grid" in parent_entry else "container"
+                if dst_kind == "container" and is_container:
+                    return False
+                dst_parent_path = parent_path
+                insert_idx = target_path[-1] + (1 if drop_pos == QAbstractItemView.BelowItem else 0)
             else:
-                target_type = "into_grid"
-                target_grid_top = self._tree.indexOfTopLevelItem(tpar)
-                target_top = target_grid_top
+                dst_parent_path, dst_kind = (), "toplevel"
+                insert_idx = target_path[0] + (1 if drop_pos == QAbstractItemView.BelowItem else 0)
 
-        if src_is_toplevel:
-            self._instruments.pop(src_top)
-            if target_type in ("toplevel_append", "toplevel_insert"):
-                if target_top > src_top:
-                    target_top -= 1
-            elif target_type == "into_grid":
-                if target_grid_top > src_top:
-                    target_grid_top -= 1
-        else:
-            self._instruments[src_top]["grid"]["instruments"].pop(src_child)
+        # Inserting later in the SAME list the source is leaving needs to
+        # account for the upcoming removal shifting everything after it down.
+        if dst_parent_path == src_parent_path and insert_idx > src_idx:
+            insert_idx -= 1
 
-        if target_type in ("toplevel_append", "toplevel_insert"):
-            new_entry: dict = {"file": inst_file, "position": [0, 0]}
-            if abs(inst_scale - 1.0) > 1e-4:
-                new_entry["scale"] = inst_scale
-            idx = min(target_top, len(self._instruments))
-            self._instruments.insert(idx, new_entry)
-            new_path: tuple = (idx,)
+        src_siblings = self._children_list_for_path(src_path)
+        src_siblings.pop(src_idx)
+
+        # The removal may also have shifted an unrelated target ancestor
+        # (e.g. dropping a top-level item onto something nested inside a
+        # later top-level grid/container).
+        dst_parent_path = self._shift_path_after_pop(dst_parent_path, src_parent_path, src_idx)
+        dst_list = (
+            self._instruments if not dst_parent_path
+            else self._entry_children(self._entry_at_path(dst_parent_path))
+        )
+        insert_idx = max(0, min(insert_idx, len(dst_list)))
+
+        if is_container:
+            new_entry = src_entry
+            c_cfg = new_entry["container"]
+            if dst_kind == "toplevel":
+                c_cfg.setdefault("position", [0, 0])
+            else:
+                c_cfg.pop("position", None)
         else:
-            tg = self._instruments[target_grid_top]["grid"]
-            new_inst: dict = {"file": inst_file}
-            if abs(inst_scale - 1.0) > 1e-4:
-                new_inst["scale"] = inst_scale
-            tg["instruments"].append(new_inst)
-            new_path = (target_grid_top, len(tg["instruments"]) - 1)
+            new_entry = {"file": src_entry.get("file", "")}
+            if dst_kind in ("toplevel", "container"):
+                new_entry["position"] = [0, 0]
+            scale = src_entry.get("scale", 1.0)
+            if abs(float(scale) - 1.0) > 1e-4:
+                new_entry["scale"] = scale
+
+        dst_list.insert(insert_idx, new_entry)
+        new_path = dst_parent_path + (insert_idx,)
 
         self._rebuild_tree(select_path=new_path)
         self._canvas.refresh()
         self.changed.emit()
+        return True
 
     # ── Toolbar buttons ────────────────────────────────────────────────────
 
@@ -1080,32 +1229,41 @@ class PanelView(QWidget):
         self._canvas.refresh()
         self.changed.emit()
 
+    def _add_container(self):
+        n = sum(1 for e in self._instruments if "container" in e)
+        self._instruments.append({"container": {
+            "name": f"Container {n + 1}",
+            "position": [0, 0],
+            "size": [300, 300],
+            "instruments": [],
+        }})
+        new_idx = len(self._instruments) - 1
+        self._rebuild_tree(select_path=(new_idx,))
+        self._canvas.refresh()
+        self.changed.emit()
+
     def _remove_item(self):
         if self._sel_path is None:
             return
-        if len(self._sel_path) == 1:
-            i = self._sel_path[0]
-            entry = self._instruments[i]
-            if "grid" in entry:
-                label = entry["grid"].get("name", "") or f"Grid {i}"
-                label = f"[{label}]"
-            else:
-                label = Path(entry.get("file", "?")).stem
-            if QMessageBox.question(
-                self, "Remove", f"Remove '{label}'?",
-                QMessageBox.Yes | QMessageBox.No,
-            ) != QMessageBox.Yes:
-                return
-            self._instruments.pop(i)
-        elif len(self._sel_path) == 2:
-            i, j = self._sel_path
-            label = Path(self._instruments[i]["grid"]["instruments"][j].get("file", "?")).stem
-            if QMessageBox.question(
-                self, "Remove", f"Remove '{label}' from grid?",
-                QMessageBox.Yes | QMessageBox.No,
-            ) != QMessageBox.Yes:
-                return
-            self._instruments[i]["grid"]["instruments"].pop(j)
+        entry = self._entry_at_path(self._sel_path)
+        if entry is None:
+            return
+        if "grid" in entry:
+            label = f"[{entry['grid'].get('name', '') or 'Grid'}]"
+        elif "container" in entry:
+            label = f"[{entry['container'].get('name', '') or 'Container'}]"
+        else:
+            label = Path(entry.get("file", "?")).stem
+        prompt = (
+            f"Remove '{label}'?" if len(self._sel_path) == 1
+            else f"Remove '{label}' from its parent?"
+        )
+        if QMessageBox.question(
+            self, "Remove", prompt, QMessageBox.Yes | QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        siblings = self._children_list_for_path(self._sel_path)
+        siblings.pop(self._sel_path[-1])
         self._rebuild_tree()
         self._canvas.refresh()
         self.changed.emit()
