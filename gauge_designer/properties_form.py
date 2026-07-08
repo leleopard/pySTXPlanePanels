@@ -2644,7 +2644,7 @@ class PropertiesForm(QWidget):
 
         self._ng_gradation_table = _TableEditor(
             "Value", "Offset px", "Length px", "Width px", "Label", "Font size", "Label offset px",
-            use_spinboxes=True, decimals=2,
+            use_spinboxes=True, decimals=1,
             bool_columns=(4,), col_defaults={4: True, 5: 14.0, 6: 8.0},
             height=240, narrow_columns=(4,),
         )
