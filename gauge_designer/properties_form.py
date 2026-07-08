@@ -2551,6 +2551,67 @@ class PropertiesForm(QWidget):
         self._ng_orientation.currentTextChanged.connect(self._emit)
         lform.addRow("Orientation", self._ng_orientation)
 
+        _ng_off_row = QWidget()
+        _ng_off_hl = QHBoxLayout(_ng_off_row)
+        _ng_off_hl.setContentsMargins(0, 0, 0, 0); _ng_off_hl.setSpacing(4)
+        self._ng_offset_x = QDoubleSpinBox(); self._ng_offset_x.setRange(-4096.0, 4096.0)
+        self._ng_offset_x.setDecimals(1)
+        self._ng_offset_y = QDoubleSpinBox(); self._ng_offset_y.setRange(-4096.0, 4096.0)
+        self._ng_offset_y.setDecimals(1)
+        for w in (self._ng_offset_x, self._ng_offset_y):
+            w.valueChanged.connect(self._emit)
+        _ng_off_hl.addWidget(self._ng_offset_x); _ng_off_hl.addWidget(self._ng_offset_y)
+        self._ng_offset_x.setToolTip(
+            "Shifts the tape's own centre line away from the needle's pivot\n"
+            "(Center X/Y above). The needle keeps rotating from the pivot —\n"
+            "only the tape (rect + ticks + labels) moves."
+        )
+        lform.addRow("Tape offset X / Y", _ng_off_row)
+
+        _ng_rect_sz_row = QWidget()
+        _ng_rect_sz_hl = QHBoxLayout(_ng_rect_sz_row)
+        _ng_rect_sz_hl.setContentsMargins(0, 0, 0, 0); _ng_rect_sz_hl.setSpacing(4)
+        self._ng_rect_w = QDoubleSpinBox(); self._ng_rect_w.setRange(0.0, 4096.0)
+        self._ng_rect_w.setDecimals(1)
+        self._ng_rect_h = QDoubleSpinBox(); self._ng_rect_h.setRange(0.0, 4096.0)
+        self._ng_rect_h.setDecimals(1)
+        for w in (self._ng_rect_w, self._ng_rect_h):
+            w.valueChanged.connect(self._emit)
+        _ng_rect_sz_hl.addWidget(self._ng_rect_w); _ng_rect_sz_hl.addWidget(self._ng_rect_h)
+        lform.addRow("Rect W / H", _ng_rect_sz_row)
+
+        _ng_rect_bg_row = QWidget()
+        _ng_rect_bg_hl = QHBoxLayout(_ng_rect_bg_row)
+        _ng_rect_bg_hl.setContentsMargins(0, 0, 0, 0); _ng_rect_bg_hl.setSpacing(6)
+        self._ng_rect_bg_chk = QCheckBox()
+        self._ng_rect_bg_chk.toggled.connect(lambda on: self._ng_rect_bg_color.setEnabled(on))
+        self._ng_rect_bg_chk.toggled.connect(self._emit)
+        self._ng_rect_bg_color = _ColorButton()
+        self._ng_rect_bg_color.setEnabled(False)
+        self._ng_rect_bg_color.color_changed.connect(self._emit)
+        _ng_rect_bg_hl.addWidget(self._ng_rect_bg_chk)
+        _ng_rect_bg_hl.addWidget(self._ng_rect_bg_color, 1)
+        lform.addRow("Rect background", _ng_rect_bg_row)
+
+        _ng_rect_line_row = QWidget()
+        _ng_rect_line_hl = QHBoxLayout(_ng_rect_line_row)
+        _ng_rect_line_hl.setContentsMargins(0, 0, 0, 0); _ng_rect_line_hl.setSpacing(6)
+        self._ng_rect_line_chk = QCheckBox()
+        self._ng_rect_line_chk.toggled.connect(self._on_ng_rect_line_toggled)
+        self._ng_rect_line_chk.toggled.connect(self._emit)
+        self._ng_rect_line_color = _ColorButton()
+        self._ng_rect_line_color.setEnabled(False)
+        self._ng_rect_line_color.color_changed.connect(self._emit)
+        self._ng_rect_line_width = QDoubleSpinBox()
+        self._ng_rect_line_width.setRange(0.5, 50.0); self._ng_rect_line_width.setDecimals(1)
+        self._ng_rect_line_width.setValue(2.0)
+        self._ng_rect_line_width.setEnabled(False)
+        self._ng_rect_line_width.valueChanged.connect(self._emit)
+        _ng_rect_line_hl.addWidget(self._ng_rect_line_chk)
+        _ng_rect_line_hl.addWidget(self._ng_rect_line_color, 1)
+        _ng_rect_line_hl.addWidget(self._ng_rect_line_width)
+        lform.addRow("Rect line", _ng_rect_line_row)
+
         self._ng_spacing_table = _TableEditor(
             "Value", "Offset px", "Length px", "Width px",
             use_spinboxes=True, decimals=2,
@@ -2664,6 +2725,10 @@ class PropertiesForm(QWidget):
 
     def _on_ng_grad_type_changed(self, idx: int) -> None:
         self._ng_grad_stack.setCurrentIndex(idx)
+
+    def _on_ng_rect_line_toggled(self, on: bool) -> None:
+        self._ng_rect_line_color.setEnabled(on)
+        self._ng_rect_line_width.setEnabled(on)
 
     def _mk_compassrose_sec(self):
         self._cr_sec = _Section("Compass Rose")
@@ -3987,6 +4052,20 @@ class PropertiesForm(QWidget):
         self._ng_segments.setValue(int(comp.get("num_segments", 64)))
         ng_lin = comp.get("linear") or {}
         self._ng_orientation.setCurrentText(str(ng_lin.get("orientation", "vertical")))
+        ng_off = ng_lin.get("offset", [0, 0])
+        self._ng_offset_x.setValue(float(ng_off[0])); self._ng_offset_y.setValue(float(ng_off[1]))
+        ng_rect_sz = ng_lin.get("size", [0, 0])
+        self._ng_rect_w.setValue(float(ng_rect_sz[0])); self._ng_rect_h.setValue(float(ng_rect_sz[1]))
+        ng_rect_bg = ng_lin.get("background_color")
+        self._ng_rect_bg_chk.setChecked(ng_rect_bg is not None)
+        self._ng_rect_bg_color.setEnabled(ng_rect_bg is not None)
+        self._ng_rect_bg_color.set_rgba(ng_rect_bg if ng_rect_bg is not None else (20, 20, 30, 220))
+        ng_rect_line = ng_lin.get("line_color")
+        self._ng_rect_line_chk.setChecked(ng_rect_line is not None)
+        self._ng_rect_line_color.setEnabled(ng_rect_line is not None)
+        self._ng_rect_line_color.set_rgba(ng_rect_line if ng_rect_line is not None else (255, 255, 255, 255))
+        self._ng_rect_line_width.setEnabled(ng_rect_line is not None)
+        self._ng_rect_line_width.setValue(float(ng_lin.get("line_width", 2.0)))
         self._ng_spacing_table.load([_ng_pad_spacing_row(row) for row in ng_lin.get("spacing_table", [])])
         self._ng_tick_side.setCurrentText(str(ng_lin.get("tick_side", "left")))
         self._ng_tick_color.set_rgba(ng_lin.get("tick_color", [255, 255, 255, 255]))
@@ -4280,6 +4359,16 @@ class PropertiesForm(QWidget):
                     "tick_side": self._ng_tick_side.currentText(),
                     "tick_color": list(self._ng_tick_color.get_rgba()),
                 }
+                ox, oy = self._ng_offset_x.value(), self._ng_offset_y.value()
+                if ox != 0 or oy != 0:
+                    lin["offset"] = [ox, oy]
+                if self._ng_rect_bg_chk.isChecked() or self._ng_rect_line_chk.isChecked():
+                    lin["size"] = [self._ng_rect_w.value(), self._ng_rect_h.value()]
+                if self._ng_rect_bg_chk.isChecked():
+                    lin["background_color"] = list(self._ng_rect_bg_color.get_rgba())
+                if self._ng_rect_line_chk.isChecked():
+                    lin["line_color"] = list(self._ng_rect_line_color.get_rgba())
+                    lin["line_width"] = self._ng_rect_line_width.value()
                 if self._ng_show_labels.isChecked():
                     labels: dict = {}
                     fmt = self._ng_label_format.text().strip()
@@ -4915,6 +5004,11 @@ class PropertiesForm(QWidget):
         self._ng_arc_color.set_rgba(None); self._ng_arc_width.setValue(2.0)
         self._ng_segments.setValue(64)
         self._ng_orientation.setCurrentIndex(0)
+        self._ng_offset_x.setValue(0.0); self._ng_offset_y.setValue(0.0)
+        self._ng_rect_w.setValue(0.0); self._ng_rect_h.setValue(0.0)
+        self._ng_rect_bg_chk.setChecked(False); self._ng_rect_bg_color.set_rgba(None)
+        self._ng_rect_line_chk.setChecked(False); self._ng_rect_line_color.set_rgba(None)
+        self._ng_rect_line_width.setValue(2.0)
         self._ng_spacing_table.load([])
         self._ng_tick_side.setCurrentIndex(0)
         self._ng_tick_color.set_rgba(None)

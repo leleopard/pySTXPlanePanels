@@ -761,15 +761,33 @@ class InstrumentCanvas(QWidget):
         side = str(lin.get("tick_side", "left"))
         tick_color = _rgba(lin.get("tick_color"))
 
+        # Tape's own centre line, possibly shifted away from the needle's
+        # pivot (cx_p, cy_p); y is negated (Arcade y-up -> PIL y-down).
+        off_x, off_y = lin.get("offset", [0.0, 0.0])
+        tx_p = cx_p + float(off_x)
+        ty_p = cy_p - float(off_y)
+
+        rect_bg = lin.get("background_color")
+        rect_line = lin.get("line_color")
+        if rect_bg is not None or rect_line is not None:
+            rw, rh = lin.get("size", [0.0, 0.0])
+            rw, rh = float(rw), float(rh)
+            bbox = [tx_p - rw / 2, ty_p - rh / 2, tx_p + rw / 2, ty_p + rh / 2]
+            if rect_bg is not None:
+                draw.rectangle(bbox, fill=_rgba(rect_bg))
+            if rect_line is not None:
+                lw = max(1, int(round(float(lin.get("line_width", 1.0)))))
+                draw.rectangle(bbox, outline=_rgba(rect_line), width=lw)
+
         for value, off, length, width in table:
             width = max(1, int(round(width)))
             if vertical:
-                x0, x1 = (cx_p - length, cx_p) if side == "left" else (cx_p, cx_p + length)
-                y = cy_p - off
+                x0, x1 = (tx_p - length, tx_p) if side == "left" else (tx_p, tx_p + length)
+                y = ty_p - off
                 draw.line([(x0, y), (x1, y)], fill=tick_color, width=width)
             else:
-                y0, y1 = (cy_p - length, cy_p) if side == "top" else (cy_p, cy_p + length)
-                x = cx_p + off
+                y0, y1 = (ty_p - length, ty_p) if side == "top" else (ty_p, ty_p + length)
+                x = tx_p + off
                 draw.line([(x, y0), (x, y1)], fill=tick_color, width=width)
 
         labels = lin.get("labels")
@@ -785,17 +803,17 @@ class InstrumentCanvas(QWidget):
         for value, off, _length, _width in table:
             text = fmt.format(value)
             if vertical:
-                ly = cy_p - off
+                ly = ty_p - off
                 if side == "left":
-                    draw.text((cx_p - offset, ly), text, fill=lcolor, font=font, anchor="rm")
+                    draw.text((tx_p - offset, ly), text, fill=lcolor, font=font, anchor="rm")
                 else:
-                    draw.text((cx_p + offset, ly), text, fill=lcolor, font=font, anchor="lm")
+                    draw.text((tx_p + offset, ly), text, fill=lcolor, font=font, anchor="lm")
             else:
-                lx = cx_p + off
+                lx = tx_p + off
                 if side == "top":
-                    draw.text((lx, cy_p - offset), text, fill=lcolor, font=font, anchor="mb")
+                    draw.text((lx, ty_p - offset), text, fill=lcolor, font=font, anchor="mb")
                 else:
-                    draw.text((lx, cy_p + offset), text, fill=lcolor, font=font, anchor="mt")
+                    draw.text((lx, ty_p + offset), text, fill=lcolor, font=font, anchor="mt")
 
     @staticmethod
     def _crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:

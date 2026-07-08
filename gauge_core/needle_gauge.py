@@ -50,6 +50,17 @@ YAML schema
       # Linear mode only:
       linear:
         orientation: vertical       # vertical | horizontal
+        offset: [0, -80]            # optional; shifts the tape's own centre line away
+                                     # from the needle's pivot (`center` above stays the
+                                     # needle's rotation point, unaffected by this).
+                                     # Ticks, labels, and the background rect below are
+                                     # all positioned relative to this shifted centre.
+        size: [40, 280]             # optional; background rect width/height, centred
+                                     # on the (possibly offset) tape centre line — only
+                                     # relevant if background_color or line_color is set
+        background_color: [20, 20, 30, 220]   # optional; omit = no rect drawn
+        line_color: [255, 255, 255, 255]      # optional outline for the rect
+        line_width: 2.0
         spacing_table:              # one row = one tick: [value, px offset from centre, length px, width px]
           - [-6, -132, 18, 2.0]
           - [-2, -68, 10, 1.5]
@@ -127,6 +138,16 @@ class NeedleGauge(_VecBase):
         # spacing_table row is [value, offset, length, width] — one row,
         # one fully-styled tick, no interval-based generation.
         self._orientation = "vertical"
+        # Offset of the tape's own centre line away from the needle pivot
+        # (self._cx, self._cy) — the needle keeps rotating from the pivot
+        # regardless; only the tape (rect + ticks + labels) shifts.
+        self._linear_offset_x = 0.0
+        self._linear_offset_y = 0.0
+        self._rect_w = 0.0
+        self._rect_h = 0.0
+        self._rect_bg_color: tuple[int, int, int, int] | None = None
+        self._rect_line_color: tuple[int, int, int, int] | None = None
+        self._rect_line_width = 1.0
         self._spacing_table: list = []
         self._tick_side = "left"
         self._tick_color: tuple[int, int, int, int] = (255, 255, 255, 255)
@@ -163,10 +184,20 @@ class NeedleGauge(_VecBase):
         label_font: str | None = None,
         label_bold: bool = False,
         label_italic: bool = False,
+        offset: tuple[float, float] = (0.0, 0.0),
+        rect_size: tuple[float, float] = (0.0, 0.0),
+        rect_background_color: tuple[int, int, int, int] | None = None,
+        rect_line_color: tuple[int, int, int, int] | None = None,
+        rect_line_width: float = 1.0,
     ) -> None:
         self._orientation = orientation
         self._spacing_table = spacing_table
         self._tick_side = tick_side
+        self._linear_offset_x, self._linear_offset_y = float(offset[0]), float(offset[1])
+        self._rect_w, self._rect_h = float(rect_size[0]), float(rect_size[1])
+        self._rect_bg_color = rect_background_color
+        self._rect_line_color = rect_line_color
+        self._rect_line_width = float(rect_line_width)
         if tick_color is not None:
             self._tick_color = tick_color
         if labels:
@@ -190,6 +221,9 @@ class NeedleGauge(_VecBase):
             [v, off * scale, length * scale, width * scale]
             for v, off, length, width in self._spacing_table
         ]
+        self._linear_offset_x *= scale; self._linear_offset_y *= scale
+        self._rect_w *= scale; self._rect_h *= scale
+        self._rect_line_width *= scale
         self._label_font_size *= scale
         self._label_offset *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
@@ -233,21 +267,32 @@ class NeedleGauge(_VecBase):
             return
         vertical = self._orientation == "vertical"
         side = self._tick_side
+        # Ticks/labels/rect are all anchored to the tape's own centre line,
+        # which may be shifted away from the needle's pivot (self._cx/_cy).
+        tx = self._cx + self._linear_offset_x
+        ty = self._cy + self._linear_offset_y
+
+        if self._rect_bg_color is not None or self._rect_line_color is not None:
+            rect = arcade.XYWH(tx, ty, self._rect_w, self._rect_h)
+            if self._rect_bg_color is not None:
+                arcade.draw_rect_filled(rect, self._rect_bg_color)
+            if self._rect_line_color is not None:
+                arcade.draw_rect_outline(rect, self._rect_line_color, self._rect_line_width)
 
         for value, off, length, width in self._spacing_table:
             if vertical:
-                x0, x1 = (self._cx - length, self._cx) if side == "left" else (self._cx, self._cx + length)
-                y = self._cy + off
+                x0, x1 = (tx - length, tx) if side == "left" else (tx, tx + length)
+                y = ty + off
                 arcade.draw_line(x0, y, x1, y, self._tick_color, width)
             else:
-                y0, y1 = (self._cy, self._cy + length) if side == "top" else (self._cy - length, self._cy)
-                x = self._cx + off
+                y0, y1 = (ty, ty + length) if side == "top" else (ty - length, ty)
+                x = tx + off
                 arcade.draw_line(x, y0, x, y1, self._tick_color, width)
 
         if self._show_labels:
-            self._draw_linear_labels(vertical, side)
+            self._draw_linear_labels(vertical, side, tx, ty)
 
-    def _draw_linear_labels(self, vertical: bool, side: str) -> None:
+    def _draw_linear_labels(self, vertical: bool, side: str, tx: float, ty: float) -> None:
         for idx, (value, off, _length, _width) in enumerate(self._spacing_table):
             if idx >= len(self._label_pool):
                 kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
@@ -264,16 +309,16 @@ class NeedleGauge(_VecBase):
             t.text = self._label_format.format(value)
             if vertical:
                 if side == "left":
-                    t.x, t.anchor_x = self._cx - self._label_offset, "right"
+                    t.x, t.anchor_x = tx - self._label_offset, "right"
                 else:
-                    t.x, t.anchor_x = self._cx + self._label_offset, "left"
-                t.y = self._cy + off
+                    t.x, t.anchor_x = tx + self._label_offset, "left"
+                t.y = ty + off
             else:
-                t.x = self._cx + off
+                t.x = tx + off
                 if side == "top":
-                    t.y, t.anchor_y = self._cy + self._label_offset, "bottom"
+                    t.y, t.anchor_y = ty + self._label_offset, "bottom"
                 else:
-                    t.y, t.anchor_y = self._cy - self._label_offset, "top"
+                    t.y, t.anchor_y = ty - self._label_offset, "top"
             t.draw()
 
     def _draw_needle(self) -> None:
@@ -334,6 +379,8 @@ def _needle_gauge_factory(
             italic=bool(labels_cfg.get("italic", False)),
             explicit_file=labels_cfg.get("font_file"),
         )
+        rect_bg = linear_cfg.get("background_color")
+        rect_line = linear_cfg.get("line_color")
         ng.set_linear(
             orientation=str(linear_cfg.get("orientation", "vertical")),
             spacing_table=[_parse_spacing_row(p) for p in linear_cfg.get("spacing_table", [])],
@@ -343,6 +390,11 @@ def _needle_gauge_factory(
             label_font=label_font,
             label_bold=label_bold,
             label_italic=label_italic,
+            offset=tuple(linear_cfg.get("offset", [0.0, 0.0])),
+            rect_size=tuple(linear_cfg.get("size", [0.0, 0.0])),
+            rect_background_color=_as_color(rect_bg) if rect_bg is not None else None,
+            rect_line_color=_as_color(rect_line) if rect_line is not None else None,
+            rect_line_width=float(linear_cfg.get("line_width", 1.0)),
         )
 
     if "visibility" in comp:
