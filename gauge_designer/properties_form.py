@@ -218,15 +218,24 @@ class _TableEditor(QWidget):
     use_spinboxes=True for QDoubleSpinBox cells instead — safer numeric
     entry (no stray text, scroll/arrow increments), used where every column
     in the table is purely numeric (e.g. a value->pixel breakpoint table).
+
+    bool_columns marks column indices (only meaningful with use_spinboxes=True)
+    that should use a QCheckBox cell instead of a spinbox. col_defaults maps
+    a column index to the value a newly-added row's cell starts with (falls
+    back to 0.0 / unchecked) — useful when a blank default would be actively
+    wrong, e.g. a font-size column defaulting to 0.
     """
     changed = Signal()
 
     def __init__(self, *headers, parent=None, use_spinboxes: bool = False,
-                 decimals: int = 2, value_range: tuple = (-99999.0, 99999.0)):
+                 decimals: int = 2, value_range: tuple = (-99999.0, 99999.0),
+                 bool_columns: tuple = (), col_defaults: dict | None = None):
         super().__init__(parent)
         self._use_spinboxes = use_spinboxes
         self._decimals = decimals
         self._value_range = value_range
+        self._bool_columns = set(bool_columns)
+        self._col_defaults = col_defaults or {}
         n = max(2, len(headers))
         self._tbl = QTableWidget(0, n)
         self._tbl.setHorizontalHeaderLabels(list(headers) if headers else ["Col 0", "Col 1"])
@@ -257,6 +266,15 @@ class _TableEditor(QWidget):
         sb.valueChanged.connect(lambda: self.changed.emit())
         return sb
 
+    def _make_bool(self, checked=False) -> QCheckBox:
+        cb = QCheckBox()
+        cb.setChecked(bool(checked))       # set before connecting: no spurious emit
+        cb.toggled.connect(lambda: self.changed.emit())
+        return cb
+
+    def _make_cell(self, col: int, value) -> QWidget:
+        return self._make_bool(value) if col in self._bool_columns else self._make_spin(value)
+
     def load(self, data: list):
         self._tbl.blockSignals(True)
         self._tbl.setRowCount(0)
@@ -267,7 +285,7 @@ class _TableEditor(QWidget):
                 self._tbl.insertRow(r)
                 for c in range(min(n, len(row))):
                     if self._use_spinboxes:
-                        self._tbl.setCellWidget(r, c, self._make_spin(row[c]))
+                        self._tbl.setCellWidget(r, c, self._make_cell(c, row[c]))
                     else:
                         self._tbl.setItem(r, c, QTableWidgetItem(str(row[c])))
         self._tbl.blockSignals(False)
@@ -279,7 +297,10 @@ class _TableEditor(QWidget):
             if self._use_spinboxes:
                 widgets = [self._tbl.cellWidget(r, c) for c in range(n)]
                 if all(widgets):
-                    out.append([w.value() for w in widgets])
+                    out.append([
+                        w.isChecked() if c in self._bool_columns else w.value()
+                        for c, w in enumerate(widgets)
+                    ])
             else:
                 items = [self._tbl.item(r, c) for c in range(n)]
                 if all(items):
@@ -291,10 +312,11 @@ class _TableEditor(QWidget):
         r = self._tbl.rowCount()
         self._tbl.insertRow(r)
         for c in range(self._tbl.columnCount()):
+            default = self._col_defaults.get(c, 0.0)
             if self._use_spinboxes:
-                self._tbl.setCellWidget(r, c, self._make_spin(0.0))
+                self._tbl.setCellWidget(r, c, self._make_cell(c, default))
             else:
-                self._tbl.setItem(r, c, QTableWidgetItem("0"))
+                self._tbl.setItem(r, c, QTableWidgetItem(str(default)))
         self._tbl.blockSignals(False)
         self.changed.emit()
 
@@ -310,10 +332,12 @@ class _TableEditor(QWidget):
         for c in range(n):
             if self._use_spinboxes:
                 wa, wb = self._tbl.cellWidget(r_a, c), self._tbl.cellWidget(r_b, c)
-                va = wa.value() if wa else 0.0
-                vb = wb.value() if wb else 0.0
-                self._tbl.setCellWidget(r_a, c, self._make_spin(vb))
-                self._tbl.setCellWidget(r_b, c, self._make_spin(va))
+                is_bool = c in self._bool_columns
+                default = False if is_bool else 0.0
+                va = (wa.isChecked() if is_bool else wa.value()) if wa else default
+                vb = (wb.isChecked() if is_bool else wb.value()) if wb else default
+                self._tbl.setCellWidget(r_a, c, self._make_cell(c, vb))
+                self._tbl.setCellWidget(r_b, c, self._make_cell(c, va))
             else:
                 a = self._tbl.item(r_a, c)
                 b = self._tbl.item(r_b, c)
@@ -2612,19 +2636,23 @@ class PropertiesForm(QWidget):
         _ng_rect_line_hl.addWidget(self._ng_rect_line_width)
         lform.addRow("Rect line", _ng_rect_line_row)
 
-        self._ng_spacing_table = _TableEditor(
-            "Value", "Offset px", "Length px", "Width px",
+        self._ng_gradation_table = _TableEditor(
+            "Value", "Offset px", "Length px", "Width px", "Label", "Font size", "Label offset px",
             use_spinboxes=True, decimals=2,
+            bool_columns=(4,), col_defaults={4: True, 5: 14.0, 6: 8.0},
         )
-        self._ng_spacing_table.setToolTip(
+        self._ng_gradation_table.setToolTip(
             "One row = one fully-styled tick: value, pixel offset from\n"
-            "centre, length, and width. No interpolation and no interval-\n"
-            "based generation — exactly the rows you enter are what gets\n"
-            "drawn, so a gauge with hand-tuned, non-uniform spacing (e.g. a\n"
-            "VSI tape where spacing compresses at higher values) is exact."
+            "centre, length, width, whether it gets a label, that label's\n"
+            "font size, and its pixel offset past the tick (negative moves\n"
+            "it back over the tick/tape instead of away from it). No\n"
+            "interpolation and no interval-based generation — exactly the\n"
+            "rows you enter are what gets drawn, so a gauge with hand-tuned,\n"
+            "non-uniform spacing (e.g. a VSI tape where spacing compresses\n"
+            "at higher values) is exact."
         )
-        self._ng_spacing_table.changed.connect(self._emit)
-        lform.addRow("Spacing table", self._ng_spacing_table)
+        self._ng_gradation_table.changed.connect(self._emit)
+        lform.addRow("Gradation Table", self._ng_gradation_table)
 
         self._ng_tick_side = _NoScrollComboBox()
         self._ng_tick_side.addItems(["left", "right", "top", "bottom"])
@@ -2642,7 +2670,9 @@ class PropertiesForm(QWidget):
         self._ng_show_labels = QCheckBox("Show labels")
         self._ng_show_labels.setChecked(True)
         self._ng_show_labels.setToolTip(
-            "One label per Spacing table row, at that row's value and position."
+            "Master switch. When on, each Gradation Table row's own 'Label'\n"
+            "checkbox decides whether that individual tick gets a label. When\n"
+            "off, no labels are drawn regardless of the per-row checkboxes."
         )
         self._ng_show_labels.toggled.connect(self._emit)
         lform.addRow(self._ng_show_labels)
@@ -2667,12 +2697,6 @@ class PropertiesForm(QWidget):
         _ng_font_hl.addWidget(_ng_font_btn)
         lform.addRow("Label font", _ng_font_row)
 
-        self._ng_label_font_size = QDoubleSpinBox()
-        self._ng_label_font_size.setRange(4.0, 120.0); self._ng_label_font_size.setDecimals(1)
-        self._ng_label_font_size.setValue(14.0)
-        self._ng_label_font_size.valueChanged.connect(self._emit)
-        lform.addRow("Label font size", self._ng_label_font_size)
-
         _ng_style_row = QWidget()
         _ng_style_hl = QHBoxLayout(_ng_style_row)
         _ng_style_hl.setContentsMargins(0, 0, 0, 0); _ng_style_hl.setSpacing(12)
@@ -2688,12 +2712,6 @@ class PropertiesForm(QWidget):
         self._ng_label_color = _ColorButton()
         self._ng_label_color.color_changed.connect(self._emit)
         lform.addRow("Label color", self._ng_label_color)
-
-        self._ng_label_offset = QDoubleSpinBox()
-        self._ng_label_offset.setRange(0.0, 500.0); self._ng_label_offset.setDecimals(1)
-        self._ng_label_offset.setValue(8.0)
-        self._ng_label_offset.valueChanged.connect(self._emit)
-        lform.addRow("Label offset px", self._ng_label_offset)
 
         self._ng_grad_stack.addWidget(circ_page)   # index 0
         self._ng_grad_stack.addWidget(lin_page)    # index 1
@@ -3167,14 +3185,12 @@ class PropertiesForm(QWidget):
         from PySide6.QtGui import QFont
         from gauge_core.font_utils import strip_style_suffix
         current_name = self._ng_label_font.text().strip() or "Arial"
-        current_size = int(self._ng_label_font_size.value())
-        initial = QFont(current_name, current_size)
+        initial = QFont(current_name, 14)   # size is per-row now; not synced back
         initial.setBold(self._ng_label_bold.isChecked())
         initial.setItalic(self._ng_label_italic.isChecked())
         ok, font = QFontDialog.getFont(initial, self, "Choose label font")
         if ok:
             self._ng_label_font.setText(strip_style_suffix(font.family()))
-            self._ng_label_font_size.setValue(float(font.pointSize()))
             self._ng_label_bold.setChecked(font.bold())
             self._ng_label_italic.setChecked(font.italic())
             self._emit()
@@ -4066,18 +4082,16 @@ class PropertiesForm(QWidget):
         self._ng_rect_line_color.set_rgba(ng_rect_line if ng_rect_line is not None else (255, 255, 255, 255))
         self._ng_rect_line_width.setEnabled(ng_rect_line is not None)
         self._ng_rect_line_width.setValue(float(ng_lin.get("line_width", 2.0)))
-        self._ng_spacing_table.load([_ng_pad_spacing_row(row) for row in ng_lin.get("spacing_table", [])])
+        self._ng_gradation_table.load([_ng_pad_spacing_row(row) for row in ng_lin.get("spacing_table", [])])
         self._ng_tick_side.setCurrentText(str(ng_lin.get("tick_side", "left")))
         self._ng_tick_color.set_rgba(ng_lin.get("tick_color", [255, 255, 255, 255]))
         ng_labels = ng_lin.get("labels") or {}
         self._ng_show_labels.setChecked(bool(ng_lin.get("labels")))
         self._ng_label_format.setText(str(ng_labels.get("format", "")))
         self._ng_label_font.setText(str(ng_labels.get("font", "")))
-        self._ng_label_font_size.setValue(float(ng_labels.get("font_size", 14.0)))
         self._ng_label_bold.setChecked(bool(ng_labels.get("bold", False)))
         self._ng_label_italic.setChecked(bool(ng_labels.get("italic", False)))
         self._ng_label_color.set_rgba(ng_labels.get("color", [255, 255, 255, 255]))
-        self._ng_label_offset.setValue(float(ng_labels.get("offset", 8.0)))
         self._ng_needle_len.setValue(float(comp.get("needle_length", 80.0)))
         self._ng_needle_width.setValue(float(comp.get("needle_width", 2.0)))
         self._ng_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
@@ -4355,7 +4369,7 @@ class PropertiesForm(QWidget):
             if grad == "linear":
                 lin: dict = {
                     "orientation": self._ng_orientation.currentText(),
-                    "spacing_table": self._ng_spacing_table.get_data(),
+                    "spacing_table": self._ng_gradation_table.get_data(),
                     "tick_side": self._ng_tick_side.currentText(),
                     "tick_color": list(self._ng_tick_color.get_rgba()),
                 }
@@ -4377,13 +4391,11 @@ class PropertiesForm(QWidget):
                     font = self._ng_label_font.text().strip()
                     if font:
                         labels["font"] = font
-                    labels["font_size"] = self._ng_label_font_size.value()
                     if self._ng_label_bold.isChecked():
                         labels["bold"] = True
                     if self._ng_label_italic.isChecked():
                         labels["italic"] = True
                     labels["color"] = list(self._ng_label_color.get_rgba())
-                    labels["offset"] = self._ng_label_offset.value()
                     lin["labels"] = labels
                 data["linear"] = lin
             else:
@@ -5009,15 +5021,14 @@ class PropertiesForm(QWidget):
         self._ng_rect_bg_chk.setChecked(False); self._ng_rect_bg_color.set_rgba(None)
         self._ng_rect_line_chk.setChecked(False); self._ng_rect_line_color.set_rgba(None)
         self._ng_rect_line_width.setValue(2.0)
-        self._ng_spacing_table.load([])
+        self._ng_gradation_table.load([])
         self._ng_tick_side.setCurrentIndex(0)
         self._ng_tick_color.set_rgba(None)
         self._ng_show_labels.setChecked(True)
         self._ng_label_format.clear()
         self._ng_label_font.clear()
-        self._ng_label_font_size.setValue(14.0); self._ng_label_color.set_rgba(None)
+        self._ng_label_color.set_rgba(None)
         self._ng_label_bold.setChecked(False); self._ng_label_italic.setChecked(False)
-        self._ng_label_offset.setValue(8.0)
         self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)
         self._ng_needle_color.set_rgba(None)
         self._ng_needle_angle.load(-220.0)

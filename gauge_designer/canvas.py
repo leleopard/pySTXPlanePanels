@@ -779,7 +779,7 @@ class InstrumentCanvas(QWidget):
                 lw = max(1, int(round(float(lin.get("line_width", 1.0)))))
                 draw.rectangle(bbox, outline=_rgba(rect_line), width=lw)
 
-        for value, off, length, width in table:
+        for value, off, length, width, _show_label, _font_size, _label_offset in table:
             width = max(1, int(round(width)))
             if vertical:
                 x0, x1 = (tx_p - length, tx_p) if side == "left" else (tx_p, tx_p + length)
@@ -794,26 +794,27 @@ class InstrumentCanvas(QWidget):
         if not labels:
             return
         fmt = labels.get("format") or "{:.0f}"
-        fsize = max(8, int(float(labels.get("font_size", 14.0))))
-        font = _pil_font(labels.get("font"), fsize,
-                         bold=bool(labels.get("bold", False)),
-                         italic=bool(labels.get("italic", False)))
+        lfont = labels.get("font")
+        bold = bool(labels.get("bold", False))
+        italic = bool(labels.get("italic", False))
         lcolor = _rgba(labels.get("color"))
-        offset = float(labels.get("offset", 8.0))
-        for value, off, _length, _width in table:
+        for value, off, _length, _width, show_label, font_size, label_offset in table:
+            if not show_label:
+                continue
             text = fmt.format(value)
+            font = _pil_font(lfont, max(8, int(font_size)), bold=bold, italic=italic)
             if vertical:
                 ly = ty_p - off
                 if side == "left":
-                    draw.text((tx_p - offset, ly), text, fill=lcolor, font=font, anchor="rm")
+                    draw.text((tx_p - label_offset, ly), text, fill=lcolor, font=font, anchor="rm")
                 else:
-                    draw.text((tx_p + offset, ly), text, fill=lcolor, font=font, anchor="lm")
+                    draw.text((tx_p + label_offset, ly), text, fill=lcolor, font=font, anchor="lm")
             else:
                 lx = tx_p + off
                 if side == "top":
-                    draw.text((lx, ty_p - offset), text, fill=lcolor, font=font, anchor="mb")
+                    draw.text((lx, ty_p - label_offset), text, fill=lcolor, font=font, anchor="mb")
                 else:
-                    draw.text((lx, ty_p + offset), text, fill=lcolor, font=font, anchor="mt")
+                    draw.text((lx, ty_p + label_offset), text, fill=lcolor, font=font, anchor="mt")
 
     @staticmethod
     def _crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:

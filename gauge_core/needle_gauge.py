@@ -61,24 +61,33 @@ YAML schema
         background_color: [20, 20, 30, 220]   # optional; omit = no rect drawn
         line_color: [255, 255, 255, 255]      # optional outline for the rect
         line_width: 2.0
-        spacing_table:              # one row = one tick: [value, px offset from centre, length px, width px]
-          - [-6, -132, 18, 2.0]
-          - [-2, -68, 10, 1.5]
-          - [-1, -40, 10, 1.5]
-          - [0, 0, 18, 2.0]
-          - [1, 40, 10, 1.5]
-          - [2, 68, 10, 1.5]
-          - [6, 132, 18, 2.0]
+        # Gradation Table (designer name for spacing_table below): one row =
+        # one tick: [value, px offset from centre, length px, width px,
+        # show_label, label font size, label px offset]. The last three
+        # columns are optional per row (default show_label=true, font
+        # size=14, offset=8) and let each tick's label be toggled and
+        # independently sized/positioned; label px offset may be negative
+        # to pull the label back over the tick/tape instead of away from it.
+        spacing_table:
+          - [-6, -132, 18, 2.0, true, 14, 8]
+          - [-2, -68, 10, 1.5, true, 14, 8]
+          - [-1, -40, 10, 1.5, true, 14, 8]
+          - [0, 0, 18, 2.0, true, 14, 8]
+          - [1, 40, 10, 1.5, true, 14, 8]
+          - [2, 68, 10, 1.5, true, 14, 8]
+          - [6, 132, 18, 2.0, true, 14, 8]
         tick_side: left             # left|right (vertical) or top|bottom (horizontal)
         tick_color: [255, 255, 255, 255]   # shared by every tick
-        labels:                      # optional; one label per spacing_table row
+        labels:                      # optional; enables labels (per-row show_label
+                                     # above still gates each individual tick).
+                                     # font_size/offset are NOT set here — they're
+                                     # per-row in spacing_table above. Everything
+                                     # else here (family/bold/italic/color) is global.
           format: "{:.0f}"
           font: ST_Boeing_PFD        # optional; blank = designer/OS default
-          font_size: 14
           bold: false
           italic: false
           color: [255, 255, 255, 255]
-          offset: 8                 # gap from centre past the tick
 """
 
 from __future__ import annotations
@@ -148,16 +157,17 @@ class NeedleGauge(_VecBase):
         self._rect_bg_color: tuple[int, int, int, int] | None = None
         self._rect_line_color: tuple[int, int, int, int] | None = None
         self._rect_line_width = 1.0
+        # Each row: [value, offset, length, width, show_label, font_size, label_offset].
         self._spacing_table: list = []
         self._tick_side = "left"
         self._tick_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        # Global label styling (family/bold/italic/color/format); font size
+        # and pixel offset are per-row, see _spacing_table above.
         self._label_format = "{:.0f}"
         self._label_font: str | None = None
-        self._label_font_size = 14.0
         self._label_bold = False
         self._label_italic = False
         self._label_color: tuple[int, int, int, int] = (255, 255, 255, 255)
-        self._label_offset = 8.0
         self._show_labels = False
         self._label_pool: list[arcade.Text] = []
 
@@ -203,11 +213,9 @@ class NeedleGauge(_VecBase):
         if labels:
             self._label_format = str(labels.get("format", "{:.0f}"))
             self._label_font = label_font
-            self._label_font_size = float(labels.get("font_size", 14.0))
             self._label_bold = label_bold
             self._label_italic = label_italic
             self._label_color = _as_color(labels.get("color"))
-            self._label_offset = float(labels.get("offset", 8.0))
             self._show_labels = True
             self._label_pool.clear()  # font changed; pool objects are stale
 
@@ -218,14 +226,13 @@ class NeedleGauge(_VecBase):
         self._needle_length *= scale
         self._needle_width *= scale
         self._spacing_table = [
-            [v, off * scale, length * scale, width * scale]
-            for v, off, length, width in self._spacing_table
+            [v, off * scale, length * scale, width * scale,
+             show_label, font_size * scale, label_offset * scale]
+            for v, off, length, width, show_label, font_size, label_offset in self._spacing_table
         ]
         self._linear_offset_x *= scale; self._linear_offset_y *= scale
         self._rect_w *= scale; self._rect_h *= scale
         self._rect_line_width *= scale
-        self._label_font_size *= scale
-        self._label_offset *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
 
     def apply_offset(self, dx: float, dy: float) -> None:
@@ -279,7 +286,7 @@ class NeedleGauge(_VecBase):
             if self._rect_line_color is not None:
                 arcade.draw_rect_outline(rect, self._rect_line_color, self._rect_line_width)
 
-        for value, off, length, width in self._spacing_table:
+        for value, off, length, width, _show_label, _font_size, _label_offset in self._spacing_table:
             if vertical:
                 x0, x1 = (tx - length, tx) if side == "left" else (tx, tx + length)
                 y = ty + off
@@ -293,7 +300,9 @@ class NeedleGauge(_VecBase):
             self._draw_linear_labels(vertical, side, tx, ty)
 
     def _draw_linear_labels(self, vertical: bool, side: str, tx: float, ty: float) -> None:
-        for idx, (value, off, _length, _width) in enumerate(self._spacing_table):
+        for idx, (value, off, _length, _width, show_label, font_size, label_offset) in enumerate(self._spacing_table):
+            # Pool slot reserved by table index regardless of visibility, so
+            # a hidden row never shifts a later row's pooled Text object.
             if idx >= len(self._label_pool):
                 kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
                 if self._label_font:
@@ -301,24 +310,27 @@ class NeedleGauge(_VecBase):
                 self._label_pool.append(arcade.Text(
                     "", 0, 0,
                     color=self._label_color,
-                    font_size=self._label_font_size,
+                    font_size=font_size,
                     anchor_x="center", anchor_y="center",
                     **kw,
                 ))
+            if not show_label:
+                continue
             t = self._label_pool[idx]
             t.text = self._label_format.format(value)
+            t.font_size = font_size
             if vertical:
                 if side == "left":
-                    t.x, t.anchor_x = tx - self._label_offset, "right"
+                    t.x, t.anchor_x = tx - label_offset, "right"
                 else:
-                    t.x, t.anchor_x = tx + self._label_offset, "left"
+                    t.x, t.anchor_x = tx + label_offset, "left"
                 t.y = ty + off
             else:
                 t.x = tx + off
                 if side == "top":
-                    t.y, t.anchor_y = ty + self._label_offset, "bottom"
+                    t.y, t.anchor_y = ty + label_offset, "bottom"
                 else:
-                    t.y, t.anchor_y = ty - self._label_offset, "top"
+                    t.y, t.anchor_y = ty - label_offset, "top"
             t.draw()
 
     def _draw_needle(self) -> None:
@@ -329,12 +341,20 @@ class NeedleGauge(_VecBase):
                          self._needle_color, self._needle_width)
 
 
-def _parse_spacing_row(row: list) -> list[float]:
-    """[value, offset] or [value, offset, length, width]; length/width
-    default to a sane minor-tick style when a row omits them."""
-    if len(row) >= 4:
-        return [float(row[0]), float(row[1]), float(row[2]), float(row[3])]
-    return [float(row[0]), float(row[1]), 10.0, 1.5]
+def _parse_spacing_row(row: list) -> list:
+    """Row shapes accepted, oldest to newest — each pads forward with sane
+    defaults so older 2/4-column rows keep working unmodified:
+      [value, offset]
+      [value, offset, length, width]
+      [value, offset, length, width, show_label, font_size, label_offset]
+    """
+    value, off = float(row[0]), float(row[1])
+    length = float(row[2]) if len(row) > 2 else 10.0
+    width = float(row[3]) if len(row) > 3 else 1.5
+    show_label = bool(row[4]) if len(row) > 4 else True
+    font_size = float(row[5]) if len(row) > 5 else 14.0
+    label_offset = float(row[6]) if len(row) > 6 else 8.0
+    return [value, off, length, width, show_label, font_size, label_offset]
 
 
 def _needle_gauge_factory(
