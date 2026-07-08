@@ -223,13 +223,16 @@ class _TableEditor(QWidget):
     that should use a QCheckBox cell instead of a spinbox. col_defaults maps
     a column index to the value a newly-added row's cell starts with (falls
     back to 0.0 / unchecked) — useful when a blank default would be actively
-    wrong, e.g. a font-size column defaulting to 0.
+    wrong, e.g. a font-size column defaulting to 0. narrow_columns marks
+    column indices that should shrink to fit their content (e.g. a checkbox
+    column) instead of stretching evenly with the rest.
     """
     changed = Signal()
 
     def __init__(self, *headers, parent=None, use_spinboxes: bool = False,
                  decimals: int = 2, value_range: tuple = (-99999.0, 99999.0),
-                 bool_columns: tuple = (), col_defaults: dict | None = None):
+                 bool_columns: tuple = (), col_defaults: dict | None = None,
+                 height: int = 110, narrow_columns: tuple = ()):
         super().__init__(parent)
         self._use_spinboxes = use_spinboxes
         self._decimals = decimals
@@ -239,9 +242,12 @@ class _TableEditor(QWidget):
         n = max(2, len(headers))
         self._tbl = QTableWidget(0, n)
         self._tbl.setHorizontalHeaderLabels(list(headers) if headers else ["Col 0", "Col 1"])
-        self._tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self._tbl.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        for c in narrow_columns:
+            header.setSectionResizeMode(c, QHeaderView.ResizeToContents)
         self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._tbl.setFixedHeight(110)
+        self._tbl.setFixedHeight(height)
         if not use_spinboxes:
             self._tbl.itemChanged.connect(lambda: self.changed.emit())
 
@@ -2640,6 +2646,7 @@ class PropertiesForm(QWidget):
             "Value", "Offset px", "Length px", "Width px", "Label", "Font size", "Label offset px",
             use_spinboxes=True, decimals=2,
             bool_columns=(4,), col_defaults={4: True, 5: 14.0, 6: 8.0},
+            height=240, narrow_columns=(4,),
         )
         self._ng_gradation_table.setToolTip(
             "One row = one fully-styled tick: value, pixel offset from\n"
