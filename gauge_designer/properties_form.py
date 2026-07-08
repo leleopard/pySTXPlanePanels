@@ -375,13 +375,13 @@ class _PointsTableEditor(QWidget):
     changed        = Signal()
     point_selected = Signal(int)   # row index of selected point, or -1
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, height: int = 130):
         super().__init__(parent)
         self._tbl = QTableWidget(0, 2)
         self._tbl.setHorizontalHeaderLabels(["X", "Y"])
         self._tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._tbl.setFixedHeight(130)
+        self._tbl.setFixedHeight(height)
         self._tbl.itemSelectionChanged.connect(self._on_selection_changed)
 
         add = QPushButton("+"); add.setFixedWidth(26); add.clicked.connect(self._add)
@@ -1569,7 +1569,7 @@ class PropertiesForm(QWidget):
         y_label = "Origin X  /  Y top" if is_y_down() else "Origin X  /  Y"
         self._poly_sec.row_pair(y_label, self._poly_ox, self._poly_oy)
 
-        self._poly_pts = _PointsTableEditor()
+        self._poly_pts = _PointsTableEditor(height=260)
         self._poly_pts.changed.connect(self._emit)
         self._poly_pts.point_selected.connect(self.point_selected)
         self._poly_sec.row("Points (relative to origin)", self._poly_pts)
