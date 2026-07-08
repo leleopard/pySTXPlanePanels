@@ -824,6 +824,16 @@ class InstrumentCanvas(QWidget):
         draw.line([(cx, cy - 10), (cx, cy + 10)], fill=c, width=1)
 
     @staticmethod
+    def _point_crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
+        """Cyan circled crosshair, 16px arms — deliberately distinct from
+        the origin's thin yellow crosshair so the two markers can't be
+        confused, marking whichever point is selected in a Points table."""
+        c = (0, 220, 255, 255)
+        draw.line([(cx - 8, cy), (cx + 8, cy)], fill=c, width=2)
+        draw.line([(cx, cy - 8), (cx, cy + 8)], fill=c, width=2)
+        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], outline=c, width=2)
+
+    @staticmethod
     def _paste_rotated_text(composite: Image.Image, text: str, font, color,
                             x: float, y: float, rotation_deg: float,
                             anchor_y: str = "m") -> None:
@@ -1053,6 +1063,13 @@ class InstrumentCanvas(QWidget):
 
         # Crosshair on origin
         self._crosshair(draw, ox, canvas_h - oy)
+
+        # Crosshair on whichever point is selected in the Points table
+        # (only while this Polygon is the selected component) — distinct
+        # style from the origin's crosshair above.
+        if comp.get("name") == self._selected_name and 0 <= self._selected_point_idx < len(pts):
+            px, py = pts[self._selected_point_idx]
+            self._point_crosshair(draw, px, py)
 
     def _render_rotary_encoder(self, comp: dict, composite: Image.Image,
                                draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
