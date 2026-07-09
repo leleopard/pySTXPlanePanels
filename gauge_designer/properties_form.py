@@ -2749,18 +2749,22 @@ class PropertiesForm(QWidget):
         # Needle viewport clip — scoped to the needle only (arc/tape/ticks/
         # labels are unaffected), so it's its own optional group rather than
         # reusing the shared "Viewport clip" section elsewhere in this form.
+        # Offset X/Y are relative to Center X/Y above (same "offset from
+        # pivot" convention as the Tape offset X/Y fields), not absolute
+        # instrument-space coordinates, so the box stays meaningful if the
+        # gauge is repositioned as a whole.
         self._ng_needle_vp_sec = _Section("Needle viewport clip", optional=True)
         self._ng_needle_vp_sec.toggled.connect(self._emit)
         self._ng_needle_vp_sec.setToolTip(
-            "Clips ONLY the needle line to this rectangle (instrument-space,\n"
-            "same [x, y, w, h] convention as the shared Viewport clip section\n"
-            "elsewhere). The arc/tape/ticks/labels are unaffected."
+            "Clips ONLY the needle line to this rectangle. Offset X/Y are\n"
+            "relative to Center X/Y above (positive X = right of pivot,\n"
+            "positive Y = above pivot) — the arc/tape/ticks/labels are\n"
+            "unaffected."
         )
-        self._ng_needle_vp_x = _sb(0, 4096); self._ng_needle_vp_y = _sb(0, 4096)
+        self._ng_needle_vp_x = _sb(); self._ng_needle_vp_y = _sb()
         for w in (self._ng_needle_vp_x, self._ng_needle_vp_y):
             w.valueChanged.connect(self._emit)
-        ng_vp_y_label = "X  /  Y top" if is_y_down() else "X  /  Y bottom"
-        self._ng_needle_vp_sec.row_pair(ng_vp_y_label, self._ng_needle_vp_x, self._ng_needle_vp_y)
+        self._ng_needle_vp_sec.row_pair("Offset X  /  Y", self._ng_needle_vp_x, self._ng_needle_vp_y)
         self._ng_needle_vp_w = _sb(0, 4096); self._ng_needle_vp_h = _sb(0, 4096)
         for w in (self._ng_needle_vp_w, self._ng_needle_vp_h):
             w.valueChanged.connect(self._emit)
@@ -4127,11 +4131,11 @@ class PropertiesForm(QWidget):
         ng_nv = comp.get("needle_viewport")
         self._ng_needle_vp_sec.set_active(ng_nv is not None)
         if ng_nv:
+            # Relative to the pivot — no y-flip (same as Tape offset X/Y).
             self._ng_needle_vp_x.setValue(int(ng_nv[0]))
+            self._ng_needle_vp_y.setValue(int(ng_nv[1]))
             self._ng_needle_vp_w.setValue(int(ng_nv[2]))
             self._ng_needle_vp_h.setValue(int(ng_nv[3]))
-            nv_vy_display = (self._ref_height - int(ng_nv[1]) - int(ng_nv[3])) if is_y_down() else int(ng_nv[1])
-            self._ng_needle_vp_y.setValue(nv_vy_display)
         else:
             self._ng_needle_vp_x.setValue(0); self._ng_needle_vp_y.setValue(0)
             self._ng_needle_vp_w.setValue(0); self._ng_needle_vp_h.setValue(0)
@@ -4455,11 +4459,9 @@ class PropertiesForm(QWidget):
             data["needle_color"] = list(self._ng_needle_color.get_rgba())
             data["needle_angle"] = self._ng_needle_angle.get_data()
             if self._ng_needle_vp_sec.active:
-                nv_h = self._ng_needle_vp_h.value()
-                nv_vy_display = self._ng_needle_vp_y.value()
-                nv_vy_yaml = (self._ref_height - nv_vy_display - nv_h) if is_y_down() else nv_vy_display
-                data["needle_viewport"] = [self._ng_needle_vp_x.value(), nv_vy_yaml,
-                                           self._ng_needle_vp_w.value(), nv_h]
+                # Relative to the pivot — no y-flip (same as Tape offset X/Y).
+                data["needle_viewport"] = [self._ng_needle_vp_x.value(), self._ng_needle_vp_y.value(),
+                                           self._ng_needle_vp_w.value(), self._ng_needle_vp_h.value()]
 
         elif ct == "VectorCompassRose":
             data["center"] = [self._cr_cx.value(), flip_y(self._cr_cy.value(), self._ref_height)]

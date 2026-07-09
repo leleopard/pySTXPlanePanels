@@ -44,9 +44,11 @@ YAML schema
       #   dataref: sim/cockpit/misc/vvi_fpm
       #   table: [[-6000, -140], [0, 0], [6000, 140]]
       #   convert_function: null
-      needle_viewport: [50, 50, 200, 200]   # optional; [x, y_bottom, w, h],
-                                     # same convention as every other
-                                     # viewport clip in this codebase.
+      needle_viewport: [-40, -40, 200, 200]  # optional; [dx, dy, w, h] —
+                                     # RELATIVE to `center` (same "offset
+                                     # from pivot" convention as the linear
+                                     # tape's own `offset` below), not an
+                                     # absolute instrument-space rectangle.
                                      # Scissor-clips ONLY the needle line —
                                      # the arc/tape/ticks/labels are
                                      # unaffected. Omit for no clipping.
@@ -154,8 +156,11 @@ class NeedleGauge(_VecBase):
         self._needle_dr: Any | None = None
         self._needle_table: list = []
         self._needle_convert: Callable | None = None
-        # Scissor rectangle (instrument-space [x, y_bottom, w, h]) confining
-        # ONLY the needle line — the arc/tape/ticks/labels are unaffected.
+        # Scissor rectangle confining ONLY the needle line — the arc/tape/
+        # ticks/labels are unaffected. [dx, dy, w, h], relative to (cx, cy)
+        # (same "offset from pivot" convention as the linear tape's own
+        # `offset` field) rather than absolute instrument-space, so the box
+        # stays meaningful if the gauge is repositioned as a whole.
         self._needle_viewport: tuple[float, float, float, float] | None = None
 
         # Linear mode (optional; enabled by calling set_linear()). Each
@@ -199,11 +204,12 @@ class NeedleGauge(_VecBase):
         if convert_fn:
             self._needle_convert = get_convert(convert_fn)
 
-    def set_needle_viewport(self, x: float, y: float, w: float, h: float) -> None:
-        """Scissor rectangle (instrument-space, y-up) confining only the
-        needle line — same [x, y_bottom, w, h] convention as every other
-        viewport clip in this codebase."""
-        self._needle_viewport = (x, y, w, h)
+    def set_needle_viewport(self, offset_x: float, offset_y: float, w: float, h: float) -> None:
+        """Scissor rectangle confining only the needle line, positioned at
+        (cx + offset_x, cy + offset_y) — relative to the pivot, not an
+        absolute instrument-space rectangle (same convention as the linear
+        tape's own `offset`)."""
+        self._needle_viewport = (offset_x, offset_y, w, h)
 
     def set_linear(
         self,
@@ -260,10 +266,10 @@ class NeedleGauge(_VecBase):
             self._needle_viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
 
     def apply_offset(self, dx: float, dy: float) -> None:
+        # _needle_viewport (like _linear_offset_x/_y) is relative to
+        # (cx, cy), so it needs no adjustment here — it moves with the
+        # pivot automatically.
         self._cx += dx; self._cy += dy
-        if self._needle_viewport is not None:
-            vx, vy, vw, vh = self._needle_viewport
-            self._needle_viewport = (vx + dx, vy + dy, vw, vh)
 
     def update(self, get_data: Callable[[Any], float]) -> None:
         self._update_visibility(get_data)
@@ -378,8 +384,10 @@ class NeedleGauge(_VecBase):
                              self._needle_color, self._needle_width)
             return
         # Scissor-clip just the needle line — same idiom as ImagePanel's and
-        # ScrollingTape's viewport clip (gauge_core/component.py).
-        vx, vy, vw, vh = self._needle_viewport
+        # ScrollingTape's viewport clip (gauge_core/component.py), except
+        # the rect is relative to the pivot (see set_needle_viewport()).
+        off_x, off_y, vw, vh = self._needle_viewport
+        vx, vy = self._cx + off_x, self._cy + off_y
         win = arcade.get_window()
         ctx = win.ctx
         _, _, fvp_w, fvp_h = ctx.viewport

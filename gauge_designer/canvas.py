@@ -761,11 +761,13 @@ class InstrumentCanvas(QWidget):
         if nv:
             # Same "draw fully, clip after" approach as _render_compassrose's
             # viewport handling — matches the runtime's GL scissor without
-            # hand-clipping the line geometry.
+            # hand-clipping the line geometry. nv is [dx, dy, w, h] relative
+            # to `center` (not cx_p/cy_p, which are already PIL-flipped).
             layer = Image.new("RGBA", composite.size, (0, 0, 0, 0))
             ImageDraw.Draw(layer).line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
-            nvx, nvy, nvw, nvh = nv
-            rx, ry = int(nvx), int(canvas_h - nvy - nvh)
+            off_x, off_y, nvw, nvh = nv
+            abs_x, abs_y = float(ctr[0]) + off_x, float(ctr[1]) + off_y
+            rx, ry = int(abs_x), int(canvas_h - abs_y - nvh)
             rw, rh = int(nvw), int(nvh)
             cropped = layer.crop((rx, ry, rx + rw, ry + rh))
             composite.alpha_composite(cropped, (rx, ry))
