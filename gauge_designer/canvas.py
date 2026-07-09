@@ -771,6 +771,11 @@ class InstrumentCanvas(QWidget):
             rw, rh = int(nvw), int(nvh)
             cropped = layer.crop((rx, ry, rx + rw, ry + rh))
             composite.alpha_composite(cropped, (rx, ry))
+            # Reference outline for the clip box itself — always shown (not
+            # gated by selection) so offset/size can be tuned without having
+            # to keep re-selecting the component.
+            draw.rectangle([rx, ry, rx + rw - 1, ry + rh - 1],
+                           outline=(0, 200, 255, 220), width=1)
         else:
             draw.line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
 
