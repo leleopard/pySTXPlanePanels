@@ -21,7 +21,13 @@ gradation type). The scale around it is either:
   own value->angle table remains a separate, independently-calibrated
   lookup (unchanged mechanism).
 
-Angle convention (Arcade): 0° = right (3 o'clock), CCW positive.
+Angle convention: 0° = up (12 o'clock), clockwise positive — this is
+this component's own "clock face" convention (needle_angle, static
+needle angle, and the circular arc's start_angle/end_angle all share
+it), distinct from Arcade's native math convention (0° = right, CCW+)
+used elsewhere in this codebase (Arc, Vector, VectorCompassRose, etc.).
+Internally converted via math_angle = 90 - clock_angle wherever Arcade
+APIs need the native convention.
 
 YAML schema
 -----------
@@ -33,7 +39,7 @@ YAML schema
       needle_length: 130
       needle_width: 2.0
       needle_color: [255, 255, 255, 255]
-      needle_angle: -220            # static angle, OR dataref dict:
+      needle_angle: -130            # static angle, OR dataref dict:
       # needle_angle:
       #   dataref: sim/cockpit/misc/vvi_fpm
       #   table: [[-6000, -140], [0, 0], [6000, 140]]
@@ -41,8 +47,8 @@ YAML schema
 
       # Circular mode only (unchanged from the original CircularGauge):
       radius: 200
-      start_angle: -220
-      end_angle: 40
+      start_angle: -130
+      end_angle: 130
       arc_color: [255, 255, 255, 255]
       arc_width: 3.0
       num_segments: 64              # optional
@@ -113,8 +119,8 @@ class NeedleGauge(_VecBase):
         center: tuple[float, float],
         gradation_type: str = "circular",
         radius: float = 100.0,
-        start_angle: float = -220.0,
-        end_angle: float = 40.0,
+        start_angle: float = -130.0,
+        end_angle: float = 130.0,
         arc_color: tuple[int, int, int, int] = (255, 255, 255, 255),
         arc_width: float = 2.0,
         num_segments: int = 64,
@@ -259,11 +265,18 @@ class NeedleGauge(_VecBase):
         self._draw_needle()
 
     def _draw_circular(self) -> None:
+        # start_angle/end_angle are in this component's clock convention
+        # (0°=up, CW+); Arcade's draw_arc_outline wants its native math
+        # convention (0°=right, CCW+) — convert via 90 - clock_angle. Arcade
+        # silently draws nothing if the first angle it's given isn't
+        # numerically smaller than the second (confirmed empirically), and
+        # since an outline has no directionality, sorting is always safe.
+        m1, m2 = 90.0 - self._start_angle, 90.0 - self._end_angle
         arcade.draw_arc_outline(
             self._cx, self._cy,
             self._radius * 2, self._radius * 2,
             self._arc_color,
-            self._start_angle, self._end_angle,
+            min(m1, m2), max(m1, m2),
             self._arc_width,
             0.0,
             self._segments,
@@ -334,9 +347,11 @@ class NeedleGauge(_VecBase):
             t.draw()
 
     def _draw_needle(self) -> None:
+        # 0°=up, CW+ (this component's clock convention): direction vector
+        # is (sin, cos) rather than the usual (cos, sin).
         angle_rad = math.radians(self._needle_angle)
-        ex = self._cx + self._needle_length * math.cos(angle_rad)
-        ey = self._cy + self._needle_length * math.sin(angle_rad)
+        ex = self._cx + self._needle_length * math.sin(angle_rad)
+        ey = self._cy + self._needle_length * math.cos(angle_rad)
         arcade.draw_line(self._cx, self._cy, ex, ey,
                          self._needle_color, self._needle_width)
 
@@ -372,8 +387,8 @@ def _needle_gauge_factory(
         center=tuple(comp["center"]),
         gradation_type=str(comp.get("gradation_type", "circular")),
         radius=float(comp.get("radius", 100.0)),
-        start_angle=float(comp.get("start_angle", -220.0)),
-        end_angle=float(comp.get("end_angle", 40.0)),
+        start_angle=float(comp.get("start_angle", -130.0)),
+        end_angle=float(comp.get("end_angle", 130.0)),
         arc_color=_as_color(comp.get("arc_color") or comp.get("color")),
         arc_width=float(comp.get("arc_width", 2.0)),
         num_segments=int(comp.get("num_segments", 64)),

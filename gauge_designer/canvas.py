@@ -723,16 +723,24 @@ class InstrumentCanvas(QWidget):
             self._render_needlegauge_linear(comp, draw, cx_p, cy_p)
         else:
             r = float(comp.get("radius", 100.0))
-            sa = float(comp.get("start_angle", -220.0))
-            ea = float(comp.get("end_angle", 40.0))
+            # NeedleGauge's own clock convention (0°=up, CW+), NOT the
+            # standalone Arc component's math convention above. Converting
+            # straight to PIL's angle: pil = clock_angle - 90. PIL (like
+            # Arcade's draw_arc_outline) silently draws the wrong short-way
+            # arc — or nothing — unless the first angle is numerically
+            # smaller than the second (confirmed empirically); an outline
+            # has no directionality, so sorting is always safe.
+            sa = float(comp.get("start_angle", -130.0))
+            ea = float(comp.get("end_angle", 130.0))
             acolor = _rgba(comp.get("arc_color") or comp.get("color"))
             awidth = max(1, int(round(float(comp.get("arc_width", 2.0)))))
             bbox = [cx_p - r, cy_p - r, cx_p + r, cy_p + r]
-            draw.arc(bbox, -ea, -sa, fill=acolor, width=awidth)
+            p1, p2 = sa - 90.0, ea - 90.0
+            draw.arc(bbox, min(p1, p2), max(p1, p2), fill=acolor, width=awidth)
 
         # Needle — no live dataref value in the static preview, so use a
         # representative mid-scale angle when dataref-driven.
-        angle_cfg = comp.get("needle_angle", -220.0)
+        angle_cfg = comp.get("needle_angle", -130.0)
         if isinstance(angle_cfg, dict):
             table = angle_cfg.get("table") or [[0, 0]]
             angles = [row[1] for row in table]
@@ -743,10 +751,10 @@ class InstrumentCanvas(QWidget):
         ncolor = _rgba(comp.get("needle_color") or comp.get("color"))
         nwidth = max(1, int(round(float(comp.get("needle_width", 2.0)))))
         angle_rad = math.radians(angle)
-        ex = cx_p + length * math.cos(angle_rad)
-        # PIL y is flipped vs. Arcade; negate the sin term (same rule the
-        # Arc/Vector selection-highlight code above already applies).
-        ey = cy_p - length * math.sin(angle_rad)
+        # 0°=up, CW+ (this component's clock convention): direction is
+        # (sin, cos); PIL y is flipped vs. Arcade, so negate the cos term.
+        ex = cx_p + length * math.sin(angle_rad)
+        ey = cy_p - length * math.cos(angle_rad)
         draw.line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
 
     def _render_needlegauge_linear(self, comp: dict, draw: ImageDraw.ImageDraw,

@@ -2541,17 +2541,17 @@ class PropertiesForm(QWidget):
 
         self._ng_arc_start = QDoubleSpinBox()
         self._ng_arc_start.setRange(-360.0, 360.0); self._ng_arc_start.setDecimals(1)
-        self._ng_arc_start.setValue(-220.0)
+        self._ng_arc_start.setValue(-130.0)
         self._ng_arc_start.valueChanged.connect(self._emit)
         cform.addRow("Arc start °", self._ng_arc_start)
 
         self._ng_arc_end = QDoubleSpinBox()
         self._ng_arc_end.setRange(-360.0, 360.0); self._ng_arc_end.setDecimals(1)
-        self._ng_arc_end.setValue(40.0)
+        self._ng_arc_end.setValue(130.0)
         self._ng_arc_end.valueChanged.connect(self._emit)
         cform.addRow("Arc end °", self._ng_arc_end)
 
-        _ng_angle_hint = QLabel("Angles: 0° = right, CCW positive.")
+        _ng_angle_hint = QLabel("Angles: 0° = up, clockwise positive.")
         _ng_angle_hint.setStyleSheet("color: #999; font-size: 10px;")
         cform.addRow(_ng_angle_hint)
 
@@ -4068,8 +4068,8 @@ class PropertiesForm(QWidget):
         self._ng_grad_type.setCurrentIndex(max(self._ng_grad_type.findText(ng_grad), 0))
         self._ng_grad_stack.setCurrentIndex(1 if ng_grad == "linear" else 0)
         self._ng_radius.setValue(float(comp.get("radius", 100.0)))
-        self._ng_arc_start.setValue(float(comp.get("start_angle", -220.0)))
-        self._ng_arc_end.setValue(float(comp.get("end_angle", 40.0)))
+        self._ng_arc_start.setValue(float(comp.get("start_angle", -130.0)))
+        self._ng_arc_end.setValue(float(comp.get("end_angle", 130.0)))
         self._ng_arc_color.set_rgba(comp.get("arc_color") or comp.get("color"))
         self._ng_arc_width.setValue(float(comp.get("arc_width", 2.0)))
         self._ng_segments.setValue(int(comp.get("num_segments", 64)))
@@ -4102,7 +4102,7 @@ class PropertiesForm(QWidget):
         self._ng_needle_len.setValue(float(comp.get("needle_length", 80.0)))
         self._ng_needle_width.setValue(float(comp.get("needle_width", 2.0)))
         self._ng_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
-        self._ng_needle_angle.load(comp.get("needle_angle", -220.0))
+        self._ng_needle_angle.load(comp.get("needle_angle", -130.0))
 
         # VectorCompassRose
         cr_ctr = comp.get("center", [0, 0])
@@ -5019,7 +5019,7 @@ class PropertiesForm(QWidget):
         self._ng_cx.setValue(0); self._ng_cy.setValue(0)
         self._ng_grad_type.setCurrentIndex(0); self._ng_grad_stack.setCurrentIndex(0)
         self._ng_radius.setValue(100.0)
-        self._ng_arc_start.setValue(-220.0); self._ng_arc_end.setValue(40.0)
+        self._ng_arc_start.setValue(-130.0); self._ng_arc_end.setValue(130.0)
         self._ng_arc_color.set_rgba(None); self._ng_arc_width.setValue(2.0)
         self._ng_segments.setValue(64)
         self._ng_orientation.setCurrentIndex(0)
@@ -5038,7 +5038,7 @@ class PropertiesForm(QWidget):
         self._ng_label_bold.setChecked(False); self._ng_label_italic.setChecked(False)
         self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)
         self._ng_needle_color.set_rgba(None)
-        self._ng_needle_angle.load(-220.0)
+        self._ng_needle_angle.load(-130.0)
         # VectorCompassRose
         self._cr_cx.setValue(0); self._cr_cy.setValue(0)
         self._cr_radius.setValue(150.0)
