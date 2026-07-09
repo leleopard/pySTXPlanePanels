@@ -2746,6 +2746,27 @@ class PropertiesForm(QWidget):
         self._ng_needle_angle.changed.connect(self._emit)
         self._ng_sec.row_widget(self._ng_needle_angle)
 
+        # Needle viewport clip — scoped to the needle only (arc/tape/ticks/
+        # labels are unaffected), so it's its own optional group rather than
+        # reusing the shared "Viewport clip" section elsewhere in this form.
+        self._ng_needle_vp_sec = _Section("Needle viewport clip", optional=True)
+        self._ng_needle_vp_sec.toggled.connect(self._emit)
+        self._ng_needle_vp_sec.setToolTip(
+            "Clips ONLY the needle line to this rectangle (instrument-space,\n"
+            "same [x, y, w, h] convention as the shared Viewport clip section\n"
+            "elsewhere). The arc/tape/ticks/labels are unaffected."
+        )
+        self._ng_needle_vp_x = _sb(0, 4096); self._ng_needle_vp_y = _sb(0, 4096)
+        for w in (self._ng_needle_vp_x, self._ng_needle_vp_y):
+            w.valueChanged.connect(self._emit)
+        ng_vp_y_label = "X  /  Y top" if is_y_down() else "X  /  Y bottom"
+        self._ng_needle_vp_sec.row_pair(ng_vp_y_label, self._ng_needle_vp_x, self._ng_needle_vp_y)
+        self._ng_needle_vp_w = _sb(0, 4096); self._ng_needle_vp_h = _sb(0, 4096)
+        for w in (self._ng_needle_vp_w, self._ng_needle_vp_h):
+            w.valueChanged.connect(self._emit)
+        self._ng_needle_vp_sec.row_pair("W  /  H", self._ng_needle_vp_w, self._ng_needle_vp_h)
+        self._ng_sec.row_widget(self._ng_needle_vp_sec)
+
         self._vbox.addWidget(self._ng_sec)
 
     def _on_ng_grad_type_changed(self, idx: int) -> None:
@@ -3604,7 +3625,7 @@ class PropertiesForm(QWidget):
             "face_offset", "face_rotation_center", "face_rotation",
             # NeedleGauge
             "gradation_type", "arc_color", "arc_width", "needle_length", "needle_width",
-            "needle_color", "needle_angle", "linear",
+            "needle_color", "needle_angle", "needle_viewport", "linear",
             # VectorCompassRose
             "background_color", "show_line", "line_color", "line_width",
             "tick5_length", "tick5_color", "tick5_width", "tick5_position",
@@ -4103,6 +4124,17 @@ class PropertiesForm(QWidget):
         self._ng_needle_width.setValue(float(comp.get("needle_width", 2.0)))
         self._ng_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
         self._ng_needle_angle.load(comp.get("needle_angle", -130.0))
+        ng_nv = comp.get("needle_viewport")
+        self._ng_needle_vp_sec.set_active(ng_nv is not None)
+        if ng_nv:
+            self._ng_needle_vp_x.setValue(int(ng_nv[0]))
+            self._ng_needle_vp_w.setValue(int(ng_nv[2]))
+            self._ng_needle_vp_h.setValue(int(ng_nv[3]))
+            nv_vy_display = (self._ref_height - int(ng_nv[1]) - int(ng_nv[3])) if is_y_down() else int(ng_nv[1])
+            self._ng_needle_vp_y.setValue(nv_vy_display)
+        else:
+            self._ng_needle_vp_x.setValue(0); self._ng_needle_vp_y.setValue(0)
+            self._ng_needle_vp_w.setValue(0); self._ng_needle_vp_h.setValue(0)
 
         # VectorCompassRose
         cr_ctr = comp.get("center", [0, 0])
@@ -4422,6 +4454,12 @@ class PropertiesForm(QWidget):
                 data["needle_width"] = nw
             data["needle_color"] = list(self._ng_needle_color.get_rgba())
             data["needle_angle"] = self._ng_needle_angle.get_data()
+            if self._ng_needle_vp_sec.active:
+                nv_h = self._ng_needle_vp_h.value()
+                nv_vy_display = self._ng_needle_vp_y.value()
+                nv_vy_yaml = (self._ref_height - nv_vy_display - nv_h) if is_y_down() else nv_vy_display
+                data["needle_viewport"] = [self._ng_needle_vp_x.value(), nv_vy_yaml,
+                                           self._ng_needle_vp_w.value(), nv_h]
 
         elif ct == "VectorCompassRose":
             data["center"] = [self._cr_cx.value(), flip_y(self._cr_cy.value(), self._ref_height)]
@@ -5039,6 +5077,9 @@ class PropertiesForm(QWidget):
         self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)
         self._ng_needle_color.set_rgba(None)
         self._ng_needle_angle.load(-130.0)
+        self._ng_needle_vp_sec.set_active(False)
+        self._ng_needle_vp_x.setValue(0); self._ng_needle_vp_y.setValue(0)
+        self._ng_needle_vp_w.setValue(0); self._ng_needle_vp_h.setValue(0)
         # VectorCompassRose
         self._cr_cx.setValue(0); self._cr_cy.setValue(0)
         self._cr_radius.setValue(150.0)

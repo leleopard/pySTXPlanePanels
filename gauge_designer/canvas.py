@@ -589,7 +589,7 @@ class InstrumentCanvas(QWidget):
                 elif ctype == "RotaryEncoder":
                     self._render_rotary_encoder(comp, composite, draw, h)
                 elif ctype == "NeedleGauge":
-                    self._render_needlegauge(comp, draw, h)
+                    self._render_needlegauge(comp, composite, draw, h)
                 elif ctype == "Text":
                     self._render_text(comp, draw, h)
             except Exception:
@@ -714,7 +714,8 @@ class InstrumentCanvas(QWidget):
         # Flipping y negates all angles, so swap and negate: pil_start=-ea, pil_end=-sa.
         draw.arc(bbox, -ea, -sa, fill=color, width=width)
 
-    def _render_needlegauge(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
+    def _render_needlegauge(self, comp: dict, composite: Image.Image,
+                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         ctr = comp.get("center", [0, 0])
         cx_p, cy_p = float(ctr[0]), canvas_h - float(ctr[1])
         grad = str(comp.get("gradation_type", "circular"))
@@ -755,7 +756,21 @@ class InstrumentCanvas(QWidget):
         # (sin, cos); PIL y is flipped vs. Arcade, so negate the cos term.
         ex = cx_p + length * math.sin(angle_rad)
         ey = cy_p - length * math.cos(angle_rad)
-        draw.line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
+
+        nv = comp.get("needle_viewport")
+        if nv:
+            # Same "draw fully, clip after" approach as _render_compassrose's
+            # viewport handling — matches the runtime's GL scissor without
+            # hand-clipping the line geometry.
+            layer = Image.new("RGBA", composite.size, (0, 0, 0, 0))
+            ImageDraw.Draw(layer).line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
+            nvx, nvy, nvw, nvh = nv
+            rx, ry = int(nvx), int(canvas_h - nvy - nvh)
+            rw, rh = int(nvw), int(nvh)
+            cropped = layer.crop((rx, ry, rx + rw, ry + rh))
+            composite.alpha_composite(cropped, (rx, ry))
+        else:
+            draw.line([(cx_p, cy_p), (ex, ey)], fill=ncolor, width=nwidth)
 
     def _render_needlegauge_linear(self, comp: dict, draw: ImageDraw.ImageDraw,
                                    cx_p: float, cy_p: float) -> None:

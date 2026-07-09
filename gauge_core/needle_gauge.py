@@ -44,6 +44,12 @@ YAML schema
       #   dataref: sim/cockpit/misc/vvi_fpm
       #   table: [[-6000, -140], [0, 0], [6000, 140]]
       #   convert_function: null
+      needle_viewport: [50, 50, 200, 200]   # optional; [x, y_bottom, w, h],
+                                     # same convention as every other
+                                     # viewport clip in this codebase.
+                                     # Scissor-clips ONLY the needle line —
+                                     # the arc/tape/ticks/labels are
+                                     # unaffected. Omit for no clipping.
 
       # Circular mode only (unchanged from the original CircularGauge):
       radius: 200
@@ -148,6 +154,9 @@ class NeedleGauge(_VecBase):
         self._needle_dr: Any | None = None
         self._needle_table: list = []
         self._needle_convert: Callable | None = None
+        # Scissor rectangle (instrument-space [x, y_bottom, w, h]) confining
+        # ONLY the needle line — the arc/tape/ticks/labels are unaffected.
+        self._needle_viewport: tuple[float, float, float, float] | None = None
 
         # Linear mode (optional; enabled by calling set_linear()). Each
         # spacing_table row is [value, offset, length, width] — one row,
@@ -189,6 +198,12 @@ class NeedleGauge(_VecBase):
         self._needle_table = table
         if convert_fn:
             self._needle_convert = get_convert(convert_fn)
+
+    def set_needle_viewport(self, x: float, y: float, w: float, h: float) -> None:
+        """Scissor rectangle (instrument-space, y-up) confining only the
+        needle line — same [x, y_bottom, w, h] convention as every other
+        viewport clip in this codebase."""
+        self._needle_viewport = (x, y, w, h)
 
     def set_linear(
         self,
@@ -240,9 +255,15 @@ class NeedleGauge(_VecBase):
         self._rect_w *= scale; self._rect_h *= scale
         self._rect_line_width *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
+        if self._needle_viewport is not None:
+            vx, vy, vw, vh = self._needle_viewport
+            self._needle_viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._cx += dx; self._cy += dy
+        if self._needle_viewport is not None:
+            vx, vy, vw, vh = self._needle_viewport
+            self._needle_viewport = (vx + dx, vy + dy, vw, vh)
 
     def update(self, get_data: Callable[[Any], float]) -> None:
         self._update_visibility(get_data)
@@ -352,8 +373,23 @@ class NeedleGauge(_VecBase):
         angle_rad = math.radians(self._needle_angle)
         ex = self._cx + self._needle_length * math.sin(angle_rad)
         ey = self._cy + self._needle_length * math.cos(angle_rad)
+        if self._needle_viewport is None:
+            arcade.draw_line(self._cx, self._cy, ex, ey,
+                             self._needle_color, self._needle_width)
+            return
+        # Scissor-clip just the needle line — same idiom as ImagePanel's and
+        # ScrollingTape's viewport clip (gauge_core/component.py).
+        vx, vy, vw, vh = self._needle_viewport
+        win = arcade.get_window()
+        ctx = win.ctx
+        _, _, fvp_w, fvp_h = ctx.viewport
+        panel_w, panel_h = getattr(win, "_panel_size", (win.width, win.height))
+        sx = fvp_w / panel_w
+        sy = fvp_h / panel_h
+        ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
         arcade.draw_line(self._cx, self._cy, ex, ey,
                          self._needle_color, self._needle_width)
+        ctx.scissor = None
 
 
 def _parse_spacing_row(row: list) -> list:
@@ -403,6 +439,10 @@ def _needle_gauge_factory(
             angle_cfg.get("table", []),
             angle_cfg.get("convert_function"),
         )
+
+    nv = comp.get("needle_viewport")
+    if nv:
+        ng.set_needle_viewport(*[float(v) for v in nv])
 
     linear_cfg = comp.get("linear")
     if linear_cfg:
