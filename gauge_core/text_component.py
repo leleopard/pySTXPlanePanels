@@ -104,6 +104,7 @@ class Text:
         self._dataref: Any | None = None
         self._format: str | None = None
         self._convert: Callable | None = None
+        self._absolute_value = False
         self._static_text = text
 
         # Optional dataref-driven visibility (mirrors ImagePanel behaviour)
@@ -115,10 +116,12 @@ class Text:
         dataref: Any,
         text_format: str = "{:.1f}",
         convert_function: str | None = None,
+        absolute_value: bool = False,
     ) -> None:
         self._dataref = _as_dataref(dataref)
         self._format = text_format
         self._convert = get_convert(convert_function)
+        self._absolute_value = bool(absolute_value)
 
     def set_visibility(self, dataref: Any, predicate: str) -> None:
         self._vis_dataref = _as_dataref(dataref)
@@ -177,6 +180,8 @@ class Text:
             value = float(get_data(self._dataref))
             if self._convert is not None:
                 value = float(self._convert(value, get_data))
+            if self._absolute_value:
+                value = abs(value)
             if self.label_hi is not None:
                 hi_text, lo_text = split_at_place(value, self._emphasize_place)
                 self.label_hi.text = hi_text
@@ -227,6 +232,7 @@ def _text_factory(
             dataref=comp["dataref"],
             text_format=comp.get("text_format", "{:.1f}"),
             convert_function=comp.get("convert_function"),
+            absolute_value=bool(comp.get("absolute_value", False)),
         )
     if "visibility" in comp:
         vis = comp["visibility"]

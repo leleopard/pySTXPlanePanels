@@ -1347,6 +1347,11 @@ class PropertiesForm(QWidget):
         self._txt_fn.currentTextChanged.connect(self._emit)
         dp_form.addRow("Convert fn", self._txt_fn)
 
+        self._txt_abs = QCheckBox("Show absolute value")
+        self._txt_abs.setToolTip("Applied after Convert fn, before formatting — displays |value| instead of value.")
+        self._txt_abs.toggled.connect(self._emit)
+        dp_form.addRow(self._txt_abs)
+
         self._txt_decimals = QSpinBox()
         self._txt_decimals.setRange(0, 6)
         self._txt_decimals.setValue(1)
@@ -3657,7 +3662,8 @@ class PropertiesForm(QWidget):
             # VectorTape (all form-managed)
             "pixels_per_unit", "wrap", "tick_side", "tick_color", "bg_color", "ticks", "labels", "bands", "bugs",
             # Text
-            "text", "dataref", "text_format", "convert_function",
+            "text", "dataref", "text_format", "convert_function", "absolute_value",
+            "emphasize_place", "emphasize_font_size",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # Vector
             "direction", "length", "cap", "cap_width", "cap_height", "cap_filled", "hide_if_less_than_cap",
@@ -3895,6 +3901,7 @@ class PropertiesForm(QWidget):
         self._txt_dr.setText(str(comp.get("dataref", "")))
         txt_cf = str(comp.get("convert_function") or _NONE)
         self._txt_fn.setCurrentIndex(max(self._txt_fn.findText(txt_cf), 0))
+        self._txt_abs.setChecked(bool(comp.get("absolute_value", False)))
         txt_fmt = str(comp.get("text_format", ""))
         self._txt_fmt_custom.setText(txt_fmt)
         self._update_txt_format()  # refresh preview from builder
@@ -4957,6 +4964,8 @@ class PropertiesForm(QWidget):
                 cf = self._txt_fn.currentText()
                 if cf != _NONE:
                     data["convert_function"] = cf
+                if self._txt_abs.isChecked():
+                    data["absolute_value"] = True
                 custom_fmt = self._txt_fmt_custom.text().strip()
                 if custom_fmt:
                     data["text_format"] = custom_fmt
@@ -5345,6 +5354,7 @@ class PropertiesForm(QWidget):
         self._txt_static.clear()
         self._txt_dr.clear()
         self._txt_fn.setCurrentIndex(0)
+        self._txt_abs.setChecked(False)
         self._txt_decimals.setValue(1)
         self._txt_width.setValue(0)
         self._txt_zerofill.setChecked(False)
