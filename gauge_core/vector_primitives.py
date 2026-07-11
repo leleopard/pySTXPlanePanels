@@ -12,8 +12,16 @@ YAML schema examples
 --------------------
     - type: Line
       name: horizon_line
-      start: [50, 250]
+      start: [50, 250]      # two-point form; equivalent to points: [[50,250],[450,250]]
       end: [450, 250]
+      color: [255, 255, 255, 200]
+      width: 2
+
+    - type: Line
+      name: multi_segment_line
+      points: [[50, 250], [150, 300], [250, 250], [350, 300]]  # 2+ points; drawn as
+                                     # connected segments (a polyline). Takes
+                                     # precedence over start/end when present.
       color: [255, 255, 255, 200]
       width: 2
 
@@ -107,37 +115,34 @@ class _VecBase:
 # ---------------------------------------------------------------------------
 
 class Line(_VecBase):
-    """Straight line between two points."""
+    """Straight line — or, with 3+ points, a connected polyline (multiple
+    straight segments drawn end-to-end)."""
 
     def __init__(
         self,
         name: str,
-        start: tuple[float, float],
-        end: tuple[float, float],
+        points: list[tuple[float, float]],
         color: tuple[int, int, int, int],
         width: float = 1.0,
     ) -> None:
         self.name = name
-        self._x1, self._y1 = float(start[0]), float(start[1])
-        self._x2, self._y2 = float(end[0]), float(end[1])
+        self._points: list[list[float]] = [[float(x), float(y)] for x, y in points]
         self._color = color
         self._width = float(width)
         self._init_visibility()
 
     def apply_scale(self, scale: float) -> None:
-        self._x1 *= scale; self._y1 *= scale
-        self._x2 *= scale; self._y2 *= scale
+        self._points = [[x * scale, y * scale] for x, y in self._points]
         self._width *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
-        self._x1 += dx; self._y1 += dy
-        self._x2 += dx; self._y2 += dy
+        self._points = [[x + dx, y + dy] for x, y in self._points]
 
     def draw(self) -> None:
         if not self._visible:
             return
-        arcade.draw_line(self._x1, self._y1, self._x2, self._y2,
-                         self._color, self._width)
+        for (x1, y1), (x2, y2) in zip(self._points, self._points[1:]):
+            arcade.draw_line(x1, y1, x2, y2, self._color, self._width)
 
 
 # ---------------------------------------------------------------------------
@@ -451,10 +456,11 @@ class Vector(_VecBase):
 # ---------------------------------------------------------------------------
 
 def _line_factory(comp: dict, base_dir: Path, container_size=None) -> Line:
+    pts = comp.get("points")
+    points = [tuple(p) for p in pts] if pts else [tuple(comp["start"]), tuple(comp["end"])]
     line = Line(
         name=comp["name"],
-        start=tuple(comp["start"]),
-        end=tuple(comp["end"]),
+        points=points,
         color=_as_color(comp.get("color")),
         width=float(comp.get("width", 1.0)),
     )

@@ -1483,15 +1483,15 @@ class PropertiesForm(QWidget):
         self._line_sec = _Section("Line")
         self._line_sec.setVisible(False)
 
-        self._line_x1 = _sb(); self._line_y1 = _sb()
-        for w in (self._line_x1, self._line_y1):
-            w.valueChanged.connect(self._emit)
-        self._line_sec.row_pair("Start X  /  Y", self._line_x1, self._line_y1)
-
-        self._line_x2 = _sb(); self._line_y2 = _sb()
-        for w in (self._line_x2, self._line_y2):
-            w.valueChanged.connect(self._emit)
-        self._line_sec.row_pair("End X  /  Y", self._line_x2, self._line_y2)
+        self._line_pts_table = _PointsTableEditor()
+        self._line_pts_table.changed.connect(self._emit)
+        self._line_pts_table.setToolTip(
+            "2 points define a simple line (saved as start/end, for backward\n"
+            "compatibility with existing files). 3+ points define a connected\n"
+            "polyline — multiple straight segments drawn end-to-end (saved\n"
+            "as points)."
+        )
+        self._line_sec.row("Points", self._line_pts_table)
 
         self._line_color = _ColorButton()
         self._line_color.color_changed.connect(self._emit)
@@ -3817,12 +3817,14 @@ class PropertiesForm(QWidget):
         self._st_axis.setCurrentIndex(0 if axis == "y" else 1)
 
         # Line
-        start = comp.get("start", [0, 0])
-        self._line_x1.setValue(int(start[0]))
-        self._line_y1.setValue(flip_y(int(start[1]), self._ref_height))
-        end = comp.get("end", [0, 0])
-        self._line_x2.setValue(int(end[0]))
-        self._line_y2.setValue(flip_y(int(end[1]), self._ref_height))
+        line_pts = comp.get("points")
+        if line_pts:
+            line_rows = [[int(x), flip_y(int(y), self._ref_height)] for x, y in line_pts]
+        else:
+            start = comp.get("start", [0, 0]); end = comp.get("end", [0, 0])
+            line_rows = [[int(start[0]), flip_y(int(start[1]), self._ref_height)],
+                         [int(end[0]), flip_y(int(end[1]), self._ref_height)]]
+        self._line_pts_table.load(line_rows)
         self._line_color.set_rgba(comp.get("color"))
         self._line_width.setValue(float(comp.get("width", 1.0)))
 
@@ -4461,8 +4463,14 @@ class PropertiesForm(QWidget):
             data["position"] = [self._px.value(), flip_y(self._py.value(), self._ref_height)]
 
         if ct == "Line":
-            data["start"] = [self._line_x1.value(), flip_y(self._line_y1.value(), self._ref_height)]
-            data["end"]   = [self._line_x2.value(), flip_y(self._line_y2.value(), self._ref_height)]
+            raw_rows = self._line_pts_table.get_data()
+            pts = [[x, flip_y(y, self._ref_height)] for x, y in raw_rows]
+            while len(pts) < 2:
+                pts.append([0, 0])
+            if len(pts) == 2:
+                data["start"], data["end"] = pts[0], pts[1]
+            else:
+                data["points"] = pts
             data["color"] = list(self._line_color.get_rgba())
             w = self._line_width.value()
             if w != 1.0:
@@ -5195,8 +5203,7 @@ class PropertiesForm(QWidget):
         self._vp_sec.set_active(False)
         self._vis_sec.set_active(False)
         # Vector primitives
-        self._line_x1.setValue(0); self._line_y1.setValue(0)
-        self._line_x2.setValue(0); self._line_y2.setValue(0)
+        self._line_pts_table.load([[0, 0], [0, 0]])
         self._line_color.set_rgba(None); self._line_width.setValue(1.0)
         self._arc_cx.setValue(0); self._arc_cy.setValue(0)
         self._arc_radius.setValue(50.0)

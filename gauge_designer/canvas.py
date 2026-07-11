@@ -354,7 +354,7 @@ class InstrumentCanvas(QWidget):
         # Reference anchor in y-up coords for each type
         ctype = comp.get("type", "") if comp else ""
         if ctype == "Line":
-            ref = comp.get("start", [0, 0])
+            ref = self._line_pts(comp)[0]
         elif ctype in ("Arc", "VectorCompassRose"):
             ref = comp.get("center", [0, 0])
         elif ctype == "Polygon":
@@ -388,9 +388,15 @@ class InstrumentCanvas(QWidget):
         if comp is not None and orig is not None:
             ctype = comp.get("type", "")
             if ctype == "Line":
-                os_ = orig.get("start", [0, 0]); oe = orig.get("end", [0, 0])
-                comp["start"] = [int(round(os_[0] + dx_yaml)), int(round(os_[1] + dy_yaml))]
-                comp["end"]   = [int(round(oe[0]  + dx_yaml)), int(round(oe[1]  + dy_yaml))]
+                # Whole-line drag: every point shifts by the same delta.
+                # Individual point editing happens via the properties form's
+                # points table, not by dragging on the canvas.
+                new_pts = [[int(round(x + dx_yaml)), int(round(y + dy_yaml))]
+                           for x, y in self._line_pts(orig)]
+                if "points" in orig:
+                    comp["points"] = new_pts
+                else:
+                    comp["start"], comp["end"] = new_pts[0], new_pts[1]
             elif ctype == "Polygon":
                 oo = orig.get("origin", [0, 0])
                 comp["origin"] = [int(round(oo[0] + dx_yaml)), int(round(oo[1] + dy_yaml))]
@@ -420,7 +426,7 @@ class InstrumentCanvas(QWidget):
         if comp is not None:
             ctype = comp.get("type", "")
             if ctype == "Line":
-                ref = comp.get("start", [0, 0])
+                ref = self._line_pts(comp)[0]
             elif ctype in ("Arc", "VectorCompassRose"):
                 ref = comp.get("center", [0, 0])
             elif ctype == "Polygon":
@@ -459,12 +465,12 @@ class InstrumentCanvas(QWidget):
                         if rx <= cx < rx + rw and ry <= cy < ry + rh:
                             result.append(comp.get("name"))
                 elif ctype == "Line":
-                    s = comp.get("start", [0, 0]); e = comp.get("end", [0, 0])
-                    x1, y1 = int(s[0]), h - int(s[1])
-                    x2, y2 = int(e[0]), h - int(e[1])
+                    pts = self._line_pts(comp)
+                    xs = [int(x) for x, _y in pts]
+                    ys = [h - int(y) for _x, y in pts]
                     pad = 8
-                    if (min(x1, x2) - pad <= cx <= max(x1, x2) + pad and
-                            min(y1, y2) - pad <= cy <= max(y1, y2) + pad):
+                    if (min(xs) - pad <= cx <= max(xs) + pad and
+                            min(ys) - pad <= cy <= max(ys) + pad):
                         result.append(comp.get("name"))
                 elif ctype in ("Arc", "VectorCompassRose"):
                     ctr = comp.get("center", [0, 0])
@@ -619,10 +625,10 @@ class InstrumentCanvas(QWidget):
                     else:
                         self._draw_crosshair(draw, comp.get("position", [w//2, h//2]), h, SEL)
                 elif ctype == "Line":
-                    s = comp.get("start", [0, 0]); e = comp.get("end", [0, 0])
+                    pts = self._line_pts(comp)
                     lw = max(3, int(float(comp.get("width", 1.0))) + 2)
-                    draw.line([(int(s[0]), h - int(s[1])), (int(e[0]), h - int(e[1]))],
-                              fill=SEL, width=lw)
+                    poly = [(int(x), h - int(y)) for x, y in pts]
+                    draw.line(poly, fill=SEL, width=lw)
                 elif ctype == "Arc":
                     ctr = comp.get("center", [0, 0])
                     r = int(round(float(comp.get("radius", 50))))
@@ -695,12 +701,21 @@ class InstrumentCanvas(QWidget):
         draw.line([(cx_p - 12, cy_p), (cx_p + 12, cy_p)], fill=color, width=2)
         draw.line([(cx_p, cy_p - 12), (cx_p, cy_p + 12)], fill=color, width=2)
 
+    @staticmethod
+    def _line_pts(comp: dict) -> list[list[float]]:
+        """Points for a Line component: explicit points: list if present
+        (2+, drawn as a connected polyline), else the legacy start/end pair."""
+        pts = comp.get("points")
+        if pts:
+            return [[float(p[0]), float(p[1])] for p in pts]
+        return [list(comp.get("start", [0, 0])), list(comp.get("end", [0, 0]))]
+
     def _render_line(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
-        s = comp.get("start", [0, 0]); e = comp.get("end", [0, 0])
+        pts = self._line_pts(comp)
         color = _rgba(comp.get("color"))
         width = max(1, int(round(float(comp.get("width", 1.0)))))
-        draw.line([(int(s[0]), canvas_h - int(s[1])), (int(e[0]), canvas_h - int(e[1]))],
-                  fill=color, width=width)
+        poly = [(int(x), canvas_h - int(y)) for x, y in pts]
+        draw.line(poly, fill=color, width=width)
 
     def _render_arc(self, comp: dict, draw: ImageDraw.ImageDraw, canvas_h: int) -> None:
         ctr = comp.get("center", [0, 0])
