@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
-    QDialog, QDialogButtonBox, QFormLayout,
+    QDialog, QDialogButtonBox, QFormLayout, QMenu,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QEvent, QRect, QPoint, QSettings, QTimer
 from gauge_designer.ui_utils import QSpinBox
@@ -117,9 +117,39 @@ class _InstrumentTree(QTreeWidget):
         self._instruments_root: Path | None = None
         self._renaming = False
         self.itemChanged.connect(self._on_item_changed)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
 
     def set_root(self, root: Path):
         self._instruments_root = root
+
+    def _show_context_menu(self, pos: QPoint) -> None:
+        """Offer 'Move to top level' for an item nested under a subfolder —
+        a reliable alternative to dragging onto empty space below the tree,
+        which may not exist (or be hard to hit) once the tree is fully
+        populated with expanded items."""
+        item = self.itemAt(pos)
+        if item is None or self._instruments_root is None:
+            return
+        src_path = Path(item.data(0, _ROLE_PATH))
+        if src_path.parent.resolve() == self._instruments_root.resolve():
+            return  # already at the top level
+        menu = QMenu(self)
+        action = menu.addAction("Move to top level")
+        if menu.exec(self.viewport().mapToGlobal(pos)) is action:
+            self._move_to_root(src_path)
+
+    def _move_to_root(self, src_path: Path) -> None:
+        dst_path = self._instruments_root / src_path.name
+        if dst_path.resolve() == src_path.resolve() or dst_path.exists():
+            QMessageBox.warning(self, "Move Error", f"'{src_path.name}' already exists at the top level.")
+            return
+        try:
+            shutil.move(str(src_path), str(dst_path))
+        except Exception as exc:
+            QMessageBox.critical(self, "Move Error", str(exc))
+            return
+        self.item_moved.emit(str(src_path), str(dst_path))
 
     def _on_item_changed(self, item: "QTreeWidgetItem", column: int):
         if self._renaming or column != 0:
