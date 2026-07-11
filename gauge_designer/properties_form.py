@@ -3125,6 +3125,7 @@ class PropertiesForm(QWidget):
 
         # ── Heading Bug ──────────────────────────────────────────────────────
         _cr_bug = _SubSection("Heading Bug", collapsed=True)
+        self._cr_bug_form = _cr_bug._form
 
         self._cr_bug_dr = QLineEdit()
         self._cr_bug_dr.setPlaceholderText("bug heading dataref  (blank = no bug)")
@@ -3192,6 +3193,7 @@ class PropertiesForm(QWidget):
 
         # ── Heading Marker ───────────────────────────────────────────────────
         _cr_marker = _SubSection("Heading Marker", collapsed=True)
+        self._cr_marker_form = _cr_marker._form
         _cr_marker.row_widget(_sep_label(
             "Fixed lubber-line/index at top-dead-centre — no dataref; the\n"
             "rose rotates underneath it."
@@ -3257,8 +3259,11 @@ class PropertiesForm(QWidget):
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
         self._cr_marker_width.setEnabled(not filled)
         self._cr_marker_outline_chk.setVisible(filled)
-        self._cr_marker_outline_color.setVisible(filled)
-        self._cr_marker_outline_width.setVisible(filled)
+        # setVisible() on just the field leaves the QFormLayout row's
+        # auto-generated label dangling (visible with no control next to
+        # it) — setRowVisible() hides the whole row, label included.
+        self._cr_marker_form.setRowVisible(self._cr_marker_outline_color, filled)
+        self._cr_marker_form.setRowVisible(self._cr_marker_outline_width, filled)
         if not filled:
             self._cr_marker_outline_chk.blockSignals(True)
             self._cr_marker_outline_chk.setChecked(False)
@@ -3272,8 +3277,11 @@ class PropertiesForm(QWidget):
         self._cr_bug_width.setEnabled(not filled)
         # Outline overlay only makes sense when filled; unfilled IS an outline
         self._cr_bug_outline_chk.setVisible(filled)
-        self._cr_bug_outline_color.setVisible(filled)
-        self._cr_bug_outline_width.setVisible(filled)
+        # setVisible() on just the field leaves the QFormLayout row's
+        # auto-generated label dangling (visible with no control next to
+        # it) — setRowVisible() hides the whole row, label included.
+        self._cr_bug_form.setRowVisible(self._cr_bug_outline_color, filled)
+        self._cr_bug_form.setRowVisible(self._cr_bug_outline_width, filled)
         if not filled:
             self._cr_bug_outline_chk.blockSignals(True)
             self._cr_bug_outline_chk.setChecked(False)
@@ -4317,10 +4325,10 @@ class PropertiesForm(QWidget):
         self._cr_bug_outline_chk.blockSignals(False)
         self._cr_bug_outline_chk.setVisible(bug_filled)
         self._cr_bug_outline_color.setEnabled(has_bug_outline)
-        self._cr_bug_outline_color.setVisible(bug_filled)
+        self._cr_bug_form.setRowVisible(self._cr_bug_outline_color, bug_filled)
         self._cr_bug_outline_color.set_rgba(bug_oc if bug_oc is not None else (255, 255, 255, 255))
         self._cr_bug_outline_width.setEnabled(has_bug_outline)
-        self._cr_bug_outline_width.setVisible(bug_filled)
+        self._cr_bug_form.setRowVisible(self._cr_bug_outline_width, bug_filled)
         self._cr_bug_outline_width.setValue(float(cr_bug.get("outline_width", 1.0)))
         cr_marker = comp.get("heading_marker") or {}
         self._cr_marker_radius.setValue(float(cr_marker.get("radius", comp.get("radius", 150.0))))
@@ -4339,11 +4347,11 @@ class PropertiesForm(QWidget):
         self._cr_marker_outline_chk.blockSignals(False)
         self._cr_marker_outline_chk.setVisible(marker_filled)
         self._cr_marker_outline_color.setEnabled(has_marker_outline)
-        self._cr_marker_outline_color.setVisible(marker_filled)
+        self._cr_marker_form.setRowVisible(self._cr_marker_outline_color, marker_filled)
         self._cr_marker_outline_color.set_rgba(
             marker_oc if marker_oc is not None else (255, 255, 255, 255))
         self._cr_marker_outline_width.setEnabled(has_marker_outline)
-        self._cr_marker_outline_width.setVisible(marker_filled)
+        self._cr_marker_form.setRowVisible(self._cr_marker_outline_width, marker_filled)
         self._cr_marker_outline_width.setValue(float(cr_marker.get("outline_width", 1.0)))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
