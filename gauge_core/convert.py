@@ -50,6 +50,9 @@ def convert_in_to_mb(value: float, _get: GetData) -> float:
 def divideby100(value: float, _get: GetData) -> float:
     return float(value) / 100.0
 
+def divideby1000(value: float, _get: GetData) -> float:
+    return float(value) / 1000.0
+
 
 # -- Compass / heading bug -----------------------------------------------
 
@@ -365,6 +368,7 @@ for _name, _func in {
     "return10000s": return10000s,
     "convert_in_to_mb": convert_in_to_mb,
     "divideby100": divideby100,
+    "divideby1000": divideby1000,
     "add_compass_heading_to_value": add_compass_heading_to_value,
     "calculate_turn_rate": calculate_turn_rate,
     "return_alt_hundreds": return_alt_hundreds,
