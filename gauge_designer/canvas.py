@@ -950,6 +950,17 @@ class InstrumentCanvas(QWidget):
             draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r],
                          outline=_rgba(comp.get("line_color")), width=line_w)
 
+        rings = comp.get("range_rings")
+        if rings:
+            ring_count = max(1, min(10, int(rings.get("count", 1))))
+            ring_color = _rgba(rings.get("color"))
+            ring_w = max(1, int(round(float(rings.get("width", 1.0)))))
+            spacing = r / ring_count
+            for k in range(1, ring_count + 1):
+                rk = k * spacing
+                draw.ellipse([cx_p - rk, cy_p - rk, cx_p + rk, cy_p + rk],
+                             outline=ring_color, width=ring_w)
+
         tick5_len  = float(comp.get("tick5_length", 8.0))
         tick5_col  = _rgba(comp.get("tick5_color"))
         tick5_w    = max(1, int(round(float(comp.get("tick5_width", 1.0)))))

@@ -105,6 +105,16 @@ YAML schema
         outline_color: null                # optional outline drawn on top when filled: true
         outline_width: 1.0
 
+      range_rings:                           # optional: evenly-spaced concentric circles
+                                             # inside the rose, e.g. radar/HSI range rings
+        count: 3                            # 1-10; spacing is auto-calculated so all
+                                             # gaps are equal: ring k sits at
+                                             # k * radius / count, so the outermost
+                                             # ring (k = count) lands on the rose's
+                                             # own radius
+        color: [255, 255, 255, 120]
+        width: 1.0
+
       heading_marker:                        # optional: fixed lubber-line/index polygon at
                                              # top-dead-centre — no dataref, since it never
                                              # rotates (the rose rotates underneath it, so
@@ -256,6 +266,14 @@ class VectorCompassRose(_VecBase):
         self._bug_dr: Any | None = None
         self._bug_convert: Callable | None = None
 
+        # Range rings (optional; enabled by calling set_range_rings()) —
+        # evenly-spaced concentric circles inside the rose, e.g. radar range
+        # rings. Centred on the rose (rotation-invariant), so no heading
+        # bookkeeping is needed — just a count/color/width.
+        self._ring_count = 0
+        self._ring_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._ring_width = 1.0
+
         # Heading marker (optional; enabled by calling set_heading_marker())
         # — a fixed lubber-line/index polygon at top-dead-centre. Unlike the
         # heading bug, it never rotates and has no dataref: the rose rotates
@@ -341,6 +359,16 @@ class VectorCompassRose(_VecBase):
         self._marker_outline_color = outline_color
         self._marker_outline_width = float(outline_width)
 
+    def set_range_rings(
+        self,
+        count: int,
+        color: tuple[int, int, int, int],
+        width: float,
+    ) -> None:
+        self._ring_count = max(1, min(10, int(count)))
+        self._ring_color = color
+        self._ring_width = float(width)
+
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
         self._radius *= scale
@@ -353,6 +381,7 @@ class VectorCompassRose(_VecBase):
         self._label_font_size *= scale
         self._label_emphasize_font_size *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
+        self._ring_width *= scale
         self._track_width *= scale
         self._track_start *= scale
         self._track_end *= scale
@@ -434,6 +463,14 @@ class VectorCompassRose(_VecBase):
                 self._cx, self._cy, self._radius, self._line_color,
                 self._line_width, num_segments=self._segments,
             )
+
+        if self._ring_count:
+            spacing = self._radius / self._ring_count
+            for k in range(1, self._ring_count + 1):
+                arcade.draw_circle_outline(
+                    self._cx, self._cy, k * spacing, self._ring_color,
+                    self._ring_width, num_segments=self._segments,
+                )
 
         for h in range(0, 360, 5):
             is_major = (h % 10) == 0
@@ -625,6 +662,14 @@ def _compass_rose_factory(
             outline_width=float(bug_cfg.get("outline_width", 1.0)),
             dataref=bug_cfg["dataref"],
             convert_fn=bug_cfg.get("convert_function"),
+        )
+
+    rings_cfg = comp.get("range_rings")
+    if rings_cfg:
+        rose.set_range_rings(
+            count=int(rings_cfg.get("count", 1)),
+            color=_as_color(rings_cfg.get("color")),
+            width=float(rings_cfg.get("width", 1.0)),
         )
 
     marker_cfg = comp.get("heading_marker")

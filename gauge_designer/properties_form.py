@@ -2917,6 +2917,36 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_circle)
 
+        # ── Range Rings ──────────────────────────────────────────────────────
+        _cr_rings = _SubSection("Range Rings", collapsed=True)
+        _cr_rings.setToolTip(
+            "Evenly-spaced concentric circles inside the rose (e.g. radar\n"
+            "range rings). Spacing is automatic: ring k sits at\n"
+            "k * radius / count, so the outermost ring lands exactly on\n"
+            "the rose's own radius."
+        )
+        self._cr_rings_count = QSpinBox()
+        self._cr_rings_count.setRange(0, 10)
+        self._cr_rings_count.setSpecialValueText("(none)")
+        self._cr_rings_count.setValue(0)
+        self._cr_rings_count.valueChanged.connect(self._on_cr_rings_count_changed)
+        self._cr_rings_count.valueChanged.connect(self._emit)
+        _cr_rings.row("Count (max 10)", self._cr_rings_count)
+
+        self._cr_rings_color = _ColorButton()
+        self._cr_rings_color.setEnabled(False)
+        self._cr_rings_color.color_changed.connect(self._emit)
+        _cr_rings.row("Color", self._cr_rings_color)
+
+        self._cr_rings_width = QDoubleSpinBox()
+        self._cr_rings_width.setRange(0.5, 50.0); self._cr_rings_width.setDecimals(1)
+        self._cr_rings_width.setValue(1.0)
+        self._cr_rings_width.setEnabled(False)
+        self._cr_rings_width.valueChanged.connect(self._emit)
+        _cr_rings.row("Width", self._cr_rings_width)
+
+        self._cr_sec.row_widget(_cr_rings)
+
         # ── 5° Ticks ─────────────────────────────────────────────────────────
         _cr_tick5 = _SubSection("5° Ticks", collapsed=True)
 
@@ -3294,6 +3324,10 @@ class PropertiesForm(QWidget):
     def _on_cr_line_toggled(self, on: bool) -> None:
         self._cr_line_color.setEnabled(on)
         self._cr_line_width.setEnabled(on)
+
+    def _on_cr_rings_count_changed(self, count: int) -> None:
+        self._cr_rings_color.setEnabled(count > 0)
+        self._cr_rings_width.setEnabled(count > 0)
 
     def _pick_ng_label_font(self) -> None:
         from PySide6.QtGui import QFont
@@ -3720,7 +3754,7 @@ class PropertiesForm(QWidget):
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
-            "heading", "track", "heading_bug", "heading_marker",
+            "heading", "track", "heading_bug", "heading_marker", "range_rings",
             # shared across all
             "viewport", "visibility",
         }
@@ -4270,6 +4304,13 @@ class PropertiesForm(QWidget):
         self._cr_line_color.setEnabled(_cr_show_line)
         self._cr_line_width.setEnabled(_cr_show_line)
         self._cr_segments.setValue(int(comp.get("num_segments", 128)))
+        cr_rings = comp.get("range_rings") or {}
+        rings_count = int(cr_rings.get("count", 0))
+        self._cr_rings_count.setValue(rings_count)
+        self._cr_rings_color.setEnabled(rings_count > 0)
+        self._cr_rings_color.set_rgba(cr_rings.get("color", [255, 255, 255, 255]))
+        self._cr_rings_width.setEnabled(rings_count > 0)
+        self._cr_rings_width.setValue(float(cr_rings.get("width", 1.0)))
         self._cr_t5_len.setValue(float(comp.get("tick5_length", 8.0)))
         self._cr_t5_color.set_rgba(comp.get("tick5_color", [255, 255, 255, 255]))
         self._cr_t5_width.setValue(float(comp.get("tick5_width", 1.0)))
@@ -4601,6 +4642,13 @@ class PropertiesForm(QWidget):
             segs = self._cr_segments.value()
             if segs != 128:
                 data["num_segments"] = segs
+            rings_count = self._cr_rings_count.value()
+            if rings_count > 0:
+                data["range_rings"] = {
+                    "count": rings_count,
+                    "color": list(self._cr_rings_color.get_rgba()),
+                    "width": self._cr_rings_width.value(),
+                }
             data["tick5_length"] = self._cr_t5_len.value()
             data["tick5_color"] = list(self._cr_t5_color.get_rgba())
             data["tick5_width"] = self._cr_t5_width.value()
@@ -5225,6 +5273,9 @@ class PropertiesForm(QWidget):
         self._cr_line_chk.setChecked(True)
         self._cr_line_color.set_rgba(None); self._cr_line_width.setValue(2.0)
         self._cr_segments.setValue(128)
+        self._cr_rings_count.setValue(0)
+        self._cr_rings_color.set_rgba(None); self._cr_rings_color.setEnabled(False)
+        self._cr_rings_width.setValue(1.0); self._cr_rings_width.setEnabled(False)
         self._cr_t5_len.setValue(8.0); self._cr_t5_color.set_rgba(None)
         self._cr_t5_width.setValue(1.0); self._cr_t5_pos.setCurrentIndex(0)
         self._cr_t10_len.setValue(16.0); self._cr_t10_color.set_rgba(None)
