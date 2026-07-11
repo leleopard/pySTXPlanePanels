@@ -502,7 +502,7 @@ class _BandEndpointWidget(QWidget):
         dl.addWidget(self._fn_combo)
         dl.addWidget(self._tbl_btn)
 
-        self._stack = QStackedWidget()
+        self._stack = _AutoSizeStack()
         self._stack.addWidget(static_w)
         self._stack.addWidget(dr_w)
 
@@ -1075,6 +1075,28 @@ class _SubSection(QWidget):
         return widget
 
 
+class _AutoSizeStack(QStackedWidget):
+    """QStackedWidget that sizes itself to the CURRENT page instead of the
+    largest page. Plain QStackedWidget reports a size hint big enough for
+    its tallest page always, even while showing a much shorter one — e.g.
+    Text's one-field Static page under its many-field Dataref page — which
+    leaves a distracting gap of dead space below the short page's content
+    until the next sibling row. Switching pages calls updateGeometry() to
+    tell the parent layout to re-query the (now different) size hint."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.currentChanged.connect(lambda _i: self.updateGeometry())
+
+    def sizeHint(self):
+        w = self.currentWidget()
+        return w.sizeHint() if w is not None else super().sizeHint()
+
+    def minimumSizeHint(self):
+        w = self.currentWidget()
+        return w.minimumSizeHint() if w is not None else super().minimumSizeHint()
+
+
 def _sb(lo: int = -4096, hi: int = 4096) -> QSpinBox:
     s = QSpinBox(); s.setRange(lo, hi); s.setMinimumWidth(64); return s
 
@@ -1318,7 +1340,7 @@ class PropertiesForm(QWidget):
         self._txt_sec.row("Mode", self._txt_mode)
 
         # Stacked pages: [0] Static, [1] Dataref
-        self._txt_stack = QStackedWidget()
+        self._txt_stack = _AutoSizeStack()
 
         # Page 0 — static text
         static_page = QWidget()
@@ -2377,7 +2399,7 @@ class PropertiesForm(QWidget):
         self._ai_fd_h_vis_mode.currentIndexChanged.connect(self._emit)
         _ai_fd.row("H vis mode", self._ai_fd_h_vis_mode)
 
-        self._ai_fd_h_vis_stack = QStackedWidget()
+        self._ai_fd_h_vis_stack = _AutoSizeStack()
         _fd_h_pred_page = QWidget()
         _fd_h_pred_form = QFormLayout(_fd_h_pred_page)
         _fd_h_pred_form.setContentsMargins(0, 2, 0, 2)
@@ -2468,7 +2490,7 @@ class PropertiesForm(QWidget):
         self._ai_fd_v_vis_mode.currentIndexChanged.connect(self._emit)
         _ai_fd.row("V vis mode", self._ai_fd_v_vis_mode)
 
-        self._ai_fd_v_vis_stack = QStackedWidget()
+        self._ai_fd_v_vis_stack = _AutoSizeStack()
         _fd_v_pred_page = QWidget()
         _fd_v_pred_form = QFormLayout(_fd_v_pred_page)
         _fd_v_pred_form.setContentsMargins(0, 2, 0, 2)
@@ -2551,7 +2573,7 @@ class PropertiesForm(QWidget):
         self._ng_grad_type.currentIndexChanged.connect(self._emit)
         self._ng_sec.row("Gradation type", self._ng_grad_type)
 
-        self._ng_grad_stack = QStackedWidget()
+        self._ng_grad_stack = _AutoSizeStack()
 
         # ── Circular page (unchanged from the original CircularGauge) ──────
         circ_page = QWidget()
@@ -3637,7 +3659,7 @@ class PropertiesForm(QWidget):
         self._vis_mode.currentIndexChanged.connect(self._emit)
         self._vis_sec.row("Mode", self._vis_mode)
 
-        self._vis_stack = QStackedWidget()
+        self._vis_stack = _AutoSizeStack()
 
         # Page 0 — named predicate (original mechanism: a registered convert
         # function used as a bool-returning predicate).
