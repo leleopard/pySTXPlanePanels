@@ -967,14 +967,31 @@ class InstrumentCanvas(QWidget):
 
         rings = comp.get("range_rings")
         if rings:
-            ring_count = max(1, min(10, int(rings.get("count", 1))))
-            ring_color = _rgba(rings.get("color"))
-            ring_w = max(1, int(round(float(rings.get("width", 1.0)))))
-            spacing = r / ring_count
-            for k in range(1, ring_count + 1):
-                rk = k * spacing
-                draw.ellipse([cx_p - rk, cy_p - rk, cx_p + rk, cy_p + rk],
-                             outline=ring_color, width=ring_w)
+            # count/color/width and label are independent — a range_rings
+            # block with only a label (no count) should not implicitly
+            # draw a ring.
+            if "count" in rings:
+                ring_count = max(1, min(10, int(rings["count"])))
+                ring_color = _rgba(rings.get("color"))
+                ring_w = max(1, int(round(float(rings.get("width", 1.0)))))
+                spacing = r / ring_count
+                for k in range(1, ring_count + 1):
+                    rk = k * spacing
+                    draw.ellipse([cx_p - rk, cy_p - rk, cx_p + rk, cy_p + rk],
+                                 outline=ring_color, width=ring_w)
+
+            range_label = rings.get("label")
+            if range_label:
+                rl_off = range_label.get("offset", [0.0, 0.0])
+                rl_x = cx_p + float(rl_off[0])
+                rl_y = cy_p - float(rl_off[1])  # PIL y-down vs. Arcade y-up
+                rl_size = max(8, int(float(range_label.get("font_size", 14.0))))
+                rl_font = _pil_font(range_label.get("font"), rl_size,
+                                    bold=bool(range_label.get("bold", False)),
+                                    italic=bool(range_label.get("italic", False)))
+                rl_text = str(range_label.get("format", "{:.0f}")).format(0.0)
+                draw.text((rl_x, rl_y), rl_text, fill=_rgba(range_label.get("color")),
+                         font=rl_font, anchor="mm")
 
         tick5_len  = float(comp.get("tick5_length", 8.0))
         tick5_col  = _rgba(comp.get("tick5_color"))

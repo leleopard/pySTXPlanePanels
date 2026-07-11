@@ -114,6 +114,20 @@ YAML schema
                                              # own radius
         color: [255, 255, 255, 120]
         width: 1.0
+        label:                               # optional: a dataref-driven range-selection
+                                             # readout (e.g. the cockpit's selected radar/
+                                             # nav range), fixed in screen space — does not
+                                             # rotate with heading, like heading_marker
+          dataref: sim/cockpit/radios/nav1_range
+          convert_function: null            # optional
+          format: "{:.0f}"
+          offset: [0, -180]                 # px, relative to the rose centre (x-right,
+                                             # y-up); NOT relative to the ring radii
+          font: ST_Boeing_PFD                # optional; blank = designer/OS default
+          font_size: 14
+          bold: false
+          italic: false
+          color: [255, 255, 255, 255]
 
       heading_marker:                        # optional: fixed lubber-line/index polygon at
                                              # top-dead-centre — no dataref, since it never
@@ -274,6 +288,24 @@ class VectorCompassRose(_VecBase):
         self._ring_color: tuple[int, int, int, int] = (255, 255, 255, 255)
         self._ring_width = 1.0
 
+        # Range-selection label (optional; enabled by calling
+        # set_range_label()) — a dataref-driven text readout (e.g. the
+        # cockpit's selected radar/nav range), fixed in screen space
+        # relative to the rose centre — like heading_marker, it does not
+        # rotate with heading.
+        self._range_label_dr: Any | None = None
+        self._range_label_convert: Callable | None = None
+        self._range_label_format = "{:.0f}"
+        self._range_label_offset_x = 0.0
+        self._range_label_offset_y = 0.0
+        self._range_label_font: str | None = None
+        self._range_label_font_size = 14.0
+        self._range_label_bold = False
+        self._range_label_italic = False
+        self._range_label_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._range_label_value = 0.0
+        self._range_label_text_obj: arcade.Text | None = None
+
         # Heading marker (optional; enabled by calling set_heading_marker())
         # — a fixed lubber-line/index polygon at top-dead-centre. Unlike the
         # heading bug, it never rotates and has no dataref: the rose rotates
@@ -369,6 +401,30 @@ class VectorCompassRose(_VecBase):
         self._ring_color = color
         self._ring_width = float(width)
 
+    def set_range_label(
+        self,
+        dataref: Any,
+        convert_fn: str | None,
+        format_str: str,
+        offset: tuple[float, float],
+        font: str | None,
+        font_size: float,
+        bold: bool,
+        italic: bool,
+        color: tuple[int, int, int, int],
+    ) -> None:
+        self._range_label_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._range_label_convert = get_convert(convert_fn)
+        self._range_label_format = format_str
+        self._range_label_offset_x, self._range_label_offset_y = float(offset[0]), float(offset[1])
+        self._range_label_font = font
+        self._range_label_font_size = float(font_size)
+        self._range_label_bold = bool(bold)
+        self._range_label_italic = bool(italic)
+        self._range_label_color = color
+        self._range_label_text_obj = None  # style changed; pool object is stale
+
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
         self._radius *= scale
@@ -382,6 +438,9 @@ class VectorCompassRose(_VecBase):
         self._label_emphasize_font_size *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
         self._ring_width *= scale
+        self._range_label_offset_x *= scale; self._range_label_offset_y *= scale
+        self._range_label_font_size *= scale
+        self._range_label_text_obj = None  # font size changed; pool object is stale
         self._track_width *= scale
         self._track_start *= scale
         self._track_end *= scale
@@ -423,6 +482,11 @@ class VectorCompassRose(_VecBase):
             if self._heading_convert is not None:
                 raw = float(self._heading_convert(raw, get_data))
             self._heading = raw % 360.0
+        if self._range_label_dr is not None:
+            raw = float(get_data(self._range_label_dr))
+            if self._range_label_convert is not None:
+                raw = float(self._range_label_convert(raw, get_data))
+            self._range_label_value = raw
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -534,6 +598,29 @@ class VectorCompassRose(_VecBase):
 
         if self._show_marker:
             self._draw_heading_marker()
+
+        if self._range_label_dr is not None:
+            self._draw_range_label()
+
+    def _draw_range_label(self) -> None:
+        # Fixed relative to the rose centre — like heading_marker, does not
+        # rotate with heading.
+        if self._range_label_text_obj is None:
+            kw: dict = dict(bold=self._range_label_bold, italic=self._range_label_italic)
+            if self._range_label_font:
+                kw["font_name"] = self._range_label_font
+            self._range_label_text_obj = arcade.Text(
+                "", 0, 0,
+                color=self._range_label_color,
+                font_size=self._range_label_font_size,
+                anchor_x="center", anchor_y="center",
+                **kw,
+            )
+        t = self._range_label_text_obj
+        t.text = self._range_label_format.format(self._range_label_value)
+        t.x = self._cx + self._range_label_offset_x
+        t.y = self._cy + self._range_label_offset_y
+        t.draw()
 
     def _draw_heading_marker(self) -> None:
         # Fixed top-dead-centre, straight up from the rose centre — no
@@ -666,11 +753,35 @@ def _compass_rose_factory(
 
     rings_cfg = comp.get("range_rings")
     if rings_cfg:
-        rose.set_range_rings(
-            count=int(rings_cfg.get("count", 1)),
-            color=_as_color(rings_cfg.get("color")),
-            width=float(rings_cfg.get("width", 1.0)),
-        )
+        # count/color/width and label are independent sub-features — a
+        # range_rings block with only a label (no count) should not
+        # implicitly draw a ring.
+        if "count" in rings_cfg:
+            rose.set_range_rings(
+                count=int(rings_cfg["count"]),
+                color=_as_color(rings_cfg.get("color")),
+                width=float(rings_cfg.get("width", 1.0)),
+            )
+
+        label_cfg = rings_cfg.get("label")
+        if label_cfg:
+            range_label_font, range_label_bold, range_label_italic = resolve_font_for_arcade(
+                label_cfg.get("font"), base_dir,
+                bold=bool(label_cfg.get("bold", False)),
+                italic=bool(label_cfg.get("italic", False)),
+                explicit_file=label_cfg.get("font_file"),
+            )
+            rose.set_range_label(
+                dataref=label_cfg["dataref"],
+                convert_fn=label_cfg.get("convert_function"),
+                format_str=str(label_cfg.get("format", "{:.0f}")),
+                offset=tuple(label_cfg.get("offset", [0.0, 0.0])),
+                font=range_label_font,
+                font_size=float(label_cfg.get("font_size", 14.0)),
+                bold=range_label_bold,
+                italic=range_label_italic,
+                color=_as_color(label_cfg.get("color")),
+            )
 
     marker_cfg = comp.get("heading_marker")
     if marker_cfg:

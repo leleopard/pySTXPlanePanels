@@ -2975,6 +2975,94 @@ class PropertiesForm(QWidget):
         self._cr_rings_width.valueChanged.connect(self._emit)
         _cr_rings.row("Width", self._cr_rings_width)
 
+        # ── Range-selection label — a dataref-driven readout (e.g. the
+        # cockpit's selected radar/nav range), fixed in screen space
+        # relative to the rose centre; does not rotate with heading.
+        self._cr_range_label_chk = QCheckBox("Range label")
+        self._cr_range_label_chk.toggled.connect(self._on_cr_range_label_toggled)
+        self._cr_range_label_chk.toggled.connect(self._emit)
+        _cr_rings.row_widget(self._cr_range_label_chk)
+
+        self._cr_range_label_dr = QLineEdit()
+        self._cr_range_label_dr.editingFinished.connect(self._emit)
+        self._cr_range_label_dr_box = self._dr_field(self._cr_range_label_dr)
+        self._cr_range_label_dr_box.setEnabled(False)
+        _cr_rings.row("Label dataref", self._cr_range_label_dr_box)
+
+        self._cr_range_label_fn = _NoScrollComboBox()
+        self._cr_range_label_fn.addItems(_VALUE_FUNCS)
+        self._cr_range_label_fn.setEnabled(False)
+        self._cr_range_label_fn.currentTextChanged.connect(self._emit)
+        _cr_rings.row("Label convert fn", self._cr_range_label_fn)
+
+        self._cr_range_label_fmt = QLineEdit()
+        self._cr_range_label_fmt.setPlaceholderText("{:.0f}")
+        self._cr_range_label_fmt.setEnabled(False)
+        self._cr_range_label_fmt.setToolTip(_FORMAT_SPEC_TOOLTIP)
+        self._cr_range_label_fmt.editingFinished.connect(self._emit)
+        _cr_rings.row("Label format", self._cr_range_label_fmt)
+
+        _cr_range_off_row = QWidget()
+        _cr_range_off_hl = QHBoxLayout(_cr_range_off_row)
+        _cr_range_off_hl.setContentsMargins(0, 0, 0, 0); _cr_range_off_hl.setSpacing(4)
+        self._cr_range_label_off_x = QDoubleSpinBox()
+        self._cr_range_label_off_x.setRange(-4096.0, 4096.0); self._cr_range_label_off_x.setDecimals(1)
+        self._cr_range_label_off_x.setEnabled(False)
+        self._cr_range_label_off_y = QDoubleSpinBox()
+        self._cr_range_label_off_y.setRange(-4096.0, 4096.0); self._cr_range_label_off_y.setDecimals(1)
+        self._cr_range_label_off_y.setEnabled(False)
+        for w in (self._cr_range_label_off_x, self._cr_range_label_off_y):
+            w.valueChanged.connect(self._emit)
+        self._cr_range_label_off_x.setToolTip(
+            "Relative to the rose centre (x-right, y-up). Fixed in screen\n"
+            "space — does not rotate with heading, like Heading Marker."
+        )
+        _cr_range_off_hl.addWidget(self._cr_range_label_off_x)
+        _cr_range_off_hl.addWidget(self._cr_range_label_off_y)
+        _cr_rings.row("Label offset X / Y", _cr_range_off_row)
+
+        self._cr_range_label_font = QLineEdit()
+        self._cr_range_label_font.setPlaceholderText("Arial  (blank = default)")
+        self._cr_range_label_font.setEnabled(False)
+        self._cr_range_label_font.editingFinished.connect(self._emit)
+        self._cr_range_label_font_btn = QPushButton("…")
+        self._cr_range_label_font_btn.setFixedWidth(28)
+        self._cr_range_label_font_btn.setEnabled(False)
+        self._cr_range_label_font_btn.setToolTip("Choose font")
+        self._cr_range_label_font_btn.clicked.connect(self._pick_cr_range_label_font)
+        _cr_range_font_row = QWidget()
+        _cr_range_font_hl = QHBoxLayout(_cr_range_font_row)
+        _cr_range_font_hl.setContentsMargins(0, 0, 0, 0); _cr_range_font_hl.setSpacing(4)
+        _cr_range_font_hl.addWidget(self._cr_range_label_font)
+        _cr_range_font_hl.addWidget(self._cr_range_label_font_btn)
+        _cr_rings.row("Label font", _cr_range_font_row)
+
+        self._cr_range_label_size = QDoubleSpinBox()
+        self._cr_range_label_size.setRange(4.0, 120.0); self._cr_range_label_size.setDecimals(1)
+        self._cr_range_label_size.setValue(14.0)
+        self._cr_range_label_size.setEnabled(False)
+        self._cr_range_label_size.valueChanged.connect(self._emit)
+        _cr_rings.row("Label font size", self._cr_range_label_size)
+
+        _cr_range_style_row = QWidget()
+        _cr_range_style_hl = QHBoxLayout(_cr_range_style_row)
+        _cr_range_style_hl.setContentsMargins(0, 0, 0, 0); _cr_range_style_hl.setSpacing(12)
+        self._cr_range_label_bold = QCheckBox("Bold")
+        self._cr_range_label_bold.setEnabled(False)
+        self._cr_range_label_bold.toggled.connect(self._emit)
+        self._cr_range_label_italic = QCheckBox("Italic")
+        self._cr_range_label_italic.setEnabled(False)
+        self._cr_range_label_italic.toggled.connect(self._emit)
+        _cr_range_style_hl.addWidget(self._cr_range_label_bold)
+        _cr_range_style_hl.addWidget(self._cr_range_label_italic)
+        _cr_range_style_hl.addStretch()
+        _cr_rings.row("Label style", _cr_range_style_row)
+
+        self._cr_range_label_color = _ColorButton()
+        self._cr_range_label_color.setEnabled(False)
+        self._cr_range_label_color.color_changed.connect(self._emit)
+        _cr_rings.row("Label color", self._cr_range_label_color)
+
         self._cr_sec.row_widget(_cr_rings)
 
         # ── 5° Ticks ─────────────────────────────────────────────────────────
@@ -3358,6 +3446,34 @@ class PropertiesForm(QWidget):
     def _on_cr_rings_count_changed(self, count: int) -> None:
         self._cr_rings_color.setEnabled(count > 0)
         self._cr_rings_width.setEnabled(count > 0)
+
+    def _on_cr_range_label_toggled(self, on: bool) -> None:
+        self._cr_range_label_dr_box.setEnabled(on)
+        self._cr_range_label_fn.setEnabled(on)
+        self._cr_range_label_fmt.setEnabled(on)
+        self._cr_range_label_off_x.setEnabled(on)
+        self._cr_range_label_off_y.setEnabled(on)
+        self._cr_range_label_font.setEnabled(on)
+        self._cr_range_label_font_btn.setEnabled(on)
+        self._cr_range_label_size.setEnabled(on)
+        self._cr_range_label_bold.setEnabled(on)
+        self._cr_range_label_italic.setEnabled(on)
+        self._cr_range_label_color.setEnabled(on)
+
+    def _pick_cr_range_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
+        current_name = self._cr_range_label_font.text().strip() or "Arial"
+        initial = QFont(current_name, int(self._cr_range_label_size.value()))
+        initial.setBold(self._cr_range_label_bold.isChecked())
+        initial.setItalic(self._cr_range_label_italic.isChecked())
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._cr_range_label_font.setText(strip_style_suffix(font.family()))
+            self._cr_range_label_size.setValue(float(font.pointSize()))
+            self._cr_range_label_bold.setChecked(font.bold())
+            self._cr_range_label_italic.setChecked(font.italic())
+            self._emit()
 
     def _pick_ng_label_font(self) -> None:
         from PySide6.QtGui import QFont
@@ -4344,6 +4460,22 @@ class PropertiesForm(QWidget):
         self._cr_rings_color.set_rgba(cr_rings.get("color", [255, 255, 255, 255]))
         self._cr_rings_width.setEnabled(rings_count > 0)
         self._cr_rings_width.setValue(float(cr_rings.get("width", 1.0)))
+        cr_range_label = cr_rings.get("label") or {}
+        has_range_label = bool(cr_rings.get("label"))
+        self._cr_range_label_chk.setChecked(has_range_label)
+        self._on_cr_range_label_toggled(has_range_label)
+        self._cr_range_label_dr.setText(str(cr_range_label.get("dataref", "")))
+        rl_fn_idx = self._cr_range_label_fn.findText(str(cr_range_label.get("convert_function") or _NONE))
+        self._cr_range_label_fn.setCurrentIndex(max(rl_fn_idx, 0))
+        self._cr_range_label_fmt.setText(str(cr_range_label.get("format", "")))
+        rl_off = cr_range_label.get("offset", [0, 0])
+        self._cr_range_label_off_x.setValue(float(rl_off[0]))
+        self._cr_range_label_off_y.setValue(float(rl_off[1]))
+        self._cr_range_label_font.setText(str(cr_range_label.get("font", "")))
+        self._cr_range_label_size.setValue(float(cr_range_label.get("font_size", 14.0)))
+        self._cr_range_label_bold.setChecked(bool(cr_range_label.get("bold", False)))
+        self._cr_range_label_italic.setChecked(bool(cr_range_label.get("italic", False)))
+        self._cr_range_label_color.set_rgba(cr_range_label.get("color", [255, 255, 255, 255]))
         self._cr_t5_len.setValue(float(comp.get("tick5_length", 8.0)))
         self._cr_t5_color.set_rgba(comp.get("tick5_color", [255, 255, 255, 255]))
         self._cr_t5_width.setValue(float(comp.get("tick5_width", 1.0)))
@@ -4682,12 +4814,36 @@ class PropertiesForm(QWidget):
             if segs != 128:
                 data["num_segments"] = segs
             rings_count = self._cr_rings_count.value()
-            if rings_count > 0:
-                data["range_rings"] = {
-                    "count": rings_count,
-                    "color": list(self._cr_rings_color.get_rgba()),
-                    "width": self._cr_rings_width.value(),
-                }
+            has_range_label = self._cr_range_label_chk.isChecked()
+            if rings_count > 0 or has_range_label:
+                rings_data: dict = {}
+                if rings_count > 0:
+                    rings_data["count"] = rings_count
+                    rings_data["color"] = list(self._cr_rings_color.get_rgba())
+                    rings_data["width"] = self._cr_rings_width.value()
+                if has_range_label:
+                    label_data: dict = {"dataref": self._cr_range_label_dr.text().strip()}
+                    rl_fn = self._cr_range_label_fn.currentText()
+                    if rl_fn and rl_fn != _NONE:
+                        label_data["convert_function"] = rl_fn
+                    rl_fmt = self._cr_range_label_fmt.text().strip()
+                    if rl_fmt:
+                        label_data["format"] = rl_fmt
+                    rl_ox = self._cr_range_label_off_x.value()
+                    rl_oy = self._cr_range_label_off_y.value()
+                    if rl_ox != 0 or rl_oy != 0:
+                        label_data["offset"] = [rl_ox, rl_oy]
+                    rl_font = self._cr_range_label_font.text().strip()
+                    if rl_font:
+                        label_data["font"] = rl_font
+                    label_data["font_size"] = self._cr_range_label_size.value()
+                    if self._cr_range_label_bold.isChecked():
+                        label_data["bold"] = True
+                    if self._cr_range_label_italic.isChecked():
+                        label_data["italic"] = True
+                    label_data["color"] = list(self._cr_range_label_color.get_rgba())
+                    rings_data["label"] = label_data
+                data["range_rings"] = rings_data
             data["tick5_length"] = self._cr_t5_len.value()
             data["tick5_color"] = list(self._cr_t5_color.get_rgba())
             data["tick5_width"] = self._cr_t5_width.value()
@@ -5314,6 +5470,16 @@ class PropertiesForm(QWidget):
         self._cr_rings_count.setValue(0)
         self._cr_rings_color.set_rgba(None); self._cr_rings_color.setEnabled(False)
         self._cr_rings_width.setValue(1.0); self._cr_rings_width.setEnabled(False)
+        self._cr_range_label_chk.setChecked(False)
+        self._on_cr_range_label_toggled(False)
+        self._cr_range_label_dr.clear()
+        self._cr_range_label_fn.setCurrentIndex(0)
+        self._cr_range_label_fmt.clear()
+        self._cr_range_label_off_x.setValue(0.0); self._cr_range_label_off_y.setValue(0.0)
+        self._cr_range_label_font.clear()
+        self._cr_range_label_size.setValue(14.0)
+        self._cr_range_label_bold.setChecked(False); self._cr_range_label_italic.setChecked(False)
+        self._cr_range_label_color.set_rgba(None)
         self._cr_t5_len.setValue(8.0); self._cr_t5_color.set_rgba(None)
         self._cr_t5_width.setValue(1.0); self._cr_t5_pos.setCurrentIndex(0)
         self._cr_t10_len.setValue(16.0); self._cr_t10_color.set_rgba(None)
