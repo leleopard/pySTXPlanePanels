@@ -2733,6 +2733,58 @@ class PropertiesForm(QWidget):
         self._ng_label_color.color_changed.connect(self._emit)
         lform.addRow("Label color", self._ng_label_color)
 
+        # Target/bug marker — a tick whose position is found by interpolating
+        # the dataref value against this SAME Gradation Table's (value,
+        # offset) pairs, so no separate calibration table is offered here.
+        self._ng_target_sec = _Section("Target marker", optional=True)
+        self._ng_target_sec.toggled.connect(self._emit)
+        self._ng_target_sec.setToolTip(
+            "A dataref-driven marker over the tape, positioned by\n"
+            "interpolating the dataref's value against this component's\n"
+            "own Gradation Table — no separate calibration table."
+        )
+        self._ng_target_dr = QLineEdit()
+        self._ng_target_dr.editingFinished.connect(self._emit)
+        self._ng_target_sec.row("Dataref", self._dr_field(self._ng_target_dr))
+        self._ng_target_fn = _NoScrollComboBox()
+        self._ng_target_fn.addItems(_VALUE_FUNCS)
+        self._ng_target_fn.currentTextChanged.connect(self._emit)
+        self._ng_target_sec.row("Convert function", self._ng_target_fn)
+        self._ng_target_length = QDoubleSpinBox()
+        self._ng_target_length.setRange(0.0, 4096.0); self._ng_target_length.setDecimals(1)
+        self._ng_target_length.setValue(20.0)
+        self._ng_target_length.valueChanged.connect(self._emit)
+        self._ng_target_sec.row("Length px", self._ng_target_length)
+        self._ng_target_width = QDoubleSpinBox()
+        self._ng_target_width.setRange(0.5, 50.0); self._ng_target_width.setDecimals(1)
+        self._ng_target_width.setValue(2.0)
+        self._ng_target_width.valueChanged.connect(self._emit)
+        self._ng_target_sec.row("Width px", self._ng_target_width)
+        self._ng_target_color = _ColorButton()
+        self._ng_target_color.color_changed.connect(self._emit)
+        self._ng_target_sec.row("Color", self._ng_target_color)
+
+        self._ng_target_vis_chk = QCheckBox()
+        self._ng_target_vis_chk.toggled.connect(self._on_ng_target_vis_toggled)
+        self._ng_target_vis_chk.toggled.connect(self._emit)
+        self._ng_target_vis_dr = QLineEdit()
+        self._ng_target_vis_dr.editingFinished.connect(self._emit)
+        self._ng_target_vis_dr_box = self._dr_field(self._ng_target_vis_dr)
+        self._ng_target_vis_dr_box.setEnabled(False)
+        _ng_target_vis_dr_row = QWidget()
+        _ng_target_vis_dr_hl = QHBoxLayout(_ng_target_vis_dr_row)
+        _ng_target_vis_dr_hl.setContentsMargins(0, 0, 0, 0); _ng_target_vis_dr_hl.setSpacing(6)
+        _ng_target_vis_dr_hl.addWidget(self._ng_target_vis_chk)
+        _ng_target_vis_dr_hl.addWidget(self._ng_target_vis_dr_box, 1)
+        self._ng_target_sec.row("Show/hide dataref", _ng_target_vis_dr_row)
+        self._ng_target_vis_pred = _NoScrollComboBox()
+        self._ng_target_vis_pred.addItems(_PREDICATES)
+        self._ng_target_vis_pred.setEnabled(False)
+        self._ng_target_vis_pred.currentTextChanged.connect(self._emit)
+        self._ng_target_sec.row("Show/hide predicate", self._ng_target_vis_pred)
+
+        lform.addRow(self._ng_target_sec)
+
         self._ng_grad_stack.addWidget(circ_page)   # index 0
         self._ng_grad_stack.addWidget(lin_page)    # index 1
         self._ng_sec.row_widget(self._ng_grad_stack)
@@ -2792,6 +2844,10 @@ class PropertiesForm(QWidget):
     def _on_ng_rect_line_toggled(self, on: bool) -> None:
         self._ng_rect_line_color.setEnabled(on)
         self._ng_rect_line_width.setEnabled(on)
+
+    def _on_ng_target_vis_toggled(self, on: bool) -> None:
+        self._ng_target_vis_dr_box.setEnabled(on)
+        self._ng_target_vis_pred.setEnabled(on)
 
     def _mk_compassrose_sec(self):
         self._cr_sec = _Section("Compass Rose")
@@ -4137,6 +4193,32 @@ class PropertiesForm(QWidget):
         self._ng_label_bold.setChecked(bool(ng_labels.get("bold", False)))
         self._ng_label_italic.setChecked(bool(ng_labels.get("italic", False)))
         self._ng_label_color.set_rgba(ng_labels.get("color", [255, 255, 255, 255]))
+        ng_target = ng_lin.get("target")
+        self._ng_target_sec.set_active(ng_target is not None)
+        if ng_target:
+            self._ng_target_dr.setText(str(ng_target.get("dataref", "")))
+            fn_idx = self._ng_target_fn.findText(str(ng_target.get("convert_function") or _NONE))
+            self._ng_target_fn.setCurrentIndex(max(fn_idx, 0))
+            self._ng_target_length.setValue(float(ng_target.get("length", 20.0)))
+            self._ng_target_width.setValue(float(ng_target.get("width", 2.0)))
+            self._ng_target_color.set_rgba(ng_target.get("color", [255, 255, 255, 255]))
+            target_vis = ng_target.get("visibility")
+            self._ng_target_vis_chk.setChecked(target_vis is not None)
+            self._ng_target_vis_dr_box.setEnabled(target_vis is not None)
+            self._ng_target_vis_pred.setEnabled(target_vis is not None)
+            self._ng_target_vis_dr.setText(str((target_vis or {}).get("dataref", "")))
+            pred_idx = self._ng_target_vis_pred.findText(str((target_vis or {}).get("predicate", "")))
+            self._ng_target_vis_pred.setCurrentIndex(max(pred_idx, 0))
+        else:
+            self._ng_target_dr.clear()
+            self._ng_target_fn.setCurrentIndex(0)
+            self._ng_target_length.setValue(20.0); self._ng_target_width.setValue(2.0)
+            self._ng_target_color.set_rgba(None)
+            self._ng_target_vis_chk.setChecked(False)
+            self._ng_target_vis_dr_box.setEnabled(False)
+            self._ng_target_vis_pred.setEnabled(False)
+            self._ng_target_vis_dr.clear()
+            self._ng_target_vis_pred.setCurrentIndex(0)
         self._ng_needle_len.setValue(float(comp.get("needle_length", 80.0)))
         self._ng_needle_width.setValue(float(comp.get("needle_width", 2.0)))
         self._ng_needle_color.set_rgba(comp.get("needle_color") or comp.get("color"))
@@ -4453,6 +4535,20 @@ class PropertiesForm(QWidget):
                         labels["italic"] = True
                     labels["color"] = list(self._ng_label_color.get_rgba())
                     lin["labels"] = labels
+                if self._ng_target_sec.active:
+                    target: dict = {"dataref": self._ng_target_dr.text().strip()}
+                    fn = self._ng_target_fn.currentText()
+                    if fn and fn != _NONE:
+                        target["convert_function"] = fn
+                    target["length"] = self._ng_target_length.value()
+                    target["width"] = self._ng_target_width.value()
+                    target["color"] = list(self._ng_target_color.get_rgba())
+                    if self._ng_target_vis_chk.isChecked():
+                        target["visibility"] = {
+                            "dataref": self._ng_target_vis_dr.text().strip(),
+                            "predicate": self._ng_target_vis_pred.currentText(),
+                        }
+                    lin["target"] = target
                 data["linear"] = lin
             else:
                 data["radius"] = self._ng_radius.value()
@@ -5089,6 +5185,16 @@ class PropertiesForm(QWidget):
         self._ng_label_font.clear()
         self._ng_label_color.set_rgba(None)
         self._ng_label_bold.setChecked(False); self._ng_label_italic.setChecked(False)
+        self._ng_target_sec.set_active(False)
+        self._ng_target_dr.clear()
+        self._ng_target_fn.setCurrentIndex(0)
+        self._ng_target_length.setValue(20.0); self._ng_target_width.setValue(2.0)
+        self._ng_target_color.set_rgba(None)
+        self._ng_target_vis_chk.setChecked(False)
+        self._ng_target_vis_dr_box.setEnabled(False)
+        self._ng_target_vis_pred.setEnabled(False)
+        self._ng_target_vis_dr.clear()
+        self._ng_target_vis_pred.setCurrentIndex(0)
         self._ng_needle_len.setValue(80.0); self._ng_needle_width.setValue(2.0)
         self._ng_needle_color.set_rgba(None)
         self._ng_needle_angle.load(-130.0)

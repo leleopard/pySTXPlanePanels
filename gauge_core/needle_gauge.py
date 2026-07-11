@@ -102,6 +102,26 @@ YAML schema
           bold: false
           italic: false
           color: [255, 255, 255, 255]
+        target:                      # optional; a dataref-driven target/bug
+                                     # marker over the tape — a tick drawn on
+                                     # the same tick_side, at a position found
+                                     # by interpolating the dataref's value
+                                     # against THIS SAME spacing_table's
+                                     # (value, offset) pairs. No separate
+                                     # calibration table — the gradation table
+                                     # itself defines the value->pixel scale.
+          dataref: sim/cockpit/autopilot/vvi_target
+          convert_function: null    # optional; applied to the raw dataref
+                                     # value before it's looked up against
+                                     # spacing_table
+          length: 20
+          width: 3.0
+          color: [255, 200, 0, 255]
+          visibility:                # optional; independent show/hide,
+                                     # same {dataref, predicate} convention
+                                     # as every other component
+            dataref: sim/cockpit/autopilot/vvi_armed
+            predicate: true_if_over_zero
 """
 
 from __future__ import annotations
@@ -191,6 +211,20 @@ class NeedleGauge(_VecBase):
         self._show_labels = False
         self._label_pool: list[arcade.Text] = []
 
+        # Target/bug marker (optional; enabled by calling set_target()).
+        # Position comes from interpolating the dataref value against this
+        # component's OWN spacing_table (value, offset) pairs — no separate
+        # calibration table.
+        self._target_dr: Any | None = None
+        self._target_convert: Callable | None = None
+        self._target_length = 0.0
+        self._target_width = 1.0
+        self._target_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._target_offset = 0.0
+        self._target_vis_dr: Any | None = None
+        self._target_vis_predicate: Callable | None = None
+        self._target_show = True
+
         self._init_visibility()
 
     def set_needle_dataref(
@@ -246,6 +280,27 @@ class NeedleGauge(_VecBase):
             self._show_labels = True
             self._label_pool.clear()  # font changed; pool objects are stale
 
+    def set_target(
+        self,
+        dataref: Any,
+        convert_fn: str | None,
+        length: float,
+        width: float,
+        color: tuple[int, int, int, int],
+    ) -> None:
+        self._target_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._target_convert = get_convert(convert_fn)
+        self._target_length = float(length)
+        self._target_width = float(width)
+        self._target_color = color
+
+    def set_target_visibility(self, dataref: Any, predicate: str) -> None:
+        self._target_vis_dr = _as_dataref(dataref)
+        self._target_vis_predicate = get_convert(predicate)
+        if self._target_vis_predicate is None:
+            raise ValueError(f"visibility predicate '{predicate}' not found in registry")
+
     def apply_scale(self, scale: float) -> None:
         self._cx *= scale; self._cy *= scale
         self._radius *= scale
@@ -264,6 +319,8 @@ class NeedleGauge(_VecBase):
         if self._needle_viewport is not None:
             vx, vy, vw, vh = self._needle_viewport
             self._needle_viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
+        self._target_length *= scale
+        self._target_width *= scale
 
     def apply_offset(self, dx: float, dy: float) -> None:
         # _needle_viewport (like _linear_offset_x/_y) is relative to
@@ -281,6 +338,22 @@ class NeedleGauge(_VecBase):
                 lookup_piecewise(self._needle_table, raw)
                 if self._needle_table else raw
             )
+        if self._target_dr is not None:
+            raw = float(get_data(self._target_dr))
+            if self._target_convert is not None:
+                raw = float(self._target_convert(raw, get_data))
+            # No separate calibration table — reuse this component's own
+            # spacing_table (value, offset) pairs. lookup_piecewise requires
+            # ascending x order; spacing_table rows are hand-authored in
+            # whatever order reads naturally (often descending), so sort a
+            # fresh view each update rather than assuming row order.
+            pairs = sorted(([row[0], row[1]] for row in self._spacing_table),
+                           key=lambda p: p[0])
+            self._target_offset = lookup_piecewise(pairs, raw)
+            if self._target_vis_dr is not None and self._target_vis_predicate is not None:
+                self._target_show = bool(
+                    self._target_vis_predicate(float(get_data(self._target_vis_dr)), get_data)
+                )
 
     def draw(self) -> None:
         if not self._visible:
@@ -338,6 +411,21 @@ class NeedleGauge(_VecBase):
 
         if self._show_labels:
             self._draw_linear_labels(vertical, side, tx, ty)
+
+        if self._target_dr is not None and self._target_show:
+            self._draw_target(vertical, side, tx, ty)
+
+    def _draw_target(self, vertical: bool, side: str, tx: float, ty: float) -> None:
+        off = self._target_offset
+        length = self._target_length
+        if vertical:
+            x0, x1 = (tx - length, tx) if side == "left" else (tx, tx + length)
+            y = ty + off
+            arcade.draw_line(x0, y, x1, y, self._target_color, self._target_width)
+        else:
+            y0, y1 = (ty, ty + length) if side == "top" else (ty - length, ty)
+            x = tx + off
+            arcade.draw_line(x, y0, x, y1, self._target_color, self._target_width)
 
     def _draw_linear_labels(self, vertical: bool, side: str, tx: float, ty: float) -> None:
         for idx, (value, off, _length, _width, show_label, font_size, label_offset) in enumerate(self._spacing_table):
@@ -479,6 +567,20 @@ def _needle_gauge_factory(
             rect_line_color=_as_color(rect_line) if rect_line is not None else None,
             rect_line_width=float(linear_cfg.get("line_width", 1.0)),
         )
+
+        target_cfg = linear_cfg.get("target")
+        if target_cfg:
+            target_color = target_cfg.get("color")
+            ng.set_target(
+                dataref=_as_dataref(target_cfg["dataref"]),
+                convert_fn=target_cfg.get("convert_function"),
+                length=float(target_cfg.get("length", 20.0)),
+                width=float(target_cfg.get("width", 2.0)),
+                color=_as_color(target_color) if target_color is not None else (255, 255, 255, 255),
+            )
+            target_vis = target_cfg.get("visibility")
+            if target_vis:
+                ng.set_target_visibility(target_vis["dataref"], resolve_predicate_name(target_vis))
 
     if "visibility" in comp:
         v = comp["visibility"]

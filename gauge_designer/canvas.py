@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal, QTimer
 
 from gauge_core.emphasize import split_at_place
+from gauge_core.lookup import lookup_piecewise
 from gauge_core.needle_gauge import _parse_spacing_row as _ng_pad_spacing_row
 from gauge_designer.ui_utils import is_y_down
 
@@ -821,30 +822,50 @@ class InstrumentCanvas(QWidget):
                 draw.line([(x, y0), (x, y1)], fill=tick_color, width=width)
 
         labels = lin.get("labels")
-        if not labels:
-            return
-        fmt = labels.get("format") or "{:.0f}"
-        lfont = labels.get("font")
-        bold = bool(labels.get("bold", False))
-        italic = bool(labels.get("italic", False))
-        lcolor = _rgba(labels.get("color"))
-        for value, off, _length, _width, show_label, font_size, label_offset in table:
-            if not show_label:
-                continue
-            text = fmt.format(value)
-            font = _pil_font(lfont, max(8, int(font_size)), bold=bold, italic=italic)
+        if labels:
+            fmt = labels.get("format") or "{:.0f}"
+            lfont = labels.get("font")
+            bold = bool(labels.get("bold", False))
+            italic = bool(labels.get("italic", False))
+            lcolor = _rgba(labels.get("color"))
+            for value, off, _length, _width, show_label, font_size, label_offset in table:
+                if not show_label:
+                    continue
+                text = fmt.format(value)
+                font = _pil_font(lfont, max(8, int(font_size)), bold=bold, italic=italic)
+                if vertical:
+                    ly = ty_p - off
+                    if side == "left":
+                        draw.text((tx_p - label_offset, ly), text, fill=lcolor, font=font, anchor="rm")
+                    else:
+                        draw.text((tx_p + label_offset, ly), text, fill=lcolor, font=font, anchor="lm")
+                else:
+                    lx = tx_p + off
+                    if side == "top":
+                        draw.text((lx, ty_p - label_offset), text, fill=lcolor, font=font, anchor="mb")
+                    else:
+                        draw.text((lx, ty_p + label_offset), text, fill=lcolor, font=font, anchor="mt")
+
+        target = lin.get("target")
+        if target:
+            # No live dataref value in the static preview — use the middle
+            # value of this component's OWN spacing_table (the same table
+            # the runtime interpolates against) as a representative position.
+            values = [row[0] for row in table]
+            mid_value = (min(values) + max(values)) / 2.0
+            pairs = sorted(([row[0], row[1]] for row in table), key=lambda p: p[0])
+            off = lookup_piecewise(pairs, mid_value)
+            length = float(target.get("length", 20.0))
+            width = max(1, int(round(float(target.get("width", 2.0)))))
+            tcolor = _rgba(target.get("color"))
             if vertical:
-                ly = ty_p - off
-                if side == "left":
-                    draw.text((tx_p - label_offset, ly), text, fill=lcolor, font=font, anchor="rm")
-                else:
-                    draw.text((tx_p + label_offset, ly), text, fill=lcolor, font=font, anchor="lm")
+                x0, x1 = (tx_p - length, tx_p) if side == "left" else (tx_p, tx_p + length)
+                y = ty_p - off
+                draw.line([(x0, y), (x1, y)], fill=tcolor, width=width)
             else:
-                lx = tx_p + off
-                if side == "top":
-                    draw.text((lx, ty_p - label_offset), text, fill=lcolor, font=font, anchor="mb")
-                else:
-                    draw.text((lx, ty_p + label_offset), text, fill=lcolor, font=font, anchor="mt")
+                y0, y1 = (ty_p - length, ty_p) if side == "top" else (ty_p, ty_p + length)
+                x = tx_p + off
+                draw.line([(x, y0), (x, y1)], fill=tcolor, width=width)
 
     @staticmethod
     def _crosshair(draw: ImageDraw.ImageDraw, cx: int, cy: int) -> None:
