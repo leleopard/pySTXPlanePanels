@@ -119,7 +119,13 @@ YAML schema
                                              # nav range), fixed in screen space — does not
                                              # rotate with heading, like heading_marker
           dataref: sim/cockpit/radios/nav1_range
-          convert_function: null            # optional
+          convert_function: null            # optional; applied to the raw dataref
+                                             # value BEFORE table (same order as
+                                             # needle_angle elsewhere in this codebase)
+          table: [[0, 10], [1, 20], [2, 40]]  # optional piecewise-linear lookup,
+                                             # e.g. a range-selector index -> the
+                                             # actual displayed range; omit to use
+                                             # the (possibly converted) raw value directly
           format: "{:.0f}"
           offset: [0, -180]                 # px, relative to the rose centre (x-right,
                                              # y-up); NOT relative to the ring radii
@@ -157,6 +163,7 @@ from typing import Any, Callable
 import arcade
 
 from gauge_core.font_utils import resolve_font_for_arcade
+from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component, resolve_predicate_name
 from gauge_core.vector_primitives import _VecBase, _as_color, _as_dataref
 
@@ -295,6 +302,7 @@ class VectorCompassRose(_VecBase):
         # rotate with heading.
         self._range_label_dr: Any | None = None
         self._range_label_convert: Callable | None = None
+        self._range_label_table: list = []
         self._range_label_format = "{:.0f}"
         self._range_label_offset_x = 0.0
         self._range_label_offset_y = 0.0
@@ -412,10 +420,12 @@ class VectorCompassRose(_VecBase):
         bold: bool,
         italic: bool,
         color: tuple[int, int, int, int],
+        table: list | None = None,
     ) -> None:
         self._range_label_dr = _as_dataref(dataref)
         if convert_fn:
             self._range_label_convert = get_convert(convert_fn)
+        self._range_label_table = table or []
         self._range_label_format = format_str
         self._range_label_offset_x, self._range_label_offset_y = float(offset[0]), float(offset[1])
         self._range_label_font = font
@@ -486,7 +496,10 @@ class VectorCompassRose(_VecBase):
             raw = float(get_data(self._range_label_dr))
             if self._range_label_convert is not None:
                 raw = float(self._range_label_convert(raw, get_data))
-            self._range_label_value = raw
+            self._range_label_value = (
+                lookup_piecewise(self._range_label_table, raw)
+                if self._range_label_table else raw
+            )
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -781,6 +794,7 @@ def _compass_rose_factory(
                 bold=range_label_bold,
                 italic=range_label_italic,
                 color=_as_color(label_cfg.get("color")),
+                table=label_cfg.get("table"),
             )
 
     marker_cfg = comp.get("heading_marker")

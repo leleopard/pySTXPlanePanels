@@ -2995,6 +2995,18 @@ class PropertiesForm(QWidget):
         self._cr_range_label_fn.currentTextChanged.connect(self._emit)
         _cr_rings.row("Label convert fn", self._cr_range_label_fn)
 
+        self._cr_range_label_table_data: list = []
+        self._cr_range_label_table_btn = QPushButton("Table…")
+        self._cr_range_label_table_btn.setFixedWidth(58)
+        self._cr_range_label_table_btn.setEnabled(False)
+        self._cr_range_label_table_btn.setToolTip(
+            "Optional piecewise-linear lookup table, e.g. a range-selector\n"
+            "index -> the actual displayed range. Applied after Convert fn;\n"
+            "omit to display the (possibly converted) raw value directly."
+        )
+        self._cr_range_label_table_btn.clicked.connect(self._edit_cr_range_label_table)
+        _cr_rings.row("Label table", self._cr_range_label_table_btn)
+
         self._cr_range_label_fmt = QLineEdit()
         self._cr_range_label_fmt.setPlaceholderText("{:.0f}")
         self._cr_range_label_fmt.setEnabled(False)
@@ -3450,6 +3462,7 @@ class PropertiesForm(QWidget):
     def _on_cr_range_label_toggled(self, on: bool) -> None:
         self._cr_range_label_dr_box.setEnabled(on)
         self._cr_range_label_fn.setEnabled(on)
+        self._cr_range_label_table_btn.setEnabled(on)
         self._cr_range_label_fmt.setEnabled(on)
         self._cr_range_label_off_x.setEnabled(on)
         self._cr_range_label_off_y.setEnabled(on)
@@ -3459,6 +3472,22 @@ class PropertiesForm(QWidget):
         self._cr_range_label_bold.setEnabled(on)
         self._cr_range_label_italic.setEnabled(on)
         self._cr_range_label_color.setEnabled(on)
+
+    def _edit_cr_range_label_table(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Range label lookup table")
+        dlg.resize(300, 300)
+        tbl = _TableEditor("Input", "Output", expanding=True)
+        tbl.load(self._cr_range_label_table_data)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(tbl, 1)
+        lay.addWidget(btns)
+        if dlg.exec() == QDialog.Accepted:
+            self._cr_range_label_table_data = tbl.get_data()
+            self._emit()
 
     def _pick_cr_range_label_font(self) -> None:
         from PySide6.QtGui import QFont
@@ -4467,6 +4496,7 @@ class PropertiesForm(QWidget):
         self._cr_range_label_dr.setText(str(cr_range_label.get("dataref", "")))
         rl_fn_idx = self._cr_range_label_fn.findText(str(cr_range_label.get("convert_function") or _NONE))
         self._cr_range_label_fn.setCurrentIndex(max(rl_fn_idx, 0))
+        self._cr_range_label_table_data = cr_range_label.get("table", [])
         self._cr_range_label_fmt.setText(str(cr_range_label.get("format", "")))
         rl_off = cr_range_label.get("offset", [0, 0])
         self._cr_range_label_off_x.setValue(float(rl_off[0]))
@@ -4826,6 +4856,8 @@ class PropertiesForm(QWidget):
                     rl_fn = self._cr_range_label_fn.currentText()
                     if rl_fn and rl_fn != _NONE:
                         label_data["convert_function"] = rl_fn
+                    if self._cr_range_label_table_data:
+                        label_data["table"] = self._cr_range_label_table_data
                     rl_fmt = self._cr_range_label_fmt.text().strip()
                     if rl_fmt:
                         label_data["format"] = rl_fmt
@@ -5474,6 +5506,7 @@ class PropertiesForm(QWidget):
         self._on_cr_range_label_toggled(False)
         self._cr_range_label_dr.clear()
         self._cr_range_label_fn.setCurrentIndex(0)
+        self._cr_range_label_table_data = []
         self._cr_range_label_fmt.clear()
         self._cr_range_label_off_x.setValue(0.0); self._cr_range_label_off_y.setValue(0.0)
         self._cr_range_label_font.clear()
