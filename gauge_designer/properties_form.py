@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QPushButton, QCheckBox, QDialog, QColorDialog, QFontDialog,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QFileDialog, QListWidget, QListWidgetItem, QStackedWidget, QFrame,
-    QGroupBox, QDialogButtonBox,
+    QGroupBox, QDialogButtonBox, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal, QSize, QSettings
 from PySide6.QtGui import QColor, QIcon, QPixmap
@@ -226,13 +226,20 @@ class _TableEditor(QWidget):
     wrong, e.g. a font-size column defaulting to 0. narrow_columns marks
     column indices that should shrink to fit their content (e.g. a checkbox
     column) instead of stretching evenly with the rest.
+
+    By default the table is a fixed height, appropriate when it's embedded
+    inline in a form alongside other fields. Pass expanding=True instead
+    when this is the sole content of a resizable container (e.g. a
+    standalone dialog) so the table grows/shrinks to fill the available
+    space rather than leaving dead space or needing an inner scrollbar.
     """
     changed = Signal()
 
     def __init__(self, *headers, parent=None, use_spinboxes: bool = False,
                  decimals: int = 2, value_range: tuple = (-99999.0, 99999.0),
                  bool_columns: tuple = (), col_defaults: dict | None = None,
-                 height: int = 110, narrow_columns: tuple = ()):
+                 height: int = 110, narrow_columns: tuple = (),
+                 expanding: bool = False):
         super().__init__(parent)
         self._use_spinboxes = use_spinboxes
         self._decimals = decimals
@@ -247,7 +254,11 @@ class _TableEditor(QWidget):
         for c in narrow_columns:
             header.setSectionResizeMode(c, QHeaderView.ResizeToContents)
         self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._tbl.setFixedHeight(height)
+        if expanding:
+            self._tbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self._tbl.setMinimumHeight(height)
+        else:
+            self._tbl.setFixedHeight(height)
         if not use_spinboxes:
             self._tbl.itemChanged.connect(lambda: self.changed.emit())
 
@@ -262,7 +273,9 @@ class _TableEditor(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(2)
-        layout.addWidget(self._tbl); layout.addLayout(btns)
+        layout.addWidget(self._tbl, 1 if expanding else 0); layout.addLayout(btns)
+        if expanding:
+            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def _make_spin(self, value=0.0) -> QDoubleSpinBox:
         sb = QDoubleSpinBox()
@@ -514,7 +527,7 @@ class _BandEndpointWidget(QWidget):
         dlg = QDialog(self)
         dlg.setWindowTitle("Calibration table")
         dlg.resize(300, 220)
-        tbl = _TableEditor("Input", "Output")
+        tbl = _TableEditor("Input", "Output", expanding=True)
         tbl.load(self._table_data)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(dlg.accept)
