@@ -346,6 +346,10 @@ def round_2dp(value: float, _get: GetData) -> float:
     """Round to 2 decimal places."""
     return round(value, 2)
 
+def round_down_50(value: float, _get: GetData) -> float:
+    """Round down to the nearest multiple of 50 (e.g. 2190 -> 2150)."""
+    return math.floor(value / 50.0) * 50.0
+
 
 # -- Identity (default) --------------------------------------------------
 
@@ -381,6 +385,7 @@ for _name, _func in {
     "round_int": round_int,
     "round_1dp": round_1dp,
     "round_2dp": round_2dp,
+    "round_down_50": round_down_50,
     "return_units_decimal": return_units_decimal,
     "return_tens_digit_int": return_tens_digit_int,
     "return_tens_digit": return_tens_digit,
