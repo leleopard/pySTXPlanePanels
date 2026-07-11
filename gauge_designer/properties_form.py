@@ -1352,10 +1352,16 @@ class PropertiesForm(QWidget):
         self._txt_abs.toggled.connect(self._emit)
         dp_form.addRow(self._txt_abs)
 
+        _txt_builder_tip = (
+            "Only takes effect when Custom fmt below is blank — Custom fmt\n"
+            "always wins when set, so this is disabled while it has a value."
+        )
+
         self._txt_decimals = QSpinBox()
         self._txt_decimals.setRange(0, 6)
         self._txt_decimals.setValue(1)
         self._txt_decimals.setMinimumWidth(50)
+        self._txt_decimals.setToolTip(_txt_builder_tip)
         self._txt_decimals.valueChanged.connect(self._update_txt_format)
         self._txt_decimals.valueChanged.connect(self._emit)
         dp_form.addRow("Decimal places", self._txt_decimals)
@@ -1365,11 +1371,13 @@ class PropertiesForm(QWidget):
         self._txt_width.setValue(0)
         self._txt_width.setSpecialValueText("auto")
         self._txt_width.setMinimumWidth(50)
+        self._txt_width.setToolTip(_txt_builder_tip)
         self._txt_width.valueChanged.connect(self._update_txt_format)
         self._txt_width.valueChanged.connect(self._emit)
         dp_form.addRow("Min width", self._txt_width)
 
         self._txt_zerofill = QCheckBox("Zero fill")
+        self._txt_zerofill.setToolTip(_txt_builder_tip)
         self._txt_zerofill.toggled.connect(self._update_txt_format)
         self._txt_zerofill.toggled.connect(self._emit)
         dp_form.addRow(self._txt_zerofill)
@@ -3949,6 +3957,7 @@ class PropertiesForm(QWidget):
         self._update_txt_format()  # refresh preview from builder
         if txt_fmt:
             self._txt_fmt_preview.setText(txt_fmt)  # custom overrides preview
+        self._sync_txt_builder_enabled()
         self._txt_emphasize_place.setValue(float(comp.get("emphasize_place", 0.0)))
         self._txt_emphasize_size.setValue(
             float(comp.get("emphasize_font_size") or comp.get("font_size", 12.0)))
@@ -5418,6 +5427,7 @@ class PropertiesForm(QWidget):
         self._txt_width.setValue(0)
         self._txt_zerofill.setChecked(False)
         self._txt_fmt_custom.clear()
+        self._sync_txt_builder_enabled()
         self._txt_emphasize_place.setValue(0.0)
         self._txt_emphasize_size.setValue(12.0)
         self._txt_font_name.clear()
@@ -5640,6 +5650,17 @@ class PropertiesForm(QWidget):
             self._txt_fmt_preview.setText(custom)
         else:
             self._update_txt_format()
+        self._sync_txt_builder_enabled()
+
+    def _sync_txt_builder_enabled(self) -> None:
+        """Decimal places/Min width/Zero fill only take effect when Custom
+        fmt is blank (get_data() prefers Custom fmt whenever it's set) —
+        disable them together so it's clear why editing them has no visible
+        effect otherwise, instead of silently doing nothing."""
+        has_custom = bool(self._txt_fmt_custom.text().strip())
+        self._txt_decimals.setEnabled(not has_custom)
+        self._txt_width.setEnabled(not has_custom)
+        self._txt_zerofill.setEnabled(not has_custom)
 
     def _pick_dataref(self, lineedit: QLineEdit) -> None:
         from gauge_designer.dataref_picker import DatarefPickerDialog
