@@ -34,6 +34,7 @@ components:
   - 255
   - 255
   - 255
+  num_segments: 64
   tick5_length: 8.0
   tick5_color:
   - 255
@@ -74,8 +75,60 @@ components:
     width: 2.0
     start: 0.0
     end: 210.0
-    tick_position: 145.0
+    tick_position: 155.0
     tick_length: 8.0
+  heading_bug:
+    dataref: sim/cockpit/autopilot/heading_mag
+    radius: 210.0
+    points:
+    - - 0
+      - 0
+    - - -12
+      - 0
+    - - -12
+      - 10
+    - - -7
+      - 10
+    - - -3
+      - 0
+    - - 3
+      - 0
+    - - 12
+      - 0
+    - - 12
+      - 10
+    - - 7
+      - 10
+    - - 3
+      - 0
+    color:
+    - 242
+    - 161
+    - 239
+    - 255
+    filled: false
+    width: 2.0
+  heading_marker:
+    radius: 210.0
+    points:
+    - - 0
+      - 0
+    - - -8
+      - 18
+    - - 8
+      - 18
+    color:
+    - 255
+    - 255
+    - 255
+    - 255
+    filled: false
+    width: 2.0
+  viewport:
+  - 56
+  - -1
+  - 420
+  - 92
 - name: bgd
   type: FilledRect
   position:
@@ -89,21 +142,6 @@ components:
   - 255
   - 255
   - 120
-  hidden: true
-- name: course_line
-  type: Line
-  start:
-  - 265
-  - 68
-  end:
-  - 265
-  - 0
-  color:
-  - 255
-  - 255
-  - 255
-  - 255
-  width: 2.0
   hidden: true
 - name: course_pointer
   type: Polygon
@@ -124,6 +162,7 @@ components:
   - 255
   filled: false
   width: 2.0
+  hidden: true
 - name: autopilot_heading_label
   type: Text
   position:

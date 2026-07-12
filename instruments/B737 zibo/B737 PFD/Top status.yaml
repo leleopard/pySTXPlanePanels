@@ -45,8 +45,25 @@ components:
   - 255
   anchor_x: center
   visibility:
-    dataref: laminar/B738/autopilot/hdg_sel_status
+    dataref: laminar/B738/autopilot/pfd_hdg_mode[0]
     predicate: true_if_equals_1
+- name: HDG_VORLOC_txt
+  type: Text
+  position:
+  - 269
+  - 543
+  text: VOR/LOC
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/pfd_hdg_mode[0]
+    predicate: true_if_equals_2
 - name: ALT_HOLD_txt
   type: Text
   position:
@@ -62,8 +79,25 @@ components:
   - 255
   anchor_x: center
   visibility:
-    dataref: laminar/B738/autopilot/alt_hld_status
-    predicate: true_if_equals_1
+    dataref: laminar/B738/autopilot/pfd_alt_mode[0]
+    predicate: true_if_equals_4
+- name: ALT_ACQ_txt
+  type: Text
+  position:
+  - 384
+  - 543
+  text: ALT ACQ
+  font_name: ST_Boeing_PFD
+  font_size: 17.0
+  color:
+  - 46
+  - 227
+  - 92
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/autopilot/pfd_alt_mode[0]
+    predicate: true_if_equals_3
 - name: V_SPEED_txt
   type: Text
   position:

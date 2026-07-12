@@ -1,0 +1,263 @@
+name: VS_gauge
+size:
+- 600
+- 600
+components:
+- name: bg_ref_copy
+  type: ImagePanel
+  position:
+  - 300
+  - 300
+  texture: Primary_Flight_Display_of_a_Boeing_737-800.png
+  origin:
+  - 0
+  - 0
+  cliprect:
+  - 854
+  - 763
+  resize_to_container: true
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/airspeed_kts_pilot
+    predicate: true_if_zero
+  hidden: true
+- name: gauge_bgd
+  type: Polygon
+  origin:
+  - 568
+  - 306
+  points:
+  - - 0
+    - 0
+  - - 0
+    - -37
+  - - -15
+    - -46
+  - - -15
+    - -133
+  - - 8
+    - -133
+  - - 32
+    - -76
+  - - 32
+    - 0
+  - - 32
+    - 76
+  - - 8
+    - 133
+  - - -15
+    - 133
+  - - -15
+    - 46
+  - - 0
+    - 37
+  color:
+  - 98
+  - 88
+  - 87
+  - 255
+- name: vs_gauge
+  type: NeedleGauge
+  center:
+  - 630
+  - 306
+  gradation_type: linear
+  linear:
+    orientation: vertical
+    spacing_table:
+    - - 6.0
+      - 123.0
+      - 5.0
+      - 1.5
+      - true
+      - 14.0
+      - -10.0
+    - - 4.0
+      - 109.0
+      - 5.0
+      - 1.5
+      - false
+      - 14.0
+      - 8.0
+    - - 2.0
+      - 93.0
+      - 5.0
+      - 1.5
+      - true
+      - 14.0
+      - -10.0
+    - - 1.5
+      - 75.0
+      - 5.0
+      - 1.5
+      - false
+      - 14.0
+      - 8.0
+    - - 1.0
+      - 56.0
+      - 5.0
+      - 1.5
+      - true
+      - 14.0
+      - -10.0
+    - - 0.5
+      - 28.0
+      - 5.0
+      - 1.5
+      - false
+      - 14.0
+      - 8.0
+    - - 0.0
+      - 0.0
+      - 14.0
+      - 1.5
+      - false
+      - 14.0
+      - 2.0
+    - - -0.5
+      - -28.0
+      - 5.0
+      - 1.5
+      - false
+      - 14.0
+      - 8.0
+    - - -1.0
+      - -56.0
+      - 5.0
+      - 1.5
+      - true
+      - 14.0
+      - -20.0
+    - - -1.5
+      - -75.0
+      - 5.0
+      - 1.5
+      - false
+      - 14.0
+      - 8.0
+    - - -2.0
+      - -93.0
+      - 5.0
+      - 1.5
+      - true
+      - 14.0
+      - -20.0
+    - - -4.0
+      - -109.0
+      - 5.0
+      - 1.5
+      - false
+      - 14.0
+      - 8.0
+    - - -6.0
+      - -123.0
+      - 5.0
+      - 1.5
+      - true
+      - 14.0
+      - -20.0
+    tick_side: right
+    tick_color:
+    - 255
+    - 255
+    - 255
+    - 255
+    offset:
+    - -62.0
+    - 0.0
+    labels:
+      font: ST_Boeing_PFD
+      color:
+      - 255
+      - 255
+      - 255
+      - 255
+    target:
+      dataref: sim/cockpit2/autopilot/vvi_dial_fpm
+      convert_function: divideby1000
+      length: 7.0
+      width: 4.0
+      color:
+      - 242
+      - 161
+      - 239
+      - 255
+  needle_length: 150.0
+  needle_width: 3.0
+  needle_color:
+  - 255
+  - 255
+  - 255
+  - 255
+  needle_angle:
+    dataref: sim/cockpit2/gauges/indicators/vvi_fpm_pilot
+    table:
+    - - -6000
+      - 204.38
+    - - -4000
+      - 207.03
+    - - -2000
+      - 210.89
+    - - -1500
+      - 216.72
+    - - -1000
+      - 224.8
+    - - -500
+      - 243.34
+    - - 0
+      - 270
+    - - 500
+      - 296.66
+    - - 1000
+      - 315.2
+    - - 1500
+      - 323.28
+    - - 2000
+      - 329.11
+    - - 4000
+      - 332.97
+    - - 6000
+      - 335.62
+  needle_viewport:
+  - -56
+  - -150
+  - 27
+  - 300
+- name: VS_text-negative
+  type: Text
+  position:
+  - 552
+  - 138
+  dataref: sim/cockpit2/gauges/indicators/vvi_fpm_pilot
+  convert_function: round_down_50
+  absolute_value: true
+  text_format: '{:.0f}'
+  font_name: ST_Boeing_PFD
+  font_size: 16.0
+  color:
+  - 255
+  - 255
+  - 255
+  - 255
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/vvi_fpm_pilot
+    operator: <
+    value: -400.0
+- name: VS_text-positive
+  type: Text
+  position:
+  - 552
+  - 449
+  dataref: sim/cockpit2/gauges/indicators/vvi_fpm_pilot
+  convert_function: round_down_50
+  text_format: '{:.0f}'
+  font_name: ST_Boeing_PFD
+  font_size: 16.0
+  color:
+  - 255
+  - 255
+  - 255
+  - 255
+  visibility:
+    dataref: sim/cockpit2/gauges/indicators/vvi_fpm_pilot
+    operator: '>'
+    value: 400.0

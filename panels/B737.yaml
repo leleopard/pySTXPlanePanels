@@ -1,28 +1,54 @@
 name: B737_PFD
 size:
-- 600
-- 600
+- 1290
+- 660
 instruments:
-- file: instruments/B737 PFD/Speed_Tape.yaml
-  position:
-  - 0
-  - 0
-- file: instruments/B737 PFD/HSI.yaml
-  position:
-  - 0
-  - 0
-- file: instruments/B737 PFD/Altitude_Tape.yaml
-  position:
-  - 0
-  - 0
-- file: instruments/B737 PFD/Top status.yaml
-  position:
-  - 0
-  - 0
-- file: instruments/B737 PFD/dir_HSI.yaml
-  position:
-  - 0
-  - 33
+- container:
+    position:
+    - 30
+    - 30
+    size:
+    - 600
+    - 600
+    name: Container 1
+    instruments:
+    - file: instruments/B737 zibo/B737 PFD/Speed_Tape.yaml
+      position:
+      - 0
+      - 0
+    - file: instruments/B737 zibo/B737 PFD/HSI.yaml
+      position:
+      - 0
+      - 0
+    - file: instruments/B737 zibo/B737 PFD/Altitude_Tape.yaml
+      position:
+      - 0
+      - 0
+    - file: instruments/B737 zibo/B737 PFD/Top status.yaml
+      position:
+      - 0
+      - 0
+    - file: instruments/B737 zibo/B737 PFD/dir_HSI.yaml
+      position:
+      - 0
+      - 33
+    - file: instruments/B737 zibo/B737 PFD/VS_gauge.yaml
+      position:
+      - 0
+      - 0
+- container:
+    position:
+    - 660
+    - 30
+    size:
+    - 600
+    - 600
+    name: Container NAVDISPLAY
+    instruments:
+    - file: instruments/B737 zibo/B737 Nav Display/HSI.yaml
+      position:
+      - 0
+      - 0
 background_color:
 - 0.0
 - 0.0
