@@ -213,6 +213,34 @@ YAML schema
             outline_color: null
             outline_width: 1.0
 
+      course_deviation_indicator:            # optional: a two-segment course
+                                             # line (head towards the course
+                                             # angle, tail diametrically
+                                             # opposite) rotating with the
+                                             # rose around its own centre,
+                                             # positioned by a course dataref
+                                             # — the classic CDI course line
+                                             # on an HSI. Head/tail polygon
+                                             # symbols and the deviation
+                                             # bar/dots are a planned
+                                             # follow-up, not implemented yet.
+        dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
+        convert_function: null              # optional
+        head:                                # segment towards the course angle
+          start: 20                          # px from the rose centre
+          end: 180                           # px from the rose centre
+          color: [255, 255, 255, 255]
+          width: 2.0
+          dash: [6, 4]                       # optional [on_px, off_px]; omit
+                                             # (or null) for a solid line
+        tail:                                # segment diametrically opposite
+                                             # (course + 180°)
+          start: 20
+          end: 180
+          color: [255, 255, 255, 255]
+          width: 2.0
+          dash: null
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -470,6 +498,27 @@ class VectorCompassRose(_VecBase):
         # dataref-positioned and visibility-gated.
         self._bearing_pointers: list[_BearingPointer] = []
 
+        # Course deviation indicator (optional; enabled by calling
+        # set_course_deviation_indicator()) — a two-segment course line
+        # (head towards the course angle, tail diametrically opposite)
+        # rotating with the rose around its own centre, positioned by a
+        # course dataref. Head/tail polygon symbols and the deviation
+        # bar/dots are a planned follow-up, not implemented here.
+        self._show_cdi = False
+        self._cdi_dr: Any | None = None
+        self._cdi_convert: Callable | None = None
+        self._cdi_angle = 0.0
+        self._cdi_head_start = 0.0
+        self._cdi_head_end = 150.0
+        self._cdi_head_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._cdi_head_width = 2.0
+        self._cdi_head_dash: tuple[float, float] | None = None
+        self._cdi_tail_start = 0.0
+        self._cdi_tail_end = 150.0
+        self._cdi_tail_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._cdi_tail_width = 2.0
+        self._cdi_tail_dash: tuple[float, float] | None = None
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
@@ -605,6 +654,36 @@ class VectorCompassRose(_VecBase):
             tail_outline_width=tail_outline_width,
         ))
 
+    def set_course_deviation_indicator(
+        self,
+        dataref: Any,
+        convert_fn: str | None,
+        head_start: float,
+        head_end: float,
+        head_color: tuple[int, int, int, int],
+        head_width: float,
+        head_dash: tuple[float, float] | None,
+        tail_start: float,
+        tail_end: float,
+        tail_color: tuple[int, int, int, int],
+        tail_width: float,
+        tail_dash: tuple[float, float] | None,
+    ) -> None:
+        self._show_cdi = True
+        self._cdi_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._cdi_convert = get_convert(convert_fn)
+        self._cdi_head_start = float(head_start)
+        self._cdi_head_end = float(head_end)
+        self._cdi_head_color = head_color
+        self._cdi_head_width = float(head_width)
+        self._cdi_head_dash = tuple(head_dash) if head_dash else None
+        self._cdi_tail_start = float(tail_start)
+        self._cdi_tail_end = float(tail_end)
+        self._cdi_tail_color = tail_color
+        self._cdi_tail_width = float(tail_width)
+        self._cdi_tail_dash = tuple(tail_dash) if tail_dash else None
+
     def set_range_rings(
         self,
         count: int,
@@ -687,6 +766,14 @@ class VectorCompassRose(_VecBase):
             p.tail_points = [(x * scale, y * scale) for x, y in p.tail_points]
             p.tail_width *= scale
             p.tail_outline_width *= scale
+        self._cdi_head_start *= scale; self._cdi_head_end *= scale
+        self._cdi_head_width *= scale
+        if self._cdi_head_dash is not None:
+            self._cdi_head_dash = (self._cdi_head_dash[0] * scale, self._cdi_head_dash[1] * scale)
+        self._cdi_tail_start *= scale; self._cdi_tail_end *= scale
+        self._cdi_tail_width *= scale
+        if self._cdi_tail_dash is not None:
+            self._cdi_tail_dash = (self._cdi_tail_dash[0] * scale, self._cdi_tail_dash[1] * scale)
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -729,6 +816,11 @@ class VectorCompassRose(_VecBase):
             p.angle = raw % 360.0
             if p.vis_dataref is not None and p.vis_predicate is not None:
                 p.visible = bool(p.vis_predicate(float(get_data(p.vis_dataref)), get_data))
+        if self._cdi_dr is not None:
+            raw = float(get_data(self._cdi_dr))
+            if self._cdi_convert is not None:
+                raw = float(self._cdi_convert(raw, get_data))
+            self._cdi_angle = raw % 360.0
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -858,6 +950,9 @@ class VectorCompassRose(_VecBase):
             if p.visible:
                 self._draw_bearing_pointer(p)
 
+        if self._show_cdi:
+            self._draw_cdi()
+
     def _draw_range_label(self) -> None:
         # Fixed relative to the rose centre — like heading_marker, does not
         # rotate with heading.
@@ -979,6 +1074,45 @@ class VectorCompassRose(_VecBase):
             dx, dy = half * math.cos(perp), half * math.sin(perp)
             arcade.draw_line(tx - dx, ty - dy, tx + dx, ty + dy,
                              self._track_color, self._track_width)
+
+    def _draw_cdi(self) -> None:
+        # Two independent line segments from the rose centre, head towards
+        # the course angle and tail diametrically opposite — same
+        # positioning model as track (point_at() handles the rose's own
+        # rotation plus this angle), but each segment gets its own
+        # start/end/style and optional dashing.
+        hx0, hy0 = self._point_at(self._cdi_angle, self._cdi_head_start)
+        hx1, hy1 = self._point_at(self._cdi_angle, self._cdi_head_end)
+        self._draw_dashed_line(
+            hx0, hy0, hx1, hy1, self._cdi_head_color, self._cdi_head_width, self._cdi_head_dash,
+        )
+        tx0, ty0 = self._point_at(self._cdi_angle + 180.0, self._cdi_tail_start)
+        tx1, ty1 = self._point_at(self._cdi_angle + 180.0, self._cdi_tail_end)
+        self._draw_dashed_line(
+            tx0, ty0, tx1, ty1, self._cdi_tail_color, self._cdi_tail_width, self._cdi_tail_dash,
+        )
+
+    @staticmethod
+    def _draw_dashed_line(
+        x0: float, y0: float, x1: float, y1: float,
+        color: tuple[int, int, int, int], width: float,
+        dash: tuple[float, float] | None,
+    ) -> None:
+        if not dash:
+            arcade.draw_line(x0, y0, x1, y1, color, width)
+            return
+        on, off = dash
+        period = on + off
+        total = math.hypot(x1 - x0, y1 - y0)
+        if period <= 0 or total <= 0:
+            arcade.draw_line(x0, y0, x1, y1, color, width)
+            return
+        ux, uy = (x1 - x0) / total, (y1 - y0) / total
+        d = 0.0
+        while d < total:
+            seg_end = min(d + on, total)
+            arcade.draw_line(x0 + ux * d, y0 + uy * d, x0 + ux * seg_end, y0 + uy * seg_end, color, width)
+            d += period
 
 
 def _compass_rose_factory(
@@ -1152,6 +1286,25 @@ def _compass_rose_factory(
             vis_dataref=pvis["dataref"] if pvis else None,
             vis_predicate=resolve_predicate_name(pvis) if pvis else None,
             **tail_kwargs,
+        )
+
+    cdi_cfg = comp.get("course_deviation_indicator")
+    if cdi_cfg:
+        head_cfg = cdi_cfg.get("head", {})
+        tail_cfg = cdi_cfg.get("tail", {})
+        rose.set_course_deviation_indicator(
+            dataref=cdi_cfg["dataref"],
+            convert_fn=cdi_cfg.get("convert_function"),
+            head_start=float(head_cfg.get("start", 0.0)),
+            head_end=float(head_cfg.get("end", comp.get("radius", 150.0))),
+            head_color=_as_color(head_cfg.get("color", [255, 255, 255, 255])),
+            head_width=float(head_cfg.get("width", 2.0)),
+            head_dash=tuple(head_cfg["dash"]) if head_cfg.get("dash") else None,
+            tail_start=float(tail_cfg.get("start", 0.0)),
+            tail_end=float(tail_cfg.get("end", comp.get("radius", 150.0))),
+            tail_color=_as_color(tail_cfg.get("color", [255, 255, 255, 255])),
+            tail_width=float(tail_cfg.get("width", 2.0)),
+            tail_dash=tuple(tail_cfg["dash"]) if tail_cfg.get("dash") else None,
         )
 
     if "visibility" in comp:

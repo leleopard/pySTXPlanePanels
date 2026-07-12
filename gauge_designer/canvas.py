@@ -1171,6 +1171,45 @@ class InstrumentCanvas(QWidget):
                     tail_cfg.get("outline_color"), tail_cfg.get("outline_width", 1.0),
                 )
 
+        cdi_cfg = comp.get("course_deviation_indicator")
+        if cdi_cfg:
+            # Angle=0 (straight up) for the static preview — no live dataref
+            # value here, and head/tail start/end are typically small
+            # relative to the rose radius (near the centre), so unlike
+            # bearing_pointers there's little risk of landing off-canvas
+            # regardless of angle; 0° just matches heading_marker's own
+            # simplest-case convention.
+            self._draw_compassrose_cdi_segment(point_at, draw, 0.0, cdi_cfg.get("head") or {}, r)
+            self._draw_compassrose_cdi_segment(point_at, draw, 180.0, cdi_cfg.get("tail") or {}, r)
+
+    def _draw_compassrose_cdi_segment(
+        self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float,
+        seg_cfg: dict, default_radius: float,
+    ) -> None:
+        start = float(seg_cfg.get("start", 0.0))
+        end = float(seg_cfg.get("end", default_radius))
+        x0, y0 = point_at(bearing_deg, start)
+        x1, y1 = point_at(bearing_deg, end)
+        color = _rgba(seg_cfg.get("color"))
+        width = max(1, int(round(float(seg_cfg.get("width", 2.0)))))
+        dash = seg_cfg.get("dash")
+        if not dash:
+            draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
+            return
+        on, off = float(dash[0]), float(dash[1])
+        period = on + off
+        total = math.hypot(x1 - x0, y1 - y0)
+        if period <= 0 or total <= 0:
+            draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
+            return
+        ux, uy = (x1 - x0) / total, (y1 - y0) / total
+        d = 0.0
+        while d < total:
+            seg_end = min(d + on, total)
+            draw.line([(x0 + ux * d, y0 + uy * d), (x0 + ux * seg_end, y0 + uy * seg_end)],
+                      fill=color, width=width)
+            d += period
+
     def _draw_compassrose_pointer_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,
         points: list, color, filled: bool, width, outline_color, outline_width,

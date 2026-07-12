@@ -1439,6 +1439,98 @@ class _BearingPointerSection(_SubSection):
         self._tail_outline_color.set_rgba(None); self._tail_outline_width.setValue(1.0)
 
 
+class _CdiLineSection(_SubSection):
+    """One line segment (head or tail) of a VectorCompassRose course
+    deviation indicator — from the rose centre outward at the CDI's own
+    dataref-driven angle (head towards it, tail at +180°, both handled by
+    the caller). Reused 2x (Head/Tail); self-contained load/get_data/reset
+    since a follow-up request (head/tail polygon symbols) is expected to
+    extend this same per-segment shape later."""
+
+    def __init__(self, label: str, owner: "PropertiesForm", parent=None):
+        super().__init__(label, collapsed=False, parent=parent)
+        self._owner = owner
+        emit = owner._emit
+
+        self._start = QDoubleSpinBox()
+        self._start.setRange(-4096.0, 4096.0); self._start.setDecimals(1)
+        self._start.setToolTip("Distance from the rose centre where this segment starts.")
+        self._start.valueChanged.connect(emit)
+        self.row("Start px (from centre)", self._start)
+
+        self._end = QDoubleSpinBox()
+        self._end.setRange(-4096.0, 4096.0); self._end.setDecimals(1)
+        self._end.setValue(150.0)
+        self._end.setToolTip("Distance from the rose centre where this segment ends.")
+        self._end.valueChanged.connect(emit)
+        self.row("End px (from centre)", self._end)
+
+        self._color = _ColorButton()
+        self._color.color_changed.connect(emit)
+        self.row("Color", self._color)
+
+        self._width = QDoubleSpinBox()
+        self._width.setRange(0.5, 50.0); self._width.setDecimals(1)
+        self._width.setValue(2.0)
+        self._width.valueChanged.connect(emit)
+        self.row("Width", self._width)
+
+        self._dash_chk = QCheckBox("Dashed")
+        self._dash_chk.toggled.connect(self._on_dash_toggled)
+        self._dash_chk.toggled.connect(emit)
+        self.row_widget(self._dash_chk)
+
+        self._dash_on = QDoubleSpinBox()
+        self._dash_on.setRange(0.5, 200.0); self._dash_on.setDecimals(1)
+        self._dash_on.setValue(6.0)
+        self._dash_on.setEnabled(False)
+        self._dash_on.valueChanged.connect(emit)
+        self.row("Dash on px", self._dash_on)
+
+        self._dash_off = QDoubleSpinBox()
+        self._dash_off.setRange(0.5, 200.0); self._dash_off.setDecimals(1)
+        self._dash_off.setValue(4.0)
+        self._dash_off.setEnabled(False)
+        self._dash_off.valueChanged.connect(emit)
+        self.row("Dash off px", self._dash_off)
+
+    def _on_dash_toggled(self, on: bool) -> None:
+        self._dash_on.setEnabled(on)
+        self._dash_off.setEnabled(on)
+
+    def load(self, cfg: dict | None) -> None:
+        cfg = cfg or {}
+        self._start.setValue(float(cfg.get("start", 0.0)))
+        self._end.setValue(float(cfg.get("end", 150.0)))
+        self._color.set_rgba(cfg.get("color", [255, 255, 255, 255]))
+        self._width.setValue(float(cfg.get("width", 2.0)))
+        dash = cfg.get("dash")
+        self._dash_chk.blockSignals(True)
+        self._dash_chk.setChecked(dash is not None)
+        self._dash_chk.blockSignals(False)
+        self._dash_on.setEnabled(dash is not None)
+        self._dash_off.setEnabled(dash is not None)
+        self._dash_on.setValue(float(dash[0]) if dash else 6.0)
+        self._dash_off.setValue(float(dash[1]) if dash else 4.0)
+
+    def get_data(self) -> dict:
+        data = {
+            "start": self._start.value(),
+            "end": self._end.value(),
+            "color": list(self._color.get_rgba()),
+            "width": self._width.value(),
+        }
+        if self._dash_chk.isChecked():
+            data["dash"] = [self._dash_on.value(), self._dash_off.value()]
+        return data
+
+    def reset(self) -> None:
+        self._start.setValue(0.0); self._end.setValue(150.0)
+        self._color.set_rgba(None); self._width.setValue(2.0)
+        self._dash_chk.setChecked(False)
+        self._dash_on.setValue(6.0); self._dash_off.setValue(4.0)
+
+
 class _AutoSizeStack(QStackedWidget):
     """QStackedWidget that sizes itself to the CURRENT page instead of the
     largest page. Plain QStackedWidget reports a size hint big enough for
@@ -3885,6 +3977,31 @@ class PropertiesForm(QWidget):
             self._cr_bearing_pointers[pointer_name] = section
             self._cr_sec.row_widget(section)
 
+        # ── Course Deviation Indicator ───────────────────────────────────────
+        _cr_cdi = _SubSection("Course Deviation Indicator", collapsed=True)
+        _cr_cdi.row_widget(_sep_label(
+            "A two-segment course line (head towards the course angle, tail\n"
+            "diametrically opposite) rotating with the rose around its own\n"
+            "centre, positioned by a course dataref."
+        ))
+
+        self._cr_cdi_dr = QLineEdit()
+        self._cr_cdi_dr.editingFinished.connect(self._emit)
+        _cr_cdi.row("Dataref", self._dr_field(self._cr_cdi_dr))
+
+        self._cr_cdi_fn = _NoScrollComboBox()
+        self._cr_cdi_fn.addItems(_VALUE_FUNCS)
+        self._cr_cdi_fn.currentTextChanged.connect(self._emit)
+        _cr_cdi.row("Convert function", self._cr_cdi_fn)
+
+        self._cr_cdi_head = _CdiLineSection("Head", self)
+        _cr_cdi.row_widget(self._cr_cdi_head)
+
+        self._cr_cdi_tail = _CdiLineSection("Tail", self)
+        _cr_cdi.row_widget(self._cr_cdi_tail)
+
+        self._cr_sec.row_widget(_cr_cdi)
+
         self._vbox.addWidget(self._cr_sec)
 
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
@@ -4417,7 +4534,7 @@ class PropertiesForm(QWidget):
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
             "heading", "track", "heading_bug", "heading_marker", "center_marker",
-            "bearing_pointers", "range_rings",
+            "bearing_pointers", "course_deviation_indicator", "range_rings",
             # shared across all
             "viewport", "visibility",
         }
@@ -5114,6 +5231,12 @@ class PropertiesForm(QWidget):
         }
         for pointer_name, section in self._cr_bearing_pointers.items():
             section.load(bearing_by_name.get(pointer_name))
+        cdi = comp.get("course_deviation_indicator") or {}
+        self._cr_cdi_dr.setText(str(cdi.get("dataref", "")))
+        cdi_fn_idx = self._cr_cdi_fn.findText(str(cdi.get("convert_function") or _NONE))
+        self._cr_cdi_fn.setCurrentIndex(max(cdi_fn_idx, 0))
+        self._cr_cdi_head.load(cdi.get("head"))
+        self._cr_cdi_tail.load(cdi.get("tail"))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -5517,6 +5640,17 @@ class PropertiesForm(QWidget):
             ]
             if pointers:
                 data["bearing_pointers"] = pointers
+            cdi_dr = self._cr_cdi_dr.text().strip()
+            if cdi_dr:
+                cdi: dict = {
+                    "dataref": cdi_dr,
+                    "head": self._cr_cdi_head.get_data(),
+                    "tail": self._cr_cdi_tail.get_data(),
+                }
+                cdi_fn = self._cr_cdi_fn.currentText()
+                if cdi_fn != _NONE:
+                    cdi["convert_function"] = cdi_fn
+                data["course_deviation_indicator"] = cdi
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -6109,6 +6243,8 @@ class PropertiesForm(QWidget):
         self._cr_center_clip_chk.setChecked(True)
         for section in self._cr_bearing_pointers.values():
             section.reset()
+        self._cr_cdi_dr.clear(); self._cr_cdi_fn.setCurrentIndex(0)
+        self._cr_cdi_head.reset(); self._cr_cdi_tail.reset()
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
