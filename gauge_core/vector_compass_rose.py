@@ -134,6 +134,9 @@ YAML schema
           bold: false
           italic: false
           color: [255, 255, 255, 255]
+          anchor_x: center                   # left | center | right — which part of
+                                             # the glyph sits at the offset point
+          anchor_y: center                   # baseline | center | top | bottom
 
       heading_marker:                        # optional: fixed lubber-line/index polygon at
                                              # top-dead-centre — no dataref, since it never
@@ -311,6 +314,8 @@ class VectorCompassRose(_VecBase):
         self._range_label_bold = False
         self._range_label_italic = False
         self._range_label_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._range_label_anchor_x = "center"
+        self._range_label_anchor_y = "center"
         self._range_label_value = 0.0
         self._range_label_text_obj: arcade.Text | None = None
 
@@ -421,6 +426,8 @@ class VectorCompassRose(_VecBase):
         italic: bool,
         color: tuple[int, int, int, int],
         table: list | None = None,
+        anchor_x: str = "center",
+        anchor_y: str = "center",
     ) -> None:
         self._range_label_dr = _as_dataref(dataref)
         if convert_fn:
@@ -433,6 +440,8 @@ class VectorCompassRose(_VecBase):
         self._range_label_bold = bool(bold)
         self._range_label_italic = bool(italic)
         self._range_label_color = color
+        self._range_label_anchor_x = anchor_x
+        self._range_label_anchor_y = anchor_y
         self._range_label_text_obj = None  # style changed; pool object is stale
 
     def apply_scale(self, scale: float) -> None:
@@ -626,11 +635,14 @@ class VectorCompassRose(_VecBase):
                 "", 0, 0,
                 color=self._range_label_color,
                 font_size=self._range_label_font_size,
-                anchor_x="center", anchor_y="center",
+                anchor_x=self._range_label_anchor_x,
+                anchor_y=self._range_label_anchor_y,
                 **kw,
             )
         t = self._range_label_text_obj
         t.text = self._range_label_format.format(self._range_label_value)
+        t.anchor_x = self._range_label_anchor_x
+        t.anchor_y = self._range_label_anchor_y
         t.x = self._cx + self._range_label_offset_x
         t.y = self._cy + self._range_label_offset_y
         t.draw()
@@ -795,6 +807,8 @@ def _compass_rose_factory(
                 italic=range_label_italic,
                 color=_as_color(label_cfg.get("color")),
                 table=label_cfg.get("table"),
+                anchor_x=str(label_cfg.get("anchor_x", "center")),
+                anchor_y=str(label_cfg.get("anchor_y", "center")),
             )
 
     marker_cfg = comp.get("heading_marker")

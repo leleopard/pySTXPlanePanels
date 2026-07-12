@@ -990,8 +990,12 @@ class InstrumentCanvas(QWidget):
                                     bold=bool(range_label.get("bold", False)),
                                     italic=bool(range_label.get("italic", False)))
                 rl_text = str(range_label.get("format", "{:.0f}")).format(0.0)
+                rl_anchor_x = {"left": "l", "center": "m", "right": "r"}.get(
+                    range_label.get("anchor_x", "center"), "m")
+                rl_anchor_y = {"baseline": "s", "center": "m", "top": "a", "bottom": "d"}.get(
+                    range_label.get("anchor_y", "center"), "m")
                 draw.text((rl_x, rl_y), rl_text, fill=_rgba(range_label.get("color")),
-                         font=rl_font, anchor="mm")
+                         font=rl_font, anchor=rl_anchor_x + rl_anchor_y)
 
         tick5_len  = float(comp.get("tick5_length", 8.0))
         tick5_col  = _rgba(comp.get("tick5_color"))

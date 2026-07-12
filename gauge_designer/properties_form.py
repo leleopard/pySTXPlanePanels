@@ -3075,6 +3075,18 @@ class PropertiesForm(QWidget):
         self._cr_range_label_color.color_changed.connect(self._emit)
         _cr_rings.row("Label color", self._cr_range_label_color)
 
+        self._cr_range_label_anchor_x = _NoScrollComboBox()
+        self._cr_range_label_anchor_x.addItems(["left", "center", "right"])
+        self._cr_range_label_anchor_x.setEnabled(False)
+        self._cr_range_label_anchor_x.currentTextChanged.connect(self._emit)
+        _cr_rings.row("Label anchor X", self._cr_range_label_anchor_x)
+
+        self._cr_range_label_anchor_y = _NoScrollComboBox()
+        self._cr_range_label_anchor_y.addItems(["baseline", "center", "top", "bottom"])
+        self._cr_range_label_anchor_y.setEnabled(False)
+        self._cr_range_label_anchor_y.currentTextChanged.connect(self._emit)
+        _cr_rings.row("Label anchor Y", self._cr_range_label_anchor_y)
+
         self._cr_sec.row_widget(_cr_rings)
 
         # ── 5° Ticks ─────────────────────────────────────────────────────────
@@ -3472,6 +3484,8 @@ class PropertiesForm(QWidget):
         self._cr_range_label_bold.setEnabled(on)
         self._cr_range_label_italic.setEnabled(on)
         self._cr_range_label_color.setEnabled(on)
+        self._cr_range_label_anchor_x.setEnabled(on)
+        self._cr_range_label_anchor_y.setEnabled(on)
 
     def _edit_cr_range_label_table(self) -> None:
         dlg = QDialog(self)
@@ -4506,6 +4520,8 @@ class PropertiesForm(QWidget):
         self._cr_range_label_bold.setChecked(bool(cr_range_label.get("bold", False)))
         self._cr_range_label_italic.setChecked(bool(cr_range_label.get("italic", False)))
         self._cr_range_label_color.set_rgba(cr_range_label.get("color", [255, 255, 255, 255]))
+        self._cr_range_label_anchor_x.setCurrentText(str(cr_range_label.get("anchor_x", "center")))
+        self._cr_range_label_anchor_y.setCurrentText(str(cr_range_label.get("anchor_y", "center")))
         self._cr_t5_len.setValue(float(comp.get("tick5_length", 8.0)))
         self._cr_t5_color.set_rgba(comp.get("tick5_color", [255, 255, 255, 255]))
         self._cr_t5_width.setValue(float(comp.get("tick5_width", 1.0)))
@@ -4874,6 +4890,12 @@ class PropertiesForm(QWidget):
                     if self._cr_range_label_italic.isChecked():
                         label_data["italic"] = True
                     label_data["color"] = list(self._cr_range_label_color.get_rgba())
+                    rl_ax = self._cr_range_label_anchor_x.currentText()
+                    if rl_ax != "center":
+                        label_data["anchor_x"] = rl_ax
+                    rl_ay = self._cr_range_label_anchor_y.currentText()
+                    if rl_ay != "center":
+                        label_data["anchor_y"] = rl_ay
                     rings_data["label"] = label_data
                 data["range_rings"] = rings_data
             data["tick5_length"] = self._cr_t5_len.value()
@@ -5513,6 +5535,8 @@ class PropertiesForm(QWidget):
         self._cr_range_label_size.setValue(14.0)
         self._cr_range_label_bold.setChecked(False); self._cr_range_label_italic.setChecked(False)
         self._cr_range_label_color.set_rgba(None)
+        self._cr_range_label_anchor_x.setCurrentIndex(1)  # "center"
+        self._cr_range_label_anchor_y.setCurrentIndex(1)  # "center"
         self._cr_t5_len.setValue(8.0); self._cr_t5_color.set_rgba(None)
         self._cr_t5_width.setValue(1.0); self._cr_t5_pos.setCurrentIndex(0)
         self._cr_t10_len.setValue(16.0); self._cr_t10_color.set_rgba(None)
