@@ -1364,6 +1364,27 @@ class PropertiesForm(QWidget):
         self._txt_dr.editingFinished.connect(self._emit)
         dp_form.addRow("Dataref", self._dr_field(self._txt_dr))
 
+        self._txt_char_array_chk = QCheckBox("Character array")
+        self._txt_char_array_chk.setToolTip(
+            "For X-Plane string/byte-array datarefs that can't be read as a\n"
+            "single float (e.g. a nav station ident like \"IOM\"). Subscribes\n"
+            "to dataref[0]..dataref[N-1] as N separate scalar datarefs — each\n"
+            "answered by X-Plane as the raw ASCII byte at that array position\n"
+            "— and joins them into text directly, stopping at the first\n"
+            "byte <= 0 (null terminator), like a C string. Disables every\n"
+            "numeric-only field below, none of which apply to raw text."
+        )
+        self._txt_char_array_chk.toggled.connect(self._on_txt_char_array_toggled)
+        self._txt_char_array_chk.toggled.connect(self._emit)
+        dp_form.addRow(self._txt_char_array_chk)
+
+        self._txt_char_count = QSpinBox()
+        self._txt_char_count.setRange(1, 32)
+        self._txt_char_count.setValue(4)
+        self._txt_char_count.setEnabled(False)
+        self._txt_char_count.valueChanged.connect(self._emit)
+        dp_form.addRow("Character count", self._txt_char_count)
+
         self._txt_fn = _NoScrollComboBox()
         self._txt_fn.addItems(_VALUE_FUNCS)
         self._txt_fn.currentTextChanged.connect(self._emit)
@@ -3893,7 +3914,7 @@ class PropertiesForm(QWidget):
             # VectorTape (all form-managed)
             "pixels_per_unit", "wrap", "tick_side", "tick_color", "bg_color", "ticks", "labels", "bands", "bugs",
             # Text
-            "text", "dataref", "text_format", "convert_function", "absolute_value",
+            "text", "dataref", "text_format", "convert_function", "absolute_value", "char_count",
             "emphasize_place", "emphasize_font_size",
             "font_name", "font_size", "bold", "italic", "anchor_x", "anchor_y", "font_file",
             # Vector
@@ -4132,6 +4153,7 @@ class PropertiesForm(QWidget):
         self._txt_mode.blockSignals(False)
         self._txt_static.setText(str(comp.get("text", "")))
         self._txt_dr.setText(str(comp.get("dataref", "")))
+        self._txt_char_count.setValue(int(comp.get("char_count") or 4))
         txt_cf = str(comp.get("convert_function") or _NONE)
         self._txt_fn.setCurrentIndex(max(self._txt_fn.findText(txt_cf), 0))
         self._txt_abs.setChecked(bool(comp.get("absolute_value", False)))
@@ -4140,7 +4162,13 @@ class PropertiesForm(QWidget):
         self._update_txt_format()  # refresh preview from builder
         if txt_fmt:
             self._txt_fmt_preview.setText(txt_fmt)  # custom overrides preview
-        self._sync_txt_builder_enabled()
+        # Set after Custom fmt above so _on_txt_char_array_toggled's fallback
+        # to _sync_txt_builder_enabled() (when unchecked) reads the correct,
+        # already-updated Custom fmt text rather than a stale value carried
+        # over from whatever component was loaded previously.
+        has_char_array = bool(comp.get("char_count"))
+        self._txt_char_array_chk.setChecked(has_char_array)
+        self._on_txt_char_array_toggled(has_char_array)  # also calls _sync_txt_builder_enabled() when off
         self._txt_emphasize_place.setValue(float(comp.get("emphasize_place", 0.0)))
         self._txt_emphasize_size.setValue(
             float(comp.get("emphasize_font_size") or comp.get("font_size", 12.0)))
@@ -5266,25 +5294,31 @@ class PropertiesForm(QWidget):
                 dr = self._txt_dr.text().strip()
                 if dr:
                     data["dataref"] = dr
-                cf = self._txt_fn.currentText()
-                if cf != _NONE:
-                    data["convert_function"] = cf
-                if self._txt_abs.isChecked():
-                    data["absolute_value"] = True
-                custom_fmt = self._txt_fmt_custom.text().strip()
-                if custom_fmt:
-                    data["text_format"] = custom_fmt
+                if self._txt_char_array_chk.isChecked():
+                    # Raw text readout — none of the numeric-only fields
+                    # below (convert fn, absolute value, format, emphasize)
+                    # apply, so none of them are written.
+                    data["char_count"] = self._txt_char_count.value()
                 else:
-                    d = self._txt_decimals.value()
-                    w = self._txt_width.value()
-                    z = self._txt_zerofill.isChecked()
-                    fill = "0" if z and w > 0 else ""
-                    width_str = str(w) if w > 0 else ""
-                    data["text_format"] = "{:" + fill + width_str + "." + str(d) + "f}"
-                emph_place = self._txt_emphasize_place.value()
-                if emph_place > 0:
-                    data["emphasize_place"] = emph_place
-                    data["emphasize_font_size"] = self._txt_emphasize_size.value()
+                    cf = self._txt_fn.currentText()
+                    if cf != _NONE:
+                        data["convert_function"] = cf
+                    if self._txt_abs.isChecked():
+                        data["absolute_value"] = True
+                    custom_fmt = self._txt_fmt_custom.text().strip()
+                    if custom_fmt:
+                        data["text_format"] = custom_fmt
+                    else:
+                        d = self._txt_decimals.value()
+                        w = self._txt_width.value()
+                        z = self._txt_zerofill.isChecked()
+                        fill = "0" if z and w > 0 else ""
+                        width_str = str(w) if w > 0 else ""
+                        data["text_format"] = "{:" + fill + width_str + "." + str(d) + "f}"
+                    emph_place = self._txt_emphasize_place.value()
+                    if emph_place > 0:
+                        data["emphasize_place"] = emph_place
+                        data["emphasize_font_size"] = self._txt_emphasize_size.value()
             fn = self._txt_font_name.text().strip()
             if fn:
                 data["font_name"] = fn
@@ -5673,6 +5707,9 @@ class PropertiesForm(QWidget):
         self._txt_stack.setCurrentIndex(0)
         self._txt_static.clear()
         self._txt_dr.clear()
+        self._txt_char_array_chk.setChecked(False)
+        self._txt_char_count.setValue(4)
+        self._on_txt_char_array_toggled(False)
         self._txt_fn.setCurrentIndex(0)
         self._txt_abs.setChecked(False)
         self._txt_decimals.setValue(1)
@@ -5885,6 +5922,24 @@ class PropertiesForm(QWidget):
 
     def _on_txt_mode_changed(self, idx: int) -> None:
         self._txt_stack.setCurrentIndex(idx)
+
+    def _on_txt_char_array_toggled(self, on: bool) -> None:
+        """Character array mode is a raw-text readout — none of the
+        numeric-only fields (convert fn, absolute value, the format
+        builder, custom fmt, emphasize) apply, so disable them all
+        together while it's on."""
+        self._txt_char_count.setEnabled(on)
+        self._txt_fn.setEnabled(not on)
+        self._txt_abs.setEnabled(not on)
+        self._txt_fmt_custom.setEnabled(not on)
+        self._txt_emphasize_place.setEnabled(not on)
+        self._txt_emphasize_size.setEnabled(not on)
+        if on:
+            self._txt_decimals.setEnabled(False)
+            self._txt_width.setEnabled(False)
+            self._txt_zerofill.setEnabled(False)
+        else:
+            self._sync_txt_builder_enabled()
 
     def _update_txt_format(self) -> None:
         d = self._txt_decimals.value()

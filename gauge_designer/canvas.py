@@ -1375,7 +1375,14 @@ class InstrumentCanvas(QWidget):
                 draw.text((start, cy_p), hi_text, fill=color, font=hi_font)
                 draw.text((start + hi_w, cy_p), lo_text, fill=color, font=font)
         else:
-            text = comp.get("text") or comp.get("text_format") or comp.get("dataref") or "?"
+            char_count = comp.get("char_count")
+            if char_count:
+                # No live dataref value in the static preview — a run of
+                # "?" the configured length previews the text's footprint
+                # (useful for layout) without implying a specific value.
+                text = "?" * max(1, int(char_count))
+            else:
+                text = comp.get("text") or comp.get("text_format") or comp.get("dataref") or "?"
             try:
                 draw.text((cx_p, cy_p), str(text), fill=color, font=font, anchor=pil_x + pil_y)
             except TypeError:

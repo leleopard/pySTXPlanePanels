@@ -5,6 +5,21 @@ baked into the PNG so this component is not required for any instrument
 YAML, but it's the building block the panel runtime uses for status
 overlays (FPS counter, "no XP data" warning), and it's available for
 future glass-cockpit numeric readouts.
+
+Dataref modes (mutually exclusive, both require `position` + `dataref`):
+  - Numeric (default): `dataref` is read as a single float, optionally
+    passed through `convert_function`/`absolute_value`, then formatted via
+    `text_format` (a Python format spec, e.g. "{:.0f}").
+  - Character array: set `char_count` to a positive int instead. For an
+    X-Plane string/byte-array dataref (e.g. a nav station ident like
+    "IOM") that can't be read as a single float over the UDP RREF
+    protocol — X-Plane DOES support per-character access via array-index
+    syntax on the dataref path (`dataref[0]`, `dataref[1]`, ...), each
+    answered as the raw ASCII byte value. `char_count` subscribes to that
+    many indexed sub-datarefs and joins their `chr()` values into the
+    label text directly (no `text_format` involved), stopping at the
+    first byte <= 0 (null terminator / unfilled padding), the same way a
+    C string would.
 """
 
 from __future__ import annotations
@@ -107,6 +122,13 @@ class Text:
         self._absolute_value = False
         self._static_text = text
 
+        # Optional character-array mode (mutually exclusive with the plain
+        # numeric dataref above) — for X-Plane string/byte-array datarefs
+        # that can't be read as a single float (e.g. a nav station ident
+        # like "IOM"). Subscribes to dataref[0]..dataref[N-1] as N separate
+        # scalar datarefs and joins their ASCII codes into text.
+        self._char_datarefs: list[Any] = []
+
         # Optional dataref-driven visibility (mirrors ImagePanel behaviour)
         self._vis_dataref: Any | None = None
         self._vis_predicate: Callable | None = None
@@ -122,6 +144,15 @@ class Text:
         self._format = text_format
         self._convert = get_convert(convert_function)
         self._absolute_value = bool(absolute_value)
+
+    def set_char_array_dataref(self, dataref: Any, char_count: int) -> None:
+        """`dataref` must be a plain X-Plane dataref path string (not a
+        (group, index) tuple) — each character is requested as its own
+        scalar dataref via X-Plane's array-index syntax, e.g.
+        "sim/.../nav1_dme_id[0]", "...[1]", ... which X-Plane answers with
+        the raw byte value (ASCII code) at that array position."""
+        count = max(1, int(char_count))
+        self._char_datarefs = [f"{dataref}[{i}]" for i in range(count)]
 
     def set_visibility(self, dataref: Any, predicate: str) -> None:
         self._vis_dataref = _as_dataref(dataref)
@@ -176,7 +207,15 @@ class Text:
             self.label.y = self._y
             self._pos_dirty = False
 
-        if self._dataref is not None and self._format is not None:
+        if self._char_datarefs:
+            chars = []
+            for dr in self._char_datarefs:
+                code = int(get_data(dr))
+                if code <= 0:
+                    break  # null terminator / unfilled padding — stop, like a C string
+                chars.append(chr(code))
+            self.label.text = "".join(chars)
+        elif self._dataref is not None and self._format is not None:
             value = float(get_data(self._dataref))
             if self._convert is not None:
                 value = float(self._convert(value, get_data))
@@ -228,12 +267,16 @@ def _text_factory(
         emphasize_font_size=comp.get("emphasize_font_size"),
     )
     if "dataref" in comp:
-        text.set_dataref(
-            dataref=comp["dataref"],
-            text_format=comp.get("text_format", "{:.1f}"),
-            convert_function=comp.get("convert_function"),
-            absolute_value=bool(comp.get("absolute_value", False)),
-        )
+        char_count = comp.get("char_count")
+        if char_count:
+            text.set_char_array_dataref(dataref=comp["dataref"], char_count=int(char_count))
+        else:
+            text.set_dataref(
+                dataref=comp["dataref"],
+                text_format=comp.get("text_format", "{:.1f}"),
+                convert_function=comp.get("convert_function"),
+                absolute_value=bool(comp.get("absolute_value", False)),
+            )
     if "visibility" in comp:
         vis = comp["visibility"]
         text.set_visibility(dataref=vis["dataref"], predicate=resolve_predicate_name(vis))
