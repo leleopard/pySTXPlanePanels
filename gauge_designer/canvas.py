@@ -943,6 +943,13 @@ class InstrumentCanvas(QWidget):
             vx, vy, vw, vh = self._viewport_rect_pil(comp, canvas_h)
             cropped = layer.crop((vx, vy, vx + vw, vy + vh))
             composite.alpha_composite(cropped, (vx, vy))
+            # Drawn last, outside the clipped layer, only when the marker
+            # has opted out of clipping — the clipped case is handled
+            # inside _render_compassrose_unclipped() instead, matching the
+            # runtime's scissor-block structure in vector_compass_rose.py.
+            center_cfg = comp.get("center_marker")
+            if center_cfg and center_cfg.get("points") and not bool(center_cfg.get("clip", True)):
+                self._draw_compassrose_center_marker(comp, draw, canvas_h)
         else:
             self._render_compassrose_unclipped(comp, composite, draw, canvas_h)
 
@@ -1121,6 +1128,33 @@ class InstrumentCanvas(QWidget):
             else:
                 mwidth = max(1, int(round(float(marker_cfg.get("width", 1.0)))))
                 draw.line(marker_pts + [marker_pts[0]], fill=mcolor, width=mwidth)
+
+        center_cfg = comp.get("center_marker")
+        if center_cfg and center_cfg.get("points") and (
+            comp.get("viewport") is None or bool(center_cfg.get("clip", True))
+        ):
+            self._draw_compassrose_center_marker(comp, draw, canvas_h)
+
+    def _draw_compassrose_center_marker(self, comp: dict, draw: ImageDraw.ImageDraw,
+                                         canvas_h: int) -> None:
+        center_cfg = comp["center_marker"]
+        ctr = comp.get("center", [0, 0])
+        cx_p, cy_p = float(ctr[0]), canvas_h - float(ctr[1])
+        # Fixed directly at the rose centre — no radius offset, no rotation.
+        # Points are y-up like the rest of the schema; negate only the Y
+        # offset to match PIL's y-down space (same rule used for the bug/
+        # heading-marker offsets above).
+        pts = [(cx_p + px, cy_p - py) for px, py in center_cfg["points"]]
+        color = _rgba(center_cfg.get("color"))
+        if bool(center_cfg.get("filled", True)):
+            draw.polygon(pts, fill=color)
+            oc = center_cfg.get("outline_color")
+            if oc is not None:
+                ow = max(1, int(round(float(center_cfg.get("outline_width", 1.0)))))
+                draw.polygon(pts, outline=_rgba(oc), width=ow)
+        else:
+            width = max(1, int(round(float(center_cfg.get("width", 1.0)))))
+            draw.line(pts + [pts[0]], fill=color, width=width)
 
     def _render_filledrect(self, comp: dict, composite: Image.Image,
                            draw: ImageDraw.ImageDraw, canvas_h: int) -> None:

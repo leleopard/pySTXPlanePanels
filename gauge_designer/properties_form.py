@@ -3447,6 +3447,68 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_marker)
 
+        # ── Center Marker ────────────────────────────────────────────────────
+        _cr_center = _SubSection("Center Marker", collapsed=True)
+        self._cr_center_form = _cr_center._form
+        _cr_center.row_widget(_sep_label(
+            "Fixed reference mark (e.g. an aircraft symbol) drawn directly at\n"
+            "the rose centre — no dataref, no radius offset, never rotates."
+        ))
+
+        self._cr_center_pts = _PointsTableEditor()
+        self._cr_center_pts.changed.connect(self._emit)
+        self._cr_center_pts.setToolTip(
+            "Relative to the rose centre, in plain screen space\n"
+            "(no rotation applied)."
+        )
+        _cr_center.row("Points (relative to centre)", self._cr_center_pts)
+
+        self._cr_center_color = _ColorButton()
+        self._cr_center_color.color_changed.connect(self._emit)
+        _cr_center.row("Fill color", self._cr_center_color)
+
+        self._cr_center_filled = QCheckBox("Filled")
+        self._cr_center_filled.setChecked(True)
+        self._cr_center_filled.toggled.connect(self._on_cr_center_filled_toggled)
+        self._cr_center_filled.toggled.connect(self._emit)
+        _cr_center.row_widget(self._cr_center_filled)
+
+        self._cr_center_width = QDoubleSpinBox()
+        self._cr_center_width.setRange(0.5, 50.0); self._cr_center_width.setDecimals(1)
+        self._cr_center_width.setValue(2.0)
+        self._cr_center_width.setEnabled(False)  # shown only when not filled
+        self._cr_center_width.valueChanged.connect(self._emit)
+        _cr_center.row("Outline width", self._cr_center_width)
+
+        self._cr_center_outline_chk = QCheckBox("Add outline")
+        self._cr_center_outline_chk.toggled.connect(self._on_cr_center_outline_toggled)
+        self._cr_center_outline_chk.toggled.connect(self._emit)
+        _cr_center.row_widget(self._cr_center_outline_chk)
+
+        self._cr_center_outline_color = _ColorButton()
+        self._cr_center_outline_color.set_rgba((255, 255, 255, 255))
+        self._cr_center_outline_color.setEnabled(False)
+        self._cr_center_outline_color.color_changed.connect(self._emit)
+        _cr_center.row("Outline color", self._cr_center_outline_color)
+
+        self._cr_center_outline_width = QDoubleSpinBox()
+        self._cr_center_outline_width.setRange(0.5, 50.0); self._cr_center_outline_width.setDecimals(1)
+        self._cr_center_outline_width.setValue(1.0)
+        self._cr_center_outline_width.setEnabled(False)
+        self._cr_center_outline_width.valueChanged.connect(self._emit)
+        _cr_center.row("Outline width ", self._cr_center_outline_width)
+
+        self._cr_center_clip_chk = QCheckBox("Clip to viewport")
+        self._cr_center_clip_chk.setChecked(True)
+        self._cr_center_clip_chk.setToolTip(
+            "On: confined by this component's own viewport clip like everything\n"
+            "else. Off: always drawn regardless of the viewport."
+        )
+        self._cr_center_clip_chk.toggled.connect(self._emit)
+        _cr_center.row_widget(self._cr_center_clip_chk)
+
+        self._cr_sec.row_widget(_cr_center)
+
         self._vbox.addWidget(self._cr_sec)
 
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
@@ -3465,6 +3527,20 @@ class PropertiesForm(QWidget):
     def _on_cr_marker_outline_toggled(self, on: bool) -> None:
         self._cr_marker_outline_color.setEnabled(on)
         self._cr_marker_outline_width.setEnabled(on)
+
+    def _on_cr_center_filled_toggled(self, filled: bool) -> None:
+        self._cr_center_width.setEnabled(not filled)
+        self._cr_center_outline_chk.setVisible(filled)
+        self._cr_center_form.setRowVisible(self._cr_center_outline_color, filled)
+        self._cr_center_form.setRowVisible(self._cr_center_outline_width, filled)
+        if not filled:
+            self._cr_center_outline_chk.blockSignals(True)
+            self._cr_center_outline_chk.setChecked(False)
+            self._cr_center_outline_chk.blockSignals(False)
+
+    def _on_cr_center_outline_toggled(self, on: bool) -> None:
+        self._cr_center_outline_color.setEnabled(on)
+        self._cr_center_outline_width.setEnabled(on)
 
     def _on_cr_bug_filled_toggled(self, filled: bool) -> None:
         self._cr_bug_width.setEnabled(not filled)
@@ -3964,7 +4040,7 @@ class PropertiesForm(QWidget):
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
-            "heading", "track", "heading_bug", "heading_marker", "range_rings",
+            "heading", "track", "heading_bug", "heading_marker", "center_marker", "range_rings",
             # shared across all
             "viewport", "visibility",
         }
@@ -4633,6 +4709,29 @@ class PropertiesForm(QWidget):
         self._cr_marker_outline_width.setEnabled(has_marker_outline)
         self._cr_marker_form.setRowVisible(self._cr_marker_outline_width, marker_filled)
         self._cr_marker_outline_width.setValue(float(cr_marker.get("outline_width", 1.0)))
+        cr_center = comp.get("center_marker") or {}
+        self._cr_center_pts.load([[p[0], p[1]] for p in cr_center.get("points", [])])
+        self._cr_center_color.set_rgba(cr_center.get("color", [255, 255, 255, 255]))
+        center_filled = bool(cr_center.get("filled", True))
+        self._cr_center_filled.blockSignals(True)
+        self._cr_center_filled.setChecked(center_filled)
+        self._cr_center_filled.blockSignals(False)
+        self._cr_center_width.setEnabled(not center_filled)
+        self._cr_center_width.setValue(float(cr_center.get("width", 2.0)))
+        center_oc = cr_center.get("outline_color")
+        has_center_outline = center_oc is not None and center_filled
+        self._cr_center_outline_chk.blockSignals(True)
+        self._cr_center_outline_chk.setChecked(has_center_outline)
+        self._cr_center_outline_chk.blockSignals(False)
+        self._cr_center_outline_chk.setVisible(center_filled)
+        self._cr_center_outline_color.setEnabled(has_center_outline)
+        self._cr_center_form.setRowVisible(self._cr_center_outline_color, center_filled)
+        self._cr_center_outline_color.set_rgba(
+            center_oc if center_oc is not None else (255, 255, 255, 255))
+        self._cr_center_outline_width.setEnabled(has_center_outline)
+        self._cr_center_form.setRowVisible(self._cr_center_outline_width, center_filled)
+        self._cr_center_outline_width.setValue(float(cr_center.get("outline_width", 1.0)))
+        self._cr_center_clip_chk.setChecked(bool(cr_center.get("clip", True)))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -5014,6 +5113,22 @@ class PropertiesForm(QWidget):
                     marker["outline_color"] = list(self._cr_marker_outline_color.get_rgba())
                     marker["outline_width"] = self._cr_marker_outline_width.value()
                 data["heading_marker"] = marker
+            cr_center_pts = self._cr_center_pts.get_data()
+            if cr_center_pts:
+                center_filled = self._cr_center_filled.isChecked()
+                center: dict = {
+                    "points": cr_center_pts,
+                    "color": list(self._cr_center_color.get_rgba()),
+                    "filled": center_filled,
+                }
+                if not center_filled:
+                    center["width"] = self._cr_center_width.value()
+                elif self._cr_center_outline_chk.isChecked():
+                    center["outline_color"] = list(self._cr_center_outline_color.get_rgba())
+                    center["outline_width"] = self._cr_center_outline_width.value()
+                if not self._cr_center_clip_chk.isChecked():
+                    center["clip"] = False
+                data["center_marker"] = center
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -5598,6 +5713,12 @@ class PropertiesForm(QWidget):
         self._cr_marker_filled.setChecked(True); self._cr_marker_width.setValue(2.0)
         self._cr_marker_outline_chk.setChecked(False)
         self._cr_marker_outline_color.set_rgba(None); self._cr_marker_outline_width.setValue(1.0)
+        self._cr_center_pts.load([])
+        self._cr_center_color.set_rgba(None)
+        self._cr_center_filled.setChecked(True); self._cr_center_width.setValue(2.0)
+        self._cr_center_outline_chk.setChecked(False)
+        self._cr_center_outline_color.set_rgba(None); self._cr_center_outline_width.setValue(1.0)
+        self._cr_center_clip_chk.setChecked(True)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)

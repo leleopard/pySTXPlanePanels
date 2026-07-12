@@ -152,6 +152,22 @@ YAML schema
         outline_color: null                # optional outline drawn on top when filled: true
         outline_width: 1.0
 
+      center_marker:                         # optional: a fixed reference mark drawn
+                                             # directly at the rose centre (e.g. an
+                                             # aircraft symbol) — no dataref, no radius
+                                             # offset, and never rotates
+        points: [[-5, 0], [5, 0], [0, 8]]     # relative to the rose centre (cx, cy),
+                                             # in plain screen space (no rotation applied)
+        color: [255, 255, 255, 255]
+        filled: true
+        width: 2.0                         # stroke width when filled: false
+        outline_color: null                # optional outline drawn on top when filled: true
+        outline_width: 1.0
+        clip: true                          # optional, default true; whether this marker
+                                             # is confined by the component's own `viewport`
+                                             # clip like everything else, or always drawn
+                                             # regardless of the viewport
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -332,6 +348,22 @@ class VectorCompassRose(_VecBase):
         self._marker_outline_color: tuple[int, int, int, int] | None = None
         self._marker_outline_width = 1.0
 
+        # Centre marker (optional; enabled by calling set_center_marker()) —
+        # a fixed reference mark (e.g. an aircraft symbol) drawn directly at
+        # the rose centre. Like heading_marker it never rotates and has no
+        # dataref, but unlike heading_marker its points are relative to the
+        # centre directly (no radius offset), and its viewport-clip behaviour
+        # is independently configurable rather than always following the
+        # component's own `viewport`.
+        self._show_center_marker = False
+        self._center_marker_points: list[tuple[float, float]] = []
+        self._center_marker_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._center_marker_filled = True
+        self._center_marker_width = 2.0
+        self._center_marker_outline_color: tuple[int, int, int, int] | None = None
+        self._center_marker_outline_width = 1.0
+        self._center_marker_clip = True
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
@@ -404,6 +436,25 @@ class VectorCompassRose(_VecBase):
         self._marker_outline_color = outline_color
         self._marker_outline_width = float(outline_width)
 
+    def set_center_marker(
+        self,
+        points: list[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        filled: bool,
+        width: float,
+        outline_color: tuple[int, int, int, int] | None,
+        outline_width: float,
+        clip: bool = True,
+    ) -> None:
+        self._show_center_marker = True
+        self._center_marker_points = [(float(x), float(y)) for x, y in points]
+        self._center_marker_color = color
+        self._center_marker_filled = bool(filled)
+        self._center_marker_width = float(width)
+        self._center_marker_outline_color = outline_color
+        self._center_marker_outline_width = float(outline_width)
+        self._center_marker_clip = bool(clip)
+
     def set_range_rings(
         self,
         count: int,
@@ -474,6 +525,9 @@ class VectorCompassRose(_VecBase):
         self._marker_points = [(x * scale, y * scale) for x, y in self._marker_points]
         self._marker_width *= scale
         self._marker_outline_width *= scale
+        self._center_marker_points = [(x * scale, y * scale) for x, y in self._center_marker_points]
+        self._center_marker_width *= scale
+        self._center_marker_outline_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -537,6 +591,13 @@ class VectorCompassRose(_VecBase):
 
         if self._viewport is not None:
             ctx.scissor = None
+
+        # Drawn last, outside the scissor block, only when the marker has
+        # opted out of clipping — the clipped case is handled inside
+        # _draw_all() instead, so it still respects draw order relative to
+        # the other rose elements.
+        if self._show_center_marker and not self._center_marker_clip:
+            self._draw_center_marker()
 
     def _draw_all(self) -> None:
         if self._background_color is not None:
@@ -624,6 +685,9 @@ class VectorCompassRose(_VecBase):
         if self._range_label_dr is not None:
             self._draw_range_label()
 
+        if self._show_center_marker and self._center_marker_clip:
+            self._draw_center_marker()
+
     def _draw_range_label(self) -> None:
         # Fixed relative to the rose centre — like heading_marker, does not
         # rotate with heading.
@@ -658,6 +722,16 @@ class VectorCompassRose(_VecBase):
                 arcade.draw_polygon_outline(pts, self._marker_outline_color, self._marker_outline_width)
         else:
             arcade.draw_polygon_outline(pts, self._marker_color, self._marker_width)
+
+    def _draw_center_marker(self) -> None:
+        # Fixed directly at the rose centre — no radius offset, no rotation.
+        pts = [(self._cx + px, self._cy + py) for px, py in self._center_marker_points]
+        if self._center_marker_filled:
+            arcade.draw_polygon_filled(pts, self._center_marker_color)
+            if self._center_marker_outline_color is not None:
+                arcade.draw_polygon_outline(pts, self._center_marker_outline_color, self._center_marker_outline_width)
+        else:
+            arcade.draw_polygon_outline(pts, self._center_marker_color, self._center_marker_width)
 
     def _draw_heading_bug(self) -> None:
         cx, cy = self._point_at(self._bug_heading, self._bug_radius)
@@ -822,6 +896,19 @@ def _compass_rose_factory(
             width=float(marker_cfg.get("width", 2.0)),
             outline_color=_as_color(moc) if moc is not None else None,
             outline_width=float(marker_cfg.get("outline_width", 1.0)),
+        )
+
+    center_marker_cfg = comp.get("center_marker")
+    if center_marker_cfg:
+        cmoc = center_marker_cfg.get("outline_color")
+        rose.set_center_marker(
+            points=[tuple(p) for p in center_marker_cfg["points"]],
+            color=_as_color(center_marker_cfg.get("color", [255, 255, 255, 255])),
+            filled=bool(center_marker_cfg.get("filled", True)),
+            width=float(center_marker_cfg.get("width", 2.0)),
+            outline_color=_as_color(cmoc) if cmoc is not None else None,
+            outline_width=float(center_marker_cfg.get("outline_width", 1.0)),
+            clip=bool(center_marker_cfg.get("clip", True)),
         )
 
     if "visibility" in comp:
