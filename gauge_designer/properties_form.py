@@ -1087,10 +1087,12 @@ class _BearingPointerSection(_SubSection):
     per-pointer dataref+predicate rather than sharing the whole rose's.
     """
 
-    def __init__(self, pointer_name: str, owner: "PropertiesForm", parent=None):
+    def __init__(self, pointer_name: str, owner: "PropertiesForm",
+                 default_preview_angle: float = 0.0, parent=None):
         super().__init__(f"{pointer_name} Pointer", collapsed=True, parent=parent)
         self._pointer_name = pointer_name
         self._owner = owner
+        self._default_preview_angle = default_preview_angle
         emit = owner._emit
 
         self.row_widget(_sep_label(
@@ -1180,6 +1182,111 @@ class _BearingPointerSection(_SubSection):
         self._vis_pred.currentTextChanged.connect(emit)
         self.row("Show/hide predicate", self._vis_pred)
 
+        self.row_widget(_sep_label(
+            "Preview angle affects only this designer's static preview —\n"
+            "there's no live dataref value here to draw at. The running\n"
+            "panel always uses the real dataref; this has no runtime effect."
+        ))
+        self._preview_angle = QDoubleSpinBox()
+        self._preview_angle.setRange(-360.0, 360.0); self._preview_angle.setDecimals(1)
+        self._preview_angle.setValue(default_preview_angle)
+        self._preview_angle.setToolTip(
+            "Designer preview only — has no effect on the running panel."
+        )
+        self._preview_angle.valueChanged.connect(emit)
+        self.row("Preview angle (designer only)", self._preview_angle)
+
+        # ── Tail (diametrically opposite the head) ──────────────────────────
+        self._tail = _SubSection("Tail", collapsed=True)
+        self._tail_form = self._tail._form
+        self._tail.row_widget(_sep_label(
+            "Optional second polygon at bearing + 180° — the tail/fletching\n"
+            "of a real RMI/RBI needle. Shares this pointer's dataref and\n"
+            "visibility; own offset/points/styling."
+        ))
+
+        self._tail_chk = QCheckBox("Add tail pointer")
+        self._tail_chk.toggled.connect(self._on_tail_toggled)
+        self._tail_chk.toggled.connect(emit)
+        self._tail.row_widget(self._tail_chk)
+
+        self._tail_offset = QDoubleSpinBox()
+        self._tail_offset.setRange(-4096.0, 4096.0); self._tail_offset.setDecimals(1)
+        self._tail_offset.setEnabled(False)
+        self._tail_offset.valueChanged.connect(emit)
+        self._tail.row("Offset from circle px", self._tail_offset)
+
+        self._tail_pts = _PointsTableEditor()
+        self._tail_pts.changed.connect(emit)
+        self._tail_pts.setEnabled(False)
+        self._tail.row("Points (relative to circle)", self._tail_pts)
+
+        self._tail_color = _ColorButton()
+        self._tail_color.color_changed.connect(emit)
+        self._tail_color.setEnabled(False)
+        self._tail.row("Fill color", self._tail_color)
+
+        self._tail_filled = QCheckBox("Filled")
+        self._tail_filled.setChecked(True)
+        self._tail_filled.setEnabled(False)
+        self._tail_filled.toggled.connect(self._on_tail_filled_toggled)
+        self._tail_filled.toggled.connect(emit)
+        self._tail.row_widget(self._tail_filled)
+
+        self._tail_width = QDoubleSpinBox()
+        self._tail_width.setRange(0.5, 50.0); self._tail_width.setDecimals(1)
+        self._tail_width.setValue(2.0)
+        self._tail_width.setEnabled(False)
+        self._tail_width.valueChanged.connect(emit)
+        self._tail.row("Outline width", self._tail_width)
+
+        self._tail_outline_chk = QCheckBox("Add outline")
+        self._tail_outline_chk.setEnabled(False)
+        self._tail_outline_chk.toggled.connect(self._on_tail_outline_toggled)
+        self._tail_outline_chk.toggled.connect(emit)
+        self._tail.row_widget(self._tail_outline_chk)
+
+        self._tail_outline_color = _ColorButton()
+        self._tail_outline_color.set_rgba((255, 255, 255, 255))
+        self._tail_outline_color.setEnabled(False)
+        self._tail_outline_color.color_changed.connect(emit)
+        self._tail.row("Outline color", self._tail_outline_color)
+
+        self._tail_outline_width = QDoubleSpinBox()
+        self._tail_outline_width.setRange(0.5, 50.0); self._tail_outline_width.setDecimals(1)
+        self._tail_outline_width.setValue(1.0)
+        self._tail_outline_width.setEnabled(False)
+        self._tail_outline_width.valueChanged.connect(emit)
+        self._tail.row("Outline width ", self._tail_outline_width)
+
+        self.row_widget(self._tail)
+
+    def _on_tail_toggled(self, on: bool) -> None:
+        self._tail_offset.setEnabled(on)
+        self._tail_pts.setEnabled(on)
+        self._tail_color.setEnabled(on)
+        self._tail_filled.setEnabled(on)
+        self._tail_width.setEnabled(on and not self._tail_filled.isChecked())
+        self._tail_outline_chk.setEnabled(on)
+        outline_on = on and self._tail_outline_chk.isChecked()
+        self._tail_outline_color.setEnabled(outline_on)
+        self._tail_outline_width.setEnabled(outline_on)
+
+    def _on_tail_filled_toggled(self, filled: bool) -> None:
+        self._tail_width.setEnabled(self._tail_chk.isChecked() and not filled)
+        self._tail_outline_chk.setVisible(filled)
+        self._tail_form.setRowVisible(self._tail_outline_color, filled)
+        self._tail_form.setRowVisible(self._tail_outline_width, filled)
+        if not filled:
+            self._tail_outline_chk.blockSignals(True)
+            self._tail_outline_chk.setChecked(False)
+            self._tail_outline_chk.blockSignals(False)
+
+    def _on_tail_outline_toggled(self, on: bool) -> None:
+        enabled = on and self._tail_chk.isChecked()
+        self._tail_outline_color.setEnabled(enabled)
+        self._tail_outline_width.setEnabled(enabled)
+
     def _on_filled_toggled(self, filled: bool) -> None:
         self._width.setEnabled(not filled)
         self._outline_chk.setVisible(filled)
@@ -1234,6 +1341,35 @@ class _BearingPointerSection(_SubSection):
         self._vis_dr.setText(str((vis or {}).get("dataref", "")))
         pred_idx = self._vis_pred.findText(str((vis or {}).get("predicate", "")))
         self._vis_pred.setCurrentIndex(max(pred_idx, 0))
+        self._preview_angle.setValue(float(cfg.get("preview_angle", self._default_preview_angle)))
+        tail = cfg.get("tail")
+        tail_on = tail is not None
+        self._tail_chk.blockSignals(True)
+        self._tail_chk.setChecked(tail_on)
+        self._tail_chk.blockSignals(False)
+        self._on_tail_toggled(tail_on)
+        tail = tail or {}
+        self._tail_offset.setValue(float(tail.get("offset", 0.0)))
+        self._tail_pts.load([[p[0], p[1]] for p in tail.get("points", [])])
+        self._tail_color.set_rgba(tail.get("color", [255, 255, 255, 255]))
+        tail_filled = bool(tail.get("filled", True))
+        self._tail_filled.blockSignals(True)
+        self._tail_filled.setChecked(tail_filled)
+        self._tail_filled.blockSignals(False)
+        self._tail_width.setEnabled(tail_on and not tail_filled)
+        self._tail_width.setValue(float(tail.get("width", 2.0)))
+        toc = tail.get("outline_color")
+        tail_has_outline = toc is not None and tail_filled
+        self._tail_outline_chk.blockSignals(True)
+        self._tail_outline_chk.setChecked(tail_has_outline)
+        self._tail_outline_chk.blockSignals(False)
+        self._tail_outline_chk.setVisible(tail_filled)
+        self._tail_outline_color.setEnabled(tail_on and tail_has_outline)
+        self._tail_form.setRowVisible(self._tail_outline_color, tail_filled)
+        self._tail_outline_color.set_rgba(toc if toc is not None else (255, 255, 255, 255))
+        self._tail_outline_width.setEnabled(tail_on and tail_has_outline)
+        self._tail_form.setRowVisible(self._tail_outline_width, tail_filled)
+        self._tail_outline_width.setValue(float(tail.get("outline_width", 1.0)))
 
     def get_data(self) -> dict | None:
         pts = self._pts.get_data()
@@ -1264,6 +1400,24 @@ class _BearingPointerSection(_SubSection):
                     "dataref": vis_dr,
                     "predicate": self._vis_pred.currentText(),
                 }
+        if self._preview_angle.value() != self._default_preview_angle:
+            data["preview_angle"] = self._preview_angle.value()
+        if self._tail_chk.isChecked():
+            tail_pts = self._tail_pts.get_data()
+            if tail_pts:
+                tail_filled = self._tail_filled.isChecked()
+                tail: dict = {
+                    "offset": self._tail_offset.value(),
+                    "points": tail_pts,
+                    "color": list(self._tail_color.get_rgba()),
+                    "filled": tail_filled,
+                }
+                if not tail_filled:
+                    tail["width"] = self._tail_width.value()
+                elif self._tail_outline_chk.isChecked():
+                    tail["outline_color"] = list(self._tail_outline_color.get_rgba())
+                    tail["outline_width"] = self._tail_outline_width.value()
+                data["tail"] = tail
         return data
 
     def reset(self) -> None:
@@ -1276,6 +1430,13 @@ class _BearingPointerSection(_SubSection):
         self._vis_chk.setChecked(False)
         self._vis_dr_box.setEnabled(False); self._vis_pred.setEnabled(False)
         self._vis_dr.clear(); self._vis_pred.setCurrentIndex(0)
+        self._preview_angle.setValue(self._default_preview_angle)
+        self._tail_chk.setChecked(False)
+        self._tail_offset.setValue(0.0); self._tail_pts.load([])
+        self._tail_color.set_rgba(None)
+        self._tail_filled.setChecked(True); self._tail_width.setValue(2.0)
+        self._tail_outline_chk.setChecked(False)
+        self._tail_outline_color.set_rgba(None); self._tail_outline_width.setValue(1.0)
 
 
 class _AutoSizeStack(QStackedWidget):
@@ -3714,8 +3875,13 @@ class PropertiesForm(QWidget):
 
         # ── Bearing Pointers (VOR1/VOR2/ADF1/ADF2) ──────────────────────────
         self._cr_bearing_pointers: dict[str, _BearingPointerSection] = {}
-        for pointer_name in ("VOR1", "VOR2", "ADF1", "ADF2"):
-            section = _BearingPointerSection(pointer_name, self)
+        for idx, pointer_name in enumerate(("VOR1", "VOR2", "ADF1", "ADF2")):
+            # Matches canvas.py's own fallback stagger formula for pointers
+            # that don't set an explicit preview_angle — kept in sync by hand
+            # since it's a one-line default, not shared code.
+            step = 10.0 + 20.0 * (idx // 2)
+            default_angle = -step if idx % 2 == 0 else step
+            section = _BearingPointerSection(pointer_name, self, default_preview_angle=default_angle)
             self._cr_bearing_pointers[pointer_name] = section
             self._cr_sec.row_widget(section)
 

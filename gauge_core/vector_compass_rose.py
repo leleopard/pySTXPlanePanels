@@ -194,6 +194,24 @@ YAML schema
           visibility:                         # optional; omit to always show this pointer
             dataref: sim/cockpit2/radios/actuators/HSI_source_select_pilot
             predicate: true_if_equals_1
+          preview_angle: 20                   # optional, designer-only: which bearing
+                                             # (degrees) this pointer is drawn at in the
+                                             # designer's static preview, since there's no
+                                             # live dataref value there — purely a
+                                             # designer convenience, has NO effect on the
+                                             # running panel (the real dataref drives the
+                                             # angle at runtime, as always)
+          tail:                               # optional: a second polygon diametrically
+                                             # opposite the head (bearing + 180°), sharing
+                                             # the head's dataref/visibility — e.g. the
+                                             # tail/fletching of a real RMI/RBI needle
+            offset: 0
+            points: [[0, 0], [-6, 10], [6, 10]]
+            color: [255, 255, 255, 255]
+            filled: true
+            width: 2.0
+            outline_color: null
+            outline_width: 1.0
 
       visibility:                           # optional, same as other components
         dataref: ...
@@ -219,7 +237,11 @@ class _BearingPointer:
     polygon on the rose's own circle that rotates with the rose like a tick,
     positioned by its own bearing dataref (same mechanism as heading_bug),
     with an independent visibility dataref/predicate rather than sharing the
-    whole rose's."""
+    whole rose's.
+
+    Optionally has a second polygon (the "tail") diametrically opposite the
+    head — bearing + 180° — sharing the same dataref/visibility, matching a
+    real RMI/RBI needle's head+tail shape."""
 
     def __init__(
         self,
@@ -235,6 +257,13 @@ class _BearingPointer:
         outline_width: float,
         vis_dataref: Any | None,
         vis_predicate: Callable | None,
+        tail_offset: float = 0.0,
+        tail_points: list[tuple[float, float]] | None = None,
+        tail_color: tuple[int, int, int, int] = (255, 255, 255, 255),
+        tail_filled: bool = True,
+        tail_width: float = 2.0,
+        tail_outline_color: tuple[int, int, int, int] | None = None,
+        tail_outline_width: float = 1.0,
     ) -> None:
         self.name = name
         self.dataref = dataref
@@ -250,6 +279,13 @@ class _BearingPointer:
         self.vis_predicate = vis_predicate
         self.angle = 0.0
         self.visible = True
+        self.tail_offset = float(tail_offset)
+        self.tail_points = [(float(x), float(y)) for x, y in (tail_points or [])]
+        self.tail_color = tail_color
+        self.tail_filled = bool(tail_filled)
+        self.tail_width = float(tail_width)
+        self.tail_outline_color = tail_outline_color
+        self.tail_outline_width = float(tail_outline_width)
 
 
 class VectorCompassRose(_VecBase):
@@ -539,6 +575,13 @@ class VectorCompassRose(_VecBase):
         outline_width: float,
         vis_dataref: Any | None = None,
         vis_predicate: str | None = None,
+        tail_offset: float = 0.0,
+        tail_points: list[tuple[float, float]] | None = None,
+        tail_color: tuple[int, int, int, int] = (255, 255, 255, 255),
+        tail_filled: bool = True,
+        tail_width: float = 2.0,
+        tail_outline_color: tuple[int, int, int, int] | None = None,
+        tail_outline_width: float = 1.0,
     ) -> None:
         self._bearing_pointers.append(_BearingPointer(
             name=name,
@@ -553,6 +596,13 @@ class VectorCompassRose(_VecBase):
             outline_width=outline_width,
             vis_dataref=_as_dataref(vis_dataref) if vis_dataref is not None else None,
             vis_predicate=get_convert(vis_predicate) if vis_predicate else None,
+            tail_offset=tail_offset,
+            tail_points=tail_points,
+            tail_color=tail_color,
+            tail_filled=tail_filled,
+            tail_width=tail_width,
+            tail_outline_color=tail_outline_color,
+            tail_outline_width=tail_outline_width,
         ))
 
     def set_range_rings(
@@ -633,6 +683,10 @@ class VectorCompassRose(_VecBase):
             p.points = [(x * scale, y * scale) for x, y in p.points]
             p.width *= scale
             p.outline_width *= scale
+            p.tail_offset *= scale
+            p.tail_points = [(x * scale, y * scale) for x, y in p.tail_points]
+            p.tail_width *= scale
+            p.tail_outline_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -853,19 +907,42 @@ class VectorCompassRose(_VecBase):
         # Same positioning model as heading_bug: a polygon on the rose's own
         # circle (radius + offset), rotating with the rose, oriented by its
         # own bearing dataref rather than the rose's heading.
-        cx, cy = self._point_at(p.angle, self._radius + p.offset)
-        angle = math.radians(self._heading - p.angle)
+        self._draw_pointer_shape(
+            p.angle, p.offset, p.points, p.color, p.filled, p.width,
+            p.outline_color, p.outline_width,
+        )
+        if p.tail_points:
+            # Diametrically opposite the head — same dataref/visibility,
+            # own shape/offset/styling, like an RMI needle's tail.
+            self._draw_pointer_shape(
+                p.angle + 180.0, p.tail_offset, p.tail_points, p.tail_color,
+                p.tail_filled, p.tail_width, p.tail_outline_color, p.tail_outline_width,
+            )
+
+    def _draw_pointer_shape(
+        self,
+        bearing_deg: float,
+        offset: float,
+        points: list[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        filled: bool,
+        width: float,
+        outline_color: tuple[int, int, int, int] | None,
+        outline_width: float,
+    ) -> None:
+        cx, cy = self._point_at(bearing_deg, self._radius + offset)
+        angle = math.radians(self._heading - bearing_deg)
         cos_a, sin_a = math.cos(angle), math.sin(angle)
         pts = [
             (cx + px * cos_a - py * sin_a, cy + px * sin_a + py * cos_a)
-            for px, py in p.points
+            for px, py in points
         ]
-        if p.filled:
-            arcade.draw_polygon_filled(pts, p.color)
-            if p.outline_color is not None:
-                arcade.draw_polygon_outline(pts, p.outline_color, p.outline_width)
+        if filled:
+            arcade.draw_polygon_filled(pts, color)
+            if outline_color is not None:
+                arcade.draw_polygon_outline(pts, outline_color, outline_width)
         else:
-            arcade.draw_polygon_outline(pts, p.color, p.width)
+            arcade.draw_polygon_outline(pts, color, width)
 
     def _draw_heading_bug(self) -> None:
         cx, cy = self._point_at(self._bug_heading, self._bug_radius)
@@ -1048,6 +1125,19 @@ def _compass_rose_factory(
     for pointer_cfg in comp.get("bearing_pointers", []):
         poc = pointer_cfg.get("outline_color")
         pvis = pointer_cfg.get("visibility")
+        tail_cfg = pointer_cfg.get("tail")
+        tail_kwargs: dict[str, Any] = {}
+        if tail_cfg:
+            toc = tail_cfg.get("outline_color")
+            tail_kwargs = dict(
+                tail_offset=float(tail_cfg.get("offset", 0.0)),
+                tail_points=[tuple(p) for p in tail_cfg["points"]],
+                tail_color=_as_color(tail_cfg.get("color", [255, 255, 255, 255])),
+                tail_filled=bool(tail_cfg.get("filled", True)),
+                tail_width=float(tail_cfg.get("width", 2.0)),
+                tail_outline_color=_as_color(toc) if toc is not None else None,
+                tail_outline_width=float(tail_cfg.get("outline_width", 1.0)),
+            )
         rose.add_bearing_pointer(
             name=str(pointer_cfg.get("name", "")),
             dataref=pointer_cfg["dataref"],
@@ -1061,6 +1151,7 @@ def _compass_rose_factory(
             outline_width=float(pointer_cfg.get("outline_width", 1.0)),
             vis_dataref=pvis["dataref"] if pvis else None,
             vis_predicate=resolve_predicate_name(pvis) if pvis else None,
+            **tail_kwargs,
         )
 
     if "visibility" in comp:

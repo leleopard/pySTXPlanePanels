@@ -1143,33 +1143,58 @@ class InstrumentCanvas(QWidget):
         # wide-radius rose puts far-from-vertical angles well outside the
         # instrument's own canvas bounds (e.g. radius=400 at 60° can land
         # 340+px off-centre horizontally), making the pointer invisible in
-        # the preview even though it renders fine at runtime.
+        # the preview even though it renders fine at runtime. `preview_angle`
+        # overrides this per-pointer when the user has set one explicitly —
+        # designer-only, no effect on the running panel.
         for idx, pointer_cfg in enumerate(comp.get("bearing_pointers") or []):
             if not pointer_cfg.get("points"):
                 continue
-            step = 10.0 + 20.0 * (idx // 2)
-            p_angle = -step if idx % 2 == 0 else step
-            p_radius = r + float(pointer_cfg.get("offset", 0.0))
-            pcx, pcy = point_at(p_angle, p_radius)
-            # Same derivation as heading_bug above: heading=0 for the static
-            # preview, so the runtime's `heading - angle` reduces to `-angle`.
-            angle = math.radians(-p_angle)
-            cos_a, sin_a = math.cos(angle), math.sin(angle)
-            p_pts = []
-            for px, py in pointer_cfg["points"]:
-                rx = px * cos_a - py * sin_a
-                ry = px * sin_a + py * cos_a
-                p_pts.append((pcx + rx, pcy - ry))
-            pcolor = _rgba(pointer_cfg.get("color"))
-            if bool(pointer_cfg.get("filled", True)):
-                draw.polygon(p_pts, fill=pcolor)
-                poc = pointer_cfg.get("outline_color")
-                if poc is not None:
-                    pow_ = max(1, int(round(float(pointer_cfg.get("outline_width", 1.0)))))
-                    draw.polygon(p_pts, outline=_rgba(poc), width=pow_)
+            if "preview_angle" in pointer_cfg:
+                p_angle = float(pointer_cfg["preview_angle"])
             else:
-                pwidth = max(1, int(round(float(pointer_cfg.get("width", 1.0)))))
-                draw.line(p_pts + [p_pts[0]], fill=pcolor, width=pwidth)
+                step = 10.0 + 20.0 * (idx // 2)
+                p_angle = -step if idx % 2 == 0 else step
+            self._draw_compassrose_pointer_shape(
+                point_at, draw, p_angle, r + float(pointer_cfg.get("offset", 0.0)),
+                pointer_cfg["points"], pointer_cfg.get("color"),
+                bool(pointer_cfg.get("filled", True)), pointer_cfg.get("width", 1.0),
+                pointer_cfg.get("outline_color"), pointer_cfg.get("outline_width", 1.0),
+            )
+            tail_cfg = pointer_cfg.get("tail")
+            if tail_cfg and tail_cfg.get("points"):
+                # Diametrically opposite the head, same representative angle
+                # + 180°, sharing the head's preview_angle.
+                self._draw_compassrose_pointer_shape(
+                    point_at, draw, p_angle + 180.0, r + float(tail_cfg.get("offset", 0.0)),
+                    tail_cfg["points"], tail_cfg.get("color"),
+                    bool(tail_cfg.get("filled", True)), tail_cfg.get("width", 1.0),
+                    tail_cfg.get("outline_color"), tail_cfg.get("outline_width", 1.0),
+                )
+
+    def _draw_compassrose_pointer_shape(
+        self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,
+        points: list, color, filled: bool, width, outline_color, outline_width,
+    ) -> None:
+        # Shared by bearing_pointers' head and tail — same derivation as
+        # heading_bug's own preview block: heading=0 for the static preview,
+        # so the runtime's `heading - angle` reduces to `-angle`.
+        pcx, pcy = point_at(bearing_deg, radius)
+        angle = math.radians(-bearing_deg)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        pts = []
+        for px, py in points:
+            rx = px * cos_a - py * sin_a
+            ry = px * sin_a + py * cos_a
+            pts.append((pcx + rx, pcy - ry))
+        rgba = _rgba(color)
+        if filled:
+            draw.polygon(pts, fill=rgba)
+            if outline_color is not None:
+                ow = max(1, int(round(float(outline_width))))
+                draw.polygon(pts, outline=_rgba(outline_color), width=ow)
+        else:
+            lw = max(1, int(round(float(width))))
+            draw.line(pts + [pts[0]], fill=rgba, width=lw)
 
     def _draw_compassrose_center_marker(self, comp: dict, draw: ImageDraw.ImageDraw,
                                          canvas_h: int) -> None:
