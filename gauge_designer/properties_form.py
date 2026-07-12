@@ -1075,6 +1075,209 @@ class _SubSection(QWidget):
         return widget
 
 
+class _BearingPointerSection(_SubSection):
+    """One dataref-driven bearing pointer (VOR/ADF-style RMI needle) for
+    VectorCompassRose — reused 4x (VOR1/VOR2/ADF1/ADF2), each self-contained
+    (load/get_data/reset) so PropertiesForm just instantiates and delegates
+    to one of these per pointer instead of repeating ~20 widgets x4.
+
+    Positioning mirrors heading_bug (a polygon on the arc rotating with the
+    rose), but points are relative to the pointer's own position on the
+    circle via an `offset` from the rose's own radius, and visibility is a
+    per-pointer dataref+predicate rather than sharing the whole rose's.
+    """
+
+    def __init__(self, pointer_name: str, owner: "PropertiesForm", parent=None):
+        super().__init__(f"{pointer_name} Pointer", collapsed=True, parent=parent)
+        self._pointer_name = pointer_name
+        self._owner = owner
+        emit = owner._emit
+
+        self.row_widget(_sep_label(
+            "A polygon on the rose's own circle, rotating with its own\n"
+            "bearing dataref (like heading_bug, but independently\n"
+            "visibility-gated)."
+        ))
+
+        self._dr = QLineEdit()
+        self._dr.editingFinished.connect(emit)
+        self.row("Dataref", owner._dr_field(self._dr))
+
+        self._fn = _NoScrollComboBox()
+        self._fn.addItems(_VALUE_FUNCS)
+        self._fn.currentTextChanged.connect(emit)
+        self.row("Convert function", self._fn)
+
+        self._offset = QDoubleSpinBox()
+        self._offset.setRange(-4096.0, 4096.0); self._offset.setDecimals(1)
+        self._offset.setToolTip(
+            "Distance from the rose's own circle (radius), not from the\n"
+            "centre — 0 sits right on the circle edge, negative moves\n"
+            "inward, positive moves outward."
+        )
+        self._offset.valueChanged.connect(emit)
+        self.row("Offset from circle px", self._offset)
+
+        self._pts = _PointsTableEditor()
+        self._pts.changed.connect(emit)
+        self._pts.setToolTip(
+            "Relative to the pointer's own position on the circle, in its\n"
+            "own unrotated local space where +y points radially outward."
+        )
+        self.row("Points (relative to circle)", self._pts)
+
+        self._color = _ColorButton()
+        self._color.color_changed.connect(emit)
+        self.row("Fill color", self._color)
+
+        self._filled = QCheckBox("Filled")
+        self._filled.setChecked(True)
+        self._filled.toggled.connect(self._on_filled_toggled)
+        self._filled.toggled.connect(emit)
+        self.row_widget(self._filled)
+
+        self._width = QDoubleSpinBox()
+        self._width.setRange(0.5, 50.0); self._width.setDecimals(1)
+        self._width.setValue(2.0)
+        self._width.setEnabled(False)  # shown only when not filled
+        self._width.valueChanged.connect(emit)
+        self.row("Outline width", self._width)
+
+        self._outline_chk = QCheckBox("Add outline")
+        self._outline_chk.toggled.connect(self._on_outline_toggled)
+        self._outline_chk.toggled.connect(emit)
+        self.row_widget(self._outline_chk)
+
+        self._outline_color = _ColorButton()
+        self._outline_color.set_rgba((255, 255, 255, 255))
+        self._outline_color.setEnabled(False)
+        self._outline_color.color_changed.connect(emit)
+        self.row("Outline color", self._outline_color)
+
+        self._outline_width = QDoubleSpinBox()
+        self._outline_width.setRange(0.5, 50.0); self._outline_width.setDecimals(1)
+        self._outline_width.setValue(1.0)
+        self._outline_width.setEnabled(False)
+        self._outline_width.valueChanged.connect(emit)
+        self.row("Outline width ", self._outline_width)
+
+        self._vis_chk = QCheckBox()
+        self._vis_chk.toggled.connect(self._on_vis_toggled)
+        self._vis_chk.toggled.connect(emit)
+        self._vis_dr = QLineEdit()
+        self._vis_dr.editingFinished.connect(emit)
+        self._vis_dr_box = owner._dr_field(self._vis_dr)
+        self._vis_dr_box.setEnabled(False)
+        _vis_dr_row = QWidget()
+        _vis_dr_hl = QHBoxLayout(_vis_dr_row)
+        _vis_dr_hl.setContentsMargins(0, 0, 0, 0); _vis_dr_hl.setSpacing(6)
+        _vis_dr_hl.addWidget(self._vis_chk)
+        _vis_dr_hl.addWidget(self._vis_dr_box, 1)
+        self.row("Show/hide dataref", _vis_dr_row)
+        self._vis_pred = _NoScrollComboBox()
+        self._vis_pred.addItems(_PREDICATES)
+        self._vis_pred.setEnabled(False)
+        self._vis_pred.currentTextChanged.connect(emit)
+        self.row("Show/hide predicate", self._vis_pred)
+
+    def _on_filled_toggled(self, filled: bool) -> None:
+        self._width.setEnabled(not filled)
+        self._outline_chk.setVisible(filled)
+        # setVisible() on just the field leaves the QFormLayout row's
+        # auto-generated label dangling (visible with no control next to
+        # it) — setRowVisible() hides the whole row, label included.
+        self._form.setRowVisible(self._outline_color, filled)
+        self._form.setRowVisible(self._outline_width, filled)
+        if not filled:
+            self._outline_chk.blockSignals(True)
+            self._outline_chk.setChecked(False)
+            self._outline_chk.blockSignals(False)
+
+    def _on_outline_toggled(self, on: bool) -> None:
+        self._outline_color.setEnabled(on)
+        self._outline_width.setEnabled(on)
+
+    def _on_vis_toggled(self, on: bool) -> None:
+        self._vis_dr_box.setEnabled(on)
+        self._vis_pred.setEnabled(on)
+
+    def load(self, cfg: dict | None) -> None:
+        cfg = cfg or {}
+        self._dr.setText(str(cfg.get("dataref", "")))
+        fn_idx = self._fn.findText(str(cfg.get("convert_function") or _NONE))
+        self._fn.setCurrentIndex(max(fn_idx, 0))
+        self._offset.setValue(float(cfg.get("offset", 0.0)))
+        self._pts.load([[p[0], p[1]] for p in cfg.get("points", [])])
+        self._color.set_rgba(cfg.get("color", [255, 255, 255, 255]))
+        filled = bool(cfg.get("filled", True))
+        self._filled.blockSignals(True)
+        self._filled.setChecked(filled)
+        self._filled.blockSignals(False)
+        self._width.setEnabled(not filled)
+        self._width.setValue(float(cfg.get("width", 2.0)))
+        oc = cfg.get("outline_color")
+        has_outline = oc is not None and filled
+        self._outline_chk.blockSignals(True)
+        self._outline_chk.setChecked(has_outline)
+        self._outline_chk.blockSignals(False)
+        self._outline_chk.setVisible(filled)
+        self._outline_color.setEnabled(has_outline)
+        self._form.setRowVisible(self._outline_color, filled)
+        self._outline_color.set_rgba(oc if oc is not None else (255, 255, 255, 255))
+        self._outline_width.setEnabled(has_outline)
+        self._form.setRowVisible(self._outline_width, filled)
+        self._outline_width.setValue(float(cfg.get("outline_width", 1.0)))
+        vis = cfg.get("visibility")
+        self._vis_chk.setChecked(vis is not None)
+        self._vis_dr_box.setEnabled(vis is not None)
+        self._vis_pred.setEnabled(vis is not None)
+        self._vis_dr.setText(str((vis or {}).get("dataref", "")))
+        pred_idx = self._vis_pred.findText(str((vis or {}).get("predicate", "")))
+        self._vis_pred.setCurrentIndex(max(pred_idx, 0))
+
+    def get_data(self) -> dict | None:
+        pts = self._pts.get_data()
+        dr = self._dr.text().strip()
+        if not pts or not dr:
+            return None
+        filled = self._filled.isChecked()
+        data: dict = {
+            "name": self._pointer_name,
+            "dataref": dr,
+            "offset": self._offset.value(),
+            "points": pts,
+            "color": list(self._color.get_rgba()),
+            "filled": filled,
+        }
+        fn = self._fn.currentText()
+        if fn != _NONE:
+            data["convert_function"] = fn
+        if not filled:
+            data["width"] = self._width.value()
+        elif self._outline_chk.isChecked():
+            data["outline_color"] = list(self._outline_color.get_rgba())
+            data["outline_width"] = self._outline_width.value()
+        if self._vis_chk.isChecked():
+            vis_dr = self._vis_dr.text().strip()
+            if vis_dr:
+                data["visibility"] = {
+                    "dataref": vis_dr,
+                    "predicate": self._vis_pred.currentText(),
+                }
+        return data
+
+    def reset(self) -> None:
+        self._dr.clear(); self._fn.setCurrentIndex(0)
+        self._offset.setValue(0.0); self._pts.load([])
+        self._color.set_rgba(None)
+        self._filled.setChecked(True); self._width.setValue(2.0)
+        self._outline_chk.setChecked(False)
+        self._outline_color.set_rgba(None); self._outline_width.setValue(1.0)
+        self._vis_chk.setChecked(False)
+        self._vis_dr_box.setEnabled(False); self._vis_pred.setEnabled(False)
+        self._vis_dr.clear(); self._vis_pred.setCurrentIndex(0)
+
+
 class _AutoSizeStack(QStackedWidget):
     """QStackedWidget that sizes itself to the CURRENT page instead of the
     largest page. Plain QStackedWidget reports a size hint big enough for
@@ -3509,6 +3712,13 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_center)
 
+        # ── Bearing Pointers (VOR1/VOR2/ADF1/ADF2) ──────────────────────────
+        self._cr_bearing_pointers: dict[str, _BearingPointerSection] = {}
+        for pointer_name in ("VOR1", "VOR2", "ADF1", "ADF2"):
+            section = _BearingPointerSection(pointer_name, self)
+            self._cr_bearing_pointers[pointer_name] = section
+            self._cr_sec.row_widget(section)
+
         self._vbox.addWidget(self._cr_sec)
 
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
@@ -4040,7 +4250,8 @@ class PropertiesForm(QWidget):
             "label_interval", "label_offset", "label_position",
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
-            "heading", "track", "heading_bug", "heading_marker", "center_marker", "range_rings",
+            "heading", "track", "heading_bug", "heading_marker", "center_marker",
+            "bearing_pointers", "range_rings",
             # shared across all
             "viewport", "visibility",
         }
@@ -4732,6 +4943,11 @@ class PropertiesForm(QWidget):
         self._cr_center_form.setRowVisible(self._cr_center_outline_width, center_filled)
         self._cr_center_outline_width.setValue(float(cr_center.get("outline_width", 1.0)))
         self._cr_center_clip_chk.setChecked(bool(cr_center.get("clip", True)))
+        bearing_by_name = {
+            str(p.get("name", "")): p for p in (comp.get("bearing_pointers") or [])
+        }
+        for pointer_name, section in self._cr_bearing_pointers.items():
+            section.load(bearing_by_name.get(pointer_name))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -5129,6 +5345,12 @@ class PropertiesForm(QWidget):
                 if not self._cr_center_clip_chk.isChecked():
                     center["clip"] = False
                 data["center_marker"] = center
+            pointers = [
+                d for d in (s.get_data() for s in self._cr_bearing_pointers.values())
+                if d is not None
+            ]
+            if pointers:
+                data["bearing_pointers"] = pointers
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -5719,6 +5941,8 @@ class PropertiesForm(QWidget):
         self._cr_center_outline_chk.setChecked(False)
         self._cr_center_outline_color.set_rgba(None); self._cr_center_outline_width.setValue(1.0)
         self._cr_center_clip_chk.setChecked(True)
+        for section in self._cr_bearing_pointers.values():
+            section.reset()
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)

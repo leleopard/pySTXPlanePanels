@@ -1135,6 +1135,35 @@ class InstrumentCanvas(QWidget):
         ):
             self._draw_compassrose_center_marker(comp, draw, canvas_h)
 
+        # Representative angles, one per pointer, staggered so multiple
+        # pointers don't overlap in the static preview (no live dataref
+        # value here, unlike heading_bug which only ever has one).
+        for idx, pointer_cfg in enumerate(comp.get("bearing_pointers") or []):
+            if not pointer_cfg.get("points"):
+                continue
+            p_angle = 60.0 + idx * 40.0
+            p_radius = r + float(pointer_cfg.get("offset", 0.0))
+            pcx, pcy = point_at(p_angle, p_radius)
+            # Same derivation as heading_bug above: heading=0 for the static
+            # preview, so the runtime's `heading - angle` reduces to `-angle`.
+            angle = math.radians(-p_angle)
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            p_pts = []
+            for px, py in pointer_cfg["points"]:
+                rx = px * cos_a - py * sin_a
+                ry = px * sin_a + py * cos_a
+                p_pts.append((pcx + rx, pcy - ry))
+            pcolor = _rgba(pointer_cfg.get("color"))
+            if bool(pointer_cfg.get("filled", True)):
+                draw.polygon(p_pts, fill=pcolor)
+                poc = pointer_cfg.get("outline_color")
+                if poc is not None:
+                    pow_ = max(1, int(round(float(pointer_cfg.get("outline_width", 1.0)))))
+                    draw.polygon(p_pts, outline=_rgba(poc), width=pow_)
+            else:
+                pwidth = max(1, int(round(float(pointer_cfg.get("width", 1.0)))))
+                draw.line(p_pts + [p_pts[0]], fill=pcolor, width=pwidth)
+
     def _draw_compassrose_center_marker(self, comp: dict, draw: ImageDraw.ImageDraw,
                                          canvas_h: int) -> None:
         center_cfg = comp["center_marker"]
