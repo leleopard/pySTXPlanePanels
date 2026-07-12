@@ -1137,11 +1137,18 @@ class InstrumentCanvas(QWidget):
 
         # Representative angles, one per pointer, staggered so multiple
         # pointers don't overlap in the static preview (no live dataref
-        # value here, unlike heading_bug which only ever has one).
+        # value here, unlike heading_bug which only ever has one) — kept
+        # close to top-dead-centre (like heading_bug's own 20° and
+        # heading_marker's 0°) rather than spread across a wide arc, since a
+        # wide-radius rose puts far-from-vertical angles well outside the
+        # instrument's own canvas bounds (e.g. radius=400 at 60° can land
+        # 340+px off-centre horizontally), making the pointer invisible in
+        # the preview even though it renders fine at runtime.
         for idx, pointer_cfg in enumerate(comp.get("bearing_pointers") or []):
             if not pointer_cfg.get("points"):
                 continue
-            p_angle = 60.0 + idx * 40.0
+            step = 10.0 + 20.0 * (idx // 2)
+            p_angle = -step if idx % 2 == 0 else step
             p_radius = r + float(pointer_cfg.get("offset", 0.0))
             pcx, pcy = point_at(p_angle, p_radius)
             # Same derivation as heading_bug above: heading=0 for the static
