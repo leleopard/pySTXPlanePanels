@@ -1,0 +1,84 @@
+name: c172_six_pack_ubuntu
+size:
+- 1440
+- 900
+background_color:
+- 0.451
+- 0.4392
+- 0.4157
+udp:
+  listen_port: 49021
+instruments:
+- file: instruments/C172/c172_rpm.yaml
+  position:
+  - 745.6
+  - 88.4
+  scale: 0.72
+- file: instruments/C172/c172_annunciator.yaml
+  position:
+  - 190.4
+  - 755.6
+  scale: 0.8
+- grid:
+    position:
+    - 8.8
+    - 265.2
+    columns: 3
+    rows: 2
+    cell_width: 240.0
+    cell_height: 240.0
+    name: Standard 6 Grid
+    instruments:
+    - file: instruments/C172/Standard 6/c172_airspeed.yaml
+      scale: 0.776
+    - file: instruments/C172/Standard 6/c172_artificial_horizon.yaml
+      scale: 0.776
+    - file: instruments/C172/Standard 6/c172_altimeter.yaml
+      scale: 0.776
+    - file: instruments/C172/Standard 6/c172_turn_coordinator.yaml
+      scale: 0.776
+    - file: instruments/C172/Standard 6/c172_directional_gyro.yaml
+      scale: 0.776
+    - file: instruments/C172/Standard 6/c172_vsi.yaml
+      scale: 0.776
+- grid:
+    position:
+    - 733.6
+    - 316.4
+    columns: 2
+    rows: 2
+    cell_width: 248.0
+    cell_height: 248.0
+    name: VORADF Grid
+    instruments:
+    - file: instruments/C172/VOR_ADF/c172_vor1.yaml
+      scale: 0.752
+    - file: instruments/C172/VOR_ADF/c172_vor2.yaml
+      scale: 0.752
+    - file: instruments/C172/VOR_ADF/c172_adf_indicator.yaml
+      scale: 0.752
+- grid:
+    position:
+    - 48.0
+    - 92.4
+    columns: 4
+    rows: 1
+    cell_width: 160.0
+    cell_height: 160.0
+    name: Grid fuel and oil/amp
+    instruments:
+    - file: instruments/C172/c172_oil_temp_pressure.yaml
+      scale: 0.8
+    - file: instruments/C172/c172_amp_vac.yaml
+      scale: 0.8
+    - file: instruments/C172/c172_fuel_quantity.yaml
+      scale: 0.8
+    - file: instruments/C172/c172_fuel_flow.yaml
+      scale: 0.8
+- file: instruments/C172/VOR_ADF/wet_compass.yaml
+  position:
+  - 1014.4
+  - 108.4
+  scale: 0.8
+window:
+  fullscreen: true
