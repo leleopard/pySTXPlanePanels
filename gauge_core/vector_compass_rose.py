@@ -114,6 +114,11 @@ YAML schema
                                              # own radius
         color: [255, 255, 255, 120]
         width: 1.0
+        half: full                           # optional: full (default) | top | bottom —
+                                             # draws only the upper or lower half of each
+                                             # ring instead of the full circle (e.g. a
+                                             # weather-radar-style HSI that only ever
+                                             # shows the top half of the compass card)
         label:                               # optional: a dataref-driven range-selection
                                              # readout (e.g. the cockpit's selected radar/
                                              # nav range), fixed in screen space — does not
@@ -540,10 +545,11 @@ class VectorCompassRose(_VecBase):
         # Range rings (optional; enabled by calling set_range_rings()) —
         # evenly-spaced concentric circles inside the rose, e.g. radar range
         # rings. Centred on the rose (rotation-invariant), so no heading
-        # bookkeeping is needed — just a count/color/width.
+        # bookkeeping is needed — just a count/color/width/half.
         self._ring_count = 0
         self._ring_color: tuple[int, int, int, int] = (255, 255, 255, 255)
         self._ring_width = 1.0
+        self._ring_half = "full"
 
         # Range-selection label (optional; enabled by calling
         # set_range_label()) — a dataref-driven text readout (e.g. the
@@ -810,10 +816,12 @@ class VectorCompassRose(_VecBase):
         count: int,
         color: tuple[int, int, int, int],
         width: float,
+        half: str = "full",
     ) -> None:
         self._ring_count = max(1, min(10, int(count)))
         self._ring_color = color
         self._ring_width = float(width)
+        self._ring_half = half if half in ("top", "bottom") else "full"
 
     def set_range_label(
         self,
@@ -1007,10 +1015,22 @@ class VectorCompassRose(_VecBase):
         if self._ring_count:
             spacing = self._radius / self._ring_count
             for k in range(1, self._ring_count + 1):
-                arcade.draw_circle_outline(
-                    self._cx, self._cy, k * spacing, self._ring_color,
-                    self._ring_width, num_segments=self._segments,
-                )
+                r = k * spacing
+                if self._ring_half == "top":
+                    arcade.draw_arc_outline(
+                        self._cx, self._cy, r * 2, r * 2, self._ring_color,
+                        0, 180, self._ring_width, num_segments=self._segments,
+                    )
+                elif self._ring_half == "bottom":
+                    arcade.draw_arc_outline(
+                        self._cx, self._cy, r * 2, r * 2, self._ring_color,
+                        180, 360, self._ring_width, num_segments=self._segments,
+                    )
+                else:
+                    arcade.draw_circle_outline(
+                        self._cx, self._cy, r, self._ring_color,
+                        self._ring_width, num_segments=self._segments,
+                    )
 
         for h in range(0, 360, 5):
             is_major = (h % 10) == 0
@@ -1396,6 +1416,7 @@ def _compass_rose_factory(
                 count=int(rings_cfg["count"]),
                 color=_as_color(rings_cfg.get("color")),
                 width=float(rings_cfg.get("width", 1.0)),
+                half=str(rings_cfg.get("half", "full")),
             )
 
         label_cfg = rings_cfg.get("label")

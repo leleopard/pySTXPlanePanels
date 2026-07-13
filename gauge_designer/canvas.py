@@ -981,11 +981,20 @@ class InstrumentCanvas(QWidget):
                 ring_count = max(1, min(10, int(rings["count"])))
                 ring_color = _rgba(rings.get("color"))
                 ring_w = max(1, int(round(float(rings.get("width", 1.0)))))
+                ring_half = rings.get("half", "full")
                 spacing = r / ring_count
                 for k in range(1, ring_count + 1):
                     rk = k * spacing
-                    draw.ellipse([cx_p - rk, cy_p - rk, cx_p + rk, cy_p + rk],
-                                 outline=ring_color, width=ring_w)
+                    bbox = [cx_p - rk, cy_p - rk, cx_p + rk, cy_p + rk]
+                    if ring_half == "top":
+                        # PIL angles run clockwise from 3 o'clock in image
+                        # (y-down) space, so — unlike arcade's CCW/y-up
+                        # convention — the top half is 180-360, not 0-180.
+                        draw.arc(bbox, 180, 360, fill=ring_color, width=ring_w)
+                    elif ring_half == "bottom":
+                        draw.arc(bbox, 0, 180, fill=ring_color, width=ring_w)
+                    else:
+                        draw.ellipse(bbox, outline=ring_color, width=ring_w)
 
             range_label = rings.get("label")
             if range_label:

@@ -3602,6 +3602,16 @@ class PropertiesForm(QWidget):
         self._cr_rings_width.valueChanged.connect(self._emit)
         _cr_rings.row("Width", self._cr_rings_width)
 
+        self._cr_rings_half = _NoScrollComboBox()
+        self._cr_rings_half.addItems(["full", "top", "bottom"])
+        self._cr_rings_half.setEnabled(False)
+        self._cr_rings_half.setToolTip(
+            "Draw only the upper or lower half of each ring instead of the\n"
+            "full circle."
+        )
+        self._cr_rings_half.currentTextChanged.connect(self._emit)
+        _cr_rings.row("Half", self._cr_rings_half)
+
         # ── Range-selection label — a dataref-driven readout (e.g. the
         # cockpit's selected radar/nav range), fixed in screen space
         # relative to the rose centre; does not rotate with heading.
@@ -4324,6 +4334,7 @@ class PropertiesForm(QWidget):
     def _on_cr_rings_count_changed(self, count: int) -> None:
         self._cr_rings_color.setEnabled(count > 0)
         self._cr_rings_width.setEnabled(count > 0)
+        self._cr_rings_half.setEnabled(count > 0)
 
     def _on_cr_range_label_toggled(self, on: bool) -> None:
         self._cr_range_label_dr_box.setEnabled(on)
@@ -5381,6 +5392,8 @@ class PropertiesForm(QWidget):
         self._cr_rings_color.set_rgba(cr_rings.get("color", [255, 255, 255, 255]))
         self._cr_rings_width.setEnabled(rings_count > 0)
         self._cr_rings_width.setValue(float(cr_rings.get("width", 1.0)))
+        self._cr_rings_half.setEnabled(rings_count > 0)
+        self._cr_rings_half.setCurrentText(str(cr_rings.get("half", "full")))
         cr_range_label = cr_rings.get("label") or {}
         has_range_label = bool(cr_rings.get("label"))
         self._cr_range_label_chk.setChecked(has_range_label)
@@ -5812,6 +5825,9 @@ class PropertiesForm(QWidget):
                     rings_data["count"] = rings_count
                     rings_data["color"] = list(self._cr_rings_color.get_rgba())
                     rings_data["width"] = self._cr_rings_width.value()
+                    rings_half = self._cr_rings_half.currentText()
+                    if rings_half != "full":
+                        rings_data["half"] = rings_half
                 if has_range_label:
                     label_data: dict = {"dataref": self._cr_range_label_dr.text().strip()}
                     rl_fn = self._cr_range_label_fn.currentText()
@@ -6534,6 +6550,7 @@ class PropertiesForm(QWidget):
         self._cr_rings_count.setValue(0)
         self._cr_rings_color.set_rgba(None); self._cr_rings_color.setEnabled(False)
         self._cr_rings_width.setValue(1.0); self._cr_rings_width.setEnabled(False)
+        self._cr_rings_half.setCurrentText("full"); self._cr_rings_half.setEnabled(False)
         self._cr_range_label_chk.setChecked(False)
         self._on_cr_range_label_toggled(False)
         self._cr_range_label_dr.clear()
