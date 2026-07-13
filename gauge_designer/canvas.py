@@ -1193,22 +1193,33 @@ class InstrumentCanvas(QWidget):
         color = _rgba(seg_cfg.get("color"))
         width = max(1, int(round(float(seg_cfg.get("width", 2.0)))))
         dash = seg_cfg.get("dash")
-        if not dash:
+        drew_dashed = False
+        if dash:
+            on, off = float(dash[0]), float(dash[1])
+            period = on + off
+            total = math.hypot(x1 - x0, y1 - y0)
+            if period > 0 and total > 0:
+                ux, uy = (x1 - x0) / total, (y1 - y0) / total
+                d = 0.0
+                while d < total:
+                    seg_end = min(d + on, total)
+                    draw.line([(x0 + ux * d, y0 + uy * d), (x0 + ux * seg_end, y0 + uy * seg_end)],
+                              fill=color, width=width)
+                    d += period
+                drew_dashed = True
+        if not drew_dashed:
             draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
-            return
-        on, off = float(dash[0]), float(dash[1])
-        period = on + off
-        total = math.hypot(x1 - x0, y1 - y0)
-        if period <= 0 or total <= 0:
-            draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
-            return
-        ux, uy = (x1 - x0) / total, (y1 - y0) / total
-        d = 0.0
-        while d < total:
-            seg_end = min(d + on, total)
-            draw.line([(x0 + ux * d, y0 + uy * d), (x0 + ux * seg_end, y0 + uy * seg_end)],
-                      fill=color, width=width)
-            d += period
+        symbol_cfg = seg_cfg.get("symbol")
+        if symbol_cfg and symbol_cfg.get("points"):
+            # symbol_offset is px from the rose centre (same units as
+            # start/end), unlike bearing_pointers' offset-from-circle, so
+            # pass it straight through as the radius argument.
+            self._draw_compassrose_pointer_shape(
+                point_at, draw, bearing_deg, float(symbol_cfg.get("offset", 0.0)),
+                symbol_cfg["points"], symbol_cfg.get("color"),
+                bool(symbol_cfg.get("filled", True)), symbol_cfg.get("width", 1.0),
+                symbol_cfg.get("outline_color"), symbol_cfg.get("outline_width", 1.0),
+            )
 
     def _draw_compassrose_pointer_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,

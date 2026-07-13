@@ -1494,9 +1494,109 @@ class _CdiLineSection(_SubSection):
         self._dash_off.valueChanged.connect(emit)
         self.row("Dash off px", self._dash_off)
 
+        # ── Symbol (e.g. an arrowhead) at this segment's own angle ──────────
+        self._symbol = _SubSection("Symbol", collapsed=True)
+        self._symbol_form = self._symbol._form
+        self._symbol.row_widget(_sep_label(
+            "Optional polygon at this segment's own angle (head: course\n"
+            "angle; tail: +180°) — e.g. an arrowhead. Position/style, same\n"
+            "convention as bearing_pointers."
+        ))
+
+        self._symbol_chk = QCheckBox("Add symbol")
+        self._symbol_chk.toggled.connect(self._on_symbol_toggled)
+        self._symbol_chk.toggled.connect(emit)
+        self._symbol.row_widget(self._symbol_chk)
+
+        self._symbol_offset = QDoubleSpinBox()
+        self._symbol_offset.setRange(-4096.0, 4096.0); self._symbol_offset.setDecimals(1)
+        self._symbol_offset.setEnabled(False)
+        self._symbol_offset.setToolTip(
+            "Distance from the rose centre where the symbol's local origin\n"
+            "sits — same units as this segment's Start/End (not an offset\n"
+            "from the rose's own circle, unlike bearing_pointers)."
+        )
+        self._symbol_offset.valueChanged.connect(emit)
+        self._symbol.row("Offset px (from centre)", self._symbol_offset)
+
+        self._symbol_pts = _PointsTableEditor()
+        self._symbol_pts.changed.connect(emit)
+        self._symbol_pts.setEnabled(False)
+        self._symbol_pts.setToolTip(
+            "Relative to the symbol's own origin, in its own unrotated\n"
+            "local space where +y points radially outward."
+        )
+        self._symbol.row("Points (relative to origin)", self._symbol_pts)
+
+        self._symbol_color = _ColorButton()
+        self._symbol_color.color_changed.connect(emit)
+        self._symbol_color.setEnabled(False)
+        self._symbol.row("Fill color", self._symbol_color)
+
+        self._symbol_filled = QCheckBox("Filled")
+        self._symbol_filled.setChecked(True)
+        self._symbol_filled.setEnabled(False)
+        self._symbol_filled.toggled.connect(self._on_symbol_filled_toggled)
+        self._symbol_filled.toggled.connect(emit)
+        self._symbol.row_widget(self._symbol_filled)
+
+        self._symbol_width = QDoubleSpinBox()
+        self._symbol_width.setRange(0.5, 50.0); self._symbol_width.setDecimals(1)
+        self._symbol_width.setValue(2.0)
+        self._symbol_width.setEnabled(False)
+        self._symbol_width.valueChanged.connect(emit)
+        self._symbol.row("Outline width", self._symbol_width)
+
+        self._symbol_outline_chk = QCheckBox("Add outline")
+        self._symbol_outline_chk.setEnabled(False)
+        self._symbol_outline_chk.toggled.connect(self._on_symbol_outline_toggled)
+        self._symbol_outline_chk.toggled.connect(emit)
+        self._symbol.row_widget(self._symbol_outline_chk)
+
+        self._symbol_outline_color = _ColorButton()
+        self._symbol_outline_color.set_rgba((255, 255, 255, 255))
+        self._symbol_outline_color.setEnabled(False)
+        self._symbol_outline_color.color_changed.connect(emit)
+        self._symbol.row("Outline color", self._symbol_outline_color)
+
+        self._symbol_outline_width = QDoubleSpinBox()
+        self._symbol_outline_width.setRange(0.5, 50.0); self._symbol_outline_width.setDecimals(1)
+        self._symbol_outline_width.setValue(1.0)
+        self._symbol_outline_width.setEnabled(False)
+        self._symbol_outline_width.valueChanged.connect(emit)
+        self._symbol.row("Outline width ", self._symbol_outline_width)
+
+        self.row_widget(self._symbol)
+
     def _on_dash_toggled(self, on: bool) -> None:
         self._dash_on.setEnabled(on)
         self._dash_off.setEnabled(on)
+
+    def _on_symbol_toggled(self, on: bool) -> None:
+        self._symbol_offset.setEnabled(on)
+        self._symbol_pts.setEnabled(on)
+        self._symbol_color.setEnabled(on)
+        self._symbol_filled.setEnabled(on)
+        self._symbol_width.setEnabled(on and not self._symbol_filled.isChecked())
+        self._symbol_outline_chk.setEnabled(on)
+        outline_on = on and self._symbol_outline_chk.isChecked()
+        self._symbol_outline_color.setEnabled(outline_on)
+        self._symbol_outline_width.setEnabled(outline_on)
+
+    def _on_symbol_filled_toggled(self, filled: bool) -> None:
+        self._symbol_width.setEnabled(self._symbol_chk.isChecked() and not filled)
+        self._symbol_outline_chk.setVisible(filled)
+        self._symbol_form.setRowVisible(self._symbol_outline_color, filled)
+        self._symbol_form.setRowVisible(self._symbol_outline_width, filled)
+        if not filled:
+            self._symbol_outline_chk.blockSignals(True)
+            self._symbol_outline_chk.setChecked(False)
+            self._symbol_outline_chk.blockSignals(False)
+
+    def _on_symbol_outline_toggled(self, on: bool) -> None:
+        enabled = on and self._symbol_chk.isChecked()
+        self._symbol_outline_color.setEnabled(enabled)
+        self._symbol_outline_width.setEnabled(enabled)
 
     def load(self, cfg: dict | None) -> None:
         cfg = cfg or {}
@@ -1512,6 +1612,34 @@ class _CdiLineSection(_SubSection):
         self._dash_off.setEnabled(dash is not None)
         self._dash_on.setValue(float(dash[0]) if dash else 6.0)
         self._dash_off.setValue(float(dash[1]) if dash else 4.0)
+        symbol = cfg.get("symbol")
+        symbol_on = symbol is not None
+        self._symbol_chk.blockSignals(True)
+        self._symbol_chk.setChecked(symbol_on)
+        self._symbol_chk.blockSignals(False)
+        self._on_symbol_toggled(symbol_on)
+        symbol = symbol or {}
+        self._symbol_offset.setValue(float(symbol.get("offset", 0.0)))
+        self._symbol_pts.load([[p[0], p[1]] for p in symbol.get("points", [])])
+        self._symbol_color.set_rgba(symbol.get("color", [255, 255, 255, 255]))
+        symbol_filled = bool(symbol.get("filled", True))
+        self._symbol_filled.blockSignals(True)
+        self._symbol_filled.setChecked(symbol_filled)
+        self._symbol_filled.blockSignals(False)
+        self._symbol_width.setEnabled(symbol_on and not symbol_filled)
+        self._symbol_width.setValue(float(symbol.get("width", 2.0)))
+        soc = symbol.get("outline_color")
+        symbol_has_outline = soc is not None and symbol_filled
+        self._symbol_outline_chk.blockSignals(True)
+        self._symbol_outline_chk.setChecked(symbol_has_outline)
+        self._symbol_outline_chk.blockSignals(False)
+        self._symbol_outline_chk.setVisible(symbol_filled)
+        self._symbol_outline_color.setEnabled(symbol_on and symbol_has_outline)
+        self._symbol_form.setRowVisible(self._symbol_outline_color, symbol_filled)
+        self._symbol_outline_color.set_rgba(soc if soc is not None else (255, 255, 255, 255))
+        self._symbol_outline_width.setEnabled(symbol_on and symbol_has_outline)
+        self._symbol_form.setRowVisible(self._symbol_outline_width, symbol_filled)
+        self._symbol_outline_width.setValue(float(symbol.get("outline_width", 1.0)))
 
     def get_data(self) -> dict:
         data = {
@@ -1522,6 +1650,22 @@ class _CdiLineSection(_SubSection):
         }
         if self._dash_chk.isChecked():
             data["dash"] = [self._dash_on.value(), self._dash_off.value()]
+        if self._symbol_chk.isChecked():
+            symbol_pts = self._symbol_pts.get_data()
+            if symbol_pts:
+                symbol_filled = self._symbol_filled.isChecked()
+                symbol: dict = {
+                    "offset": self._symbol_offset.value(),
+                    "points": symbol_pts,
+                    "color": list(self._symbol_color.get_rgba()),
+                    "filled": symbol_filled,
+                }
+                if not symbol_filled:
+                    symbol["width"] = self._symbol_width.value()
+                elif self._symbol_outline_chk.isChecked():
+                    symbol["outline_color"] = list(self._symbol_outline_color.get_rgba())
+                    symbol["outline_width"] = self._symbol_outline_width.value()
+                data["symbol"] = symbol
         return data
 
     def reset(self) -> None:
@@ -1529,6 +1673,12 @@ class _CdiLineSection(_SubSection):
         self._color.set_rgba(None); self._width.setValue(2.0)
         self._dash_chk.setChecked(False)
         self._dash_on.setValue(6.0); self._dash_off.setValue(4.0)
+        self._symbol_chk.setChecked(False)
+        self._symbol_offset.setValue(0.0); self._symbol_pts.load([])
+        self._symbol_color.set_rgba(None)
+        self._symbol_filled.setChecked(True); self._symbol_width.setValue(2.0)
+        self._symbol_outline_chk.setChecked(False)
+        self._symbol_outline_color.set_rgba(None); self._symbol_outline_width.setValue(1.0)
 
 
 class _AutoSizeStack(QStackedWidget):

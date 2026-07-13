@@ -220,8 +220,7 @@ YAML schema
                                              # rose around its own centre,
                                              # positioned by a course dataref
                                              # — the classic CDI course line
-                                             # on an HSI. Head/tail polygon
-                                             # symbols and the deviation
+                                             # on an HSI. The deviation
                                              # bar/dots are a planned
                                              # follow-up, not implemented yet.
         dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
@@ -233,6 +232,25 @@ YAML schema
           width: 2.0
           dash: [6, 4]                       # optional [on_px, off_px]; omit
                                              # (or null) for a solid line
+          symbol:                            # optional: a polygon at this
+                                             # segment's own angle (head:
+                                             # course angle; tail: +180°) —
+                                             # e.g. an arrowhead at the tip
+            offset: 180                      # px from the rose centre where
+                                             # the symbol's local origin
+                                             # sits (independent of the
+                                             # line's own end, though
+                                             # usually matches it)
+            points: [[0, 0], [-8, -14], [8, -14]]  # relative to that origin,
+                                             # in the symbol's own unrotated
+                                             # local space where +y points
+                                             # radially outward — same
+                                             # convention as bearing_pointers
+            color: [255, 255, 255, 255]
+            filled: true
+            width: 2.0                      # stroke width when filled: false
+            outline_color: null             # optional outline when filled: true
+            outline_width: 1.0
         tail:                                # segment diametrically opposite
                                              # (course + 180°)
           start: 20
@@ -240,6 +258,7 @@ YAML schema
           color: [255, 255, 255, 255]
           width: 2.0
           dash: null
+          symbol: null                      # optional, same shape as head's
 
       visibility:                           # optional, same as other components
         dataref: ...
@@ -314,6 +333,41 @@ class _BearingPointer:
         self.tail_width = float(tail_width)
         self.tail_outline_color = tail_outline_color
         self.tail_outline_width = float(tail_outline_width)
+
+
+class _CdiSegment:
+    """One line segment (head or tail) of a course_deviation_indicator — a
+    line from the rose centre out to `end` at the segment's own angle
+    (`_draw_cdi()` passes `cdi_angle` for head, `cdi_angle + 180` for tail),
+    with an optional polygon symbol (e.g. an arrowhead) at that same angle."""
+
+    def __init__(
+        self,
+        start: float,
+        end: float,
+        color: tuple[int, int, int, int],
+        width: float,
+        dash: tuple[float, float] | None,
+        symbol_offset: float = 0.0,
+        symbol_points: list[tuple[float, float]] | None = None,
+        symbol_color: tuple[int, int, int, int] = (255, 255, 255, 255),
+        symbol_filled: bool = True,
+        symbol_width: float = 2.0,
+        symbol_outline_color: tuple[int, int, int, int] | None = None,
+        symbol_outline_width: float = 1.0,
+    ) -> None:
+        self.start = float(start)
+        self.end = float(end)
+        self.color = color
+        self.width = float(width)
+        self.dash = tuple(dash) if dash else None
+        self.symbol_offset = float(symbol_offset)
+        self.symbol_points = [(float(x), float(y)) for x, y in (symbol_points or [])]
+        self.symbol_color = symbol_color
+        self.symbol_filled = bool(symbol_filled)
+        self.symbol_width = float(symbol_width)
+        self.symbol_outline_color = symbol_outline_color
+        self.symbol_outline_width = float(symbol_outline_width)
 
 
 class VectorCompassRose(_VecBase):
@@ -502,22 +556,15 @@ class VectorCompassRose(_VecBase):
         # set_course_deviation_indicator()) — a two-segment course line
         # (head towards the course angle, tail diametrically opposite)
         # rotating with the rose around its own centre, positioned by a
-        # course dataref. Head/tail polygon symbols and the deviation
-        # bar/dots are a planned follow-up, not implemented here.
+        # course dataref, each segment optionally carrying a polygon symbol
+        # (e.g. an arrowhead). The deviation bar/dots are a planned
+        # follow-up, not implemented here.
         self._show_cdi = False
         self._cdi_dr: Any | None = None
         self._cdi_convert: Callable | None = None
         self._cdi_angle = 0.0
-        self._cdi_head_start = 0.0
-        self._cdi_head_end = 150.0
-        self._cdi_head_color: tuple[int, int, int, int] = (255, 255, 255, 255)
-        self._cdi_head_width = 2.0
-        self._cdi_head_dash: tuple[float, float] | None = None
-        self._cdi_tail_start = 0.0
-        self._cdi_tail_end = 150.0
-        self._cdi_tail_color: tuple[int, int, int, int] = (255, 255, 255, 255)
-        self._cdi_tail_width = 2.0
-        self._cdi_tail_dash: tuple[float, float] | None = None
+        self._cdi_head: _CdiSegment | None = None
+        self._cdi_tail: _CdiSegment | None = None
 
         self._init_visibility()
 
@@ -658,31 +705,15 @@ class VectorCompassRose(_VecBase):
         self,
         dataref: Any,
         convert_fn: str | None,
-        head_start: float,
-        head_end: float,
-        head_color: tuple[int, int, int, int],
-        head_width: float,
-        head_dash: tuple[float, float] | None,
-        tail_start: float,
-        tail_end: float,
-        tail_color: tuple[int, int, int, int],
-        tail_width: float,
-        tail_dash: tuple[float, float] | None,
+        head: _CdiSegment,
+        tail: _CdiSegment,
     ) -> None:
         self._show_cdi = True
         self._cdi_dr = _as_dataref(dataref)
         if convert_fn:
             self._cdi_convert = get_convert(convert_fn)
-        self._cdi_head_start = float(head_start)
-        self._cdi_head_end = float(head_end)
-        self._cdi_head_color = head_color
-        self._cdi_head_width = float(head_width)
-        self._cdi_head_dash = tuple(head_dash) if head_dash else None
-        self._cdi_tail_start = float(tail_start)
-        self._cdi_tail_end = float(tail_end)
-        self._cdi_tail_color = tail_color
-        self._cdi_tail_width = float(tail_width)
-        self._cdi_tail_dash = tuple(tail_dash) if tail_dash else None
+        self._cdi_head = head
+        self._cdi_tail = tail
 
     def set_range_rings(
         self,
@@ -766,14 +797,17 @@ class VectorCompassRose(_VecBase):
             p.tail_points = [(x * scale, y * scale) for x, y in p.tail_points]
             p.tail_width *= scale
             p.tail_outline_width *= scale
-        self._cdi_head_start *= scale; self._cdi_head_end *= scale
-        self._cdi_head_width *= scale
-        if self._cdi_head_dash is not None:
-            self._cdi_head_dash = (self._cdi_head_dash[0] * scale, self._cdi_head_dash[1] * scale)
-        self._cdi_tail_start *= scale; self._cdi_tail_end *= scale
-        self._cdi_tail_width *= scale
-        if self._cdi_tail_dash is not None:
-            self._cdi_tail_dash = (self._cdi_tail_dash[0] * scale, self._cdi_tail_dash[1] * scale)
+        for seg in (self._cdi_head, self._cdi_tail):
+            if seg is None:
+                continue
+            seg.start *= scale; seg.end *= scale
+            seg.width *= scale
+            if seg.dash is not None:
+                seg.dash = (seg.dash[0] * scale, seg.dash[1] * scale)
+            seg.symbol_offset *= scale
+            seg.symbol_points = [(x * scale, y * scale) for x, y in seg.symbol_points]
+            seg.symbol_width *= scale
+            seg.symbol_outline_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -1003,21 +1037,21 @@ class VectorCompassRose(_VecBase):
         # circle (radius + offset), rotating with the rose, oriented by its
         # own bearing dataref rather than the rose's heading.
         self._draw_pointer_shape(
-            p.angle, p.offset, p.points, p.color, p.filled, p.width,
+            p.angle, self._radius + p.offset, p.points, p.color, p.filled, p.width,
             p.outline_color, p.outline_width,
         )
         if p.tail_points:
             # Diametrically opposite the head — same dataref/visibility,
             # own shape/offset/styling, like an RMI needle's tail.
             self._draw_pointer_shape(
-                p.angle + 180.0, p.tail_offset, p.tail_points, p.tail_color,
+                p.angle + 180.0, self._radius + p.tail_offset, p.tail_points, p.tail_color,
                 p.tail_filled, p.tail_width, p.tail_outline_color, p.tail_outline_width,
             )
 
     def _draw_pointer_shape(
         self,
         bearing_deg: float,
-        offset: float,
+        radius: float,
         points: list[tuple[float, float]],
         color: tuple[int, int, int, int],
         filled: bool,
@@ -1025,7 +1059,7 @@ class VectorCompassRose(_VecBase):
         outline_color: tuple[int, int, int, int] | None,
         outline_width: float,
     ) -> None:
-        cx, cy = self._point_at(bearing_deg, self._radius + offset)
+        cx, cy = self._point_at(bearing_deg, radius)
         angle = math.radians(self._heading - bearing_deg)
         cos_a, sin_a = math.cos(angle), math.sin(angle)
         pts = [
@@ -1079,18 +1113,27 @@ class VectorCompassRose(_VecBase):
         # Two independent line segments from the rose centre, head towards
         # the course angle and tail diametrically opposite — same
         # positioning model as track (point_at() handles the rose's own
-        # rotation plus this angle), but each segment gets its own
-        # start/end/style and optional dashing.
-        hx0, hy0 = self._point_at(self._cdi_angle, self._cdi_head_start)
-        hx1, hy1 = self._point_at(self._cdi_angle, self._cdi_head_end)
-        self._draw_dashed_line(
-            hx0, hy0, hx1, hy1, self._cdi_head_color, self._cdi_head_width, self._cdi_head_dash,
-        )
-        tx0, ty0 = self._point_at(self._cdi_angle + 180.0, self._cdi_tail_start)
-        tx1, ty1 = self._point_at(self._cdi_angle + 180.0, self._cdi_tail_end)
-        self._draw_dashed_line(
-            tx0, ty0, tx1, ty1, self._cdi_tail_color, self._cdi_tail_width, self._cdi_tail_dash,
-        )
+        # rotation plus this angle), each with its own start/end/style,
+        # optional dashing, and optional polygon symbol.
+        if self._cdi_head is not None:
+            self._draw_cdi_segment(self._cdi_head, self._cdi_angle)
+        if self._cdi_tail is not None:
+            self._draw_cdi_segment(self._cdi_tail, self._cdi_angle + 180.0)
+
+    def _draw_cdi_segment(self, seg: _CdiSegment, bearing_deg: float) -> None:
+        x0, y0 = self._point_at(bearing_deg, seg.start)
+        x1, y1 = self._point_at(bearing_deg, seg.end)
+        self._draw_dashed_line(x0, y0, x1, y1, seg.color, seg.width, seg.dash)
+        if seg.symbol_points:
+            # symbol_offset is px from the rose centre (same units as
+            # start/end), unlike bearing_pointers' offset-from-circle, so no
+            # `self._radius +` here — reuses _draw_pointer_shape as-is since
+            # that method just takes a plain radius from the rose centre.
+            self._draw_pointer_shape(
+                bearing_deg, seg.symbol_offset, seg.symbol_points, seg.symbol_color,
+                seg.symbol_filled, seg.symbol_width, seg.symbol_outline_color,
+                seg.symbol_outline_width,
+            )
 
     @staticmethod
     def _draw_dashed_line(
@@ -1113,6 +1156,30 @@ class VectorCompassRose(_VecBase):
             seg_end = min(d + on, total)
             arcade.draw_line(x0 + ux * d, y0 + uy * d, x0 + ux * seg_end, y0 + uy * seg_end, color, width)
             d += period
+
+
+def _parse_cdi_segment(seg_cfg: dict[str, Any], default_end: float) -> _CdiSegment:
+    symbol_cfg = seg_cfg.get("symbol")
+    symbol_kwargs: dict[str, Any] = {}
+    if symbol_cfg:
+        soc = symbol_cfg.get("outline_color")
+        symbol_kwargs = dict(
+            symbol_offset=float(symbol_cfg.get("offset", 0.0)),
+            symbol_points=[tuple(p) for p in symbol_cfg["points"]],
+            symbol_color=_as_color(symbol_cfg.get("color", [255, 255, 255, 255])),
+            symbol_filled=bool(symbol_cfg.get("filled", True)),
+            symbol_width=float(symbol_cfg.get("width", 2.0)),
+            symbol_outline_color=_as_color(soc) if soc is not None else None,
+            symbol_outline_width=float(symbol_cfg.get("outline_width", 1.0)),
+        )
+    return _CdiSegment(
+        start=float(seg_cfg.get("start", 0.0)),
+        end=float(seg_cfg.get("end", default_end)),
+        color=_as_color(seg_cfg.get("color", [255, 255, 255, 255])),
+        width=float(seg_cfg.get("width", 2.0)),
+        dash=tuple(seg_cfg["dash"]) if seg_cfg.get("dash") else None,
+        **symbol_kwargs,
+    )
 
 
 def _compass_rose_factory(
@@ -1290,21 +1357,12 @@ def _compass_rose_factory(
 
     cdi_cfg = comp.get("course_deviation_indicator")
     if cdi_cfg:
-        head_cfg = cdi_cfg.get("head", {})
-        tail_cfg = cdi_cfg.get("tail", {})
+        default_end = float(comp.get("radius", 150.0))
         rose.set_course_deviation_indicator(
             dataref=cdi_cfg["dataref"],
             convert_fn=cdi_cfg.get("convert_function"),
-            head_start=float(head_cfg.get("start", 0.0)),
-            head_end=float(head_cfg.get("end", comp.get("radius", 150.0))),
-            head_color=_as_color(head_cfg.get("color", [255, 255, 255, 255])),
-            head_width=float(head_cfg.get("width", 2.0)),
-            head_dash=tuple(head_cfg["dash"]) if head_cfg.get("dash") else None,
-            tail_start=float(tail_cfg.get("start", 0.0)),
-            tail_end=float(tail_cfg.get("end", comp.get("radius", 150.0))),
-            tail_color=_as_color(tail_cfg.get("color", [255, 255, 255, 255])),
-            tail_width=float(tail_cfg.get("width", 2.0)),
-            tail_dash=tuple(tail_cfg["dash"]) if tail_cfg.get("dash") else None,
+            head=_parse_cdi_segment(cdi_cfg.get("head", {}), default_end),
+            tail=_parse_cdi_segment(cdi_cfg.get("tail", {}), default_end),
         )
 
     if "visibility" in comp:
