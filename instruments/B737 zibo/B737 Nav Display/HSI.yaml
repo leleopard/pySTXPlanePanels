@@ -36,6 +36,7 @@ components:
     - 255
     - 255
     width: 2.0
+    half: top
     label:
       dataref: laminar/B738/EFIS/capt/map_range
       table:
@@ -244,11 +245,99 @@ components:
     visibility:
       dataref: sim/cockpit2/EFIS/EFIS_2_selection_pilot
       predicate: true_if_equals_2
+  course_deviation_indicator:
+    dataref: laminar/B738/autopilot/course_pilot
+    head:
+      start: 86.0
+      end: 400.0
+      color:
+      - 242
+      - 161
+      - 239
+      - 255
+      width: 2.0
+      symbol:
+        offset: 83.0
+        points:
+        - - 0
+          - 0
+        - - 5
+          - -7
+        - - 5
+          - -22
+        - - -5
+          - -22
+        - - -5
+          - -7
+        color:
+        - 255
+        - 255
+        - 255
+        - 255
+        filled: false
+        width: 2.0
+    tail:
+      start: 80.0
+      end: 400.0
+      color:
+      - 242
+      - 161
+      - 239
+      - 255
+      width: 2.0
+      dash:
+      - 10.0
+      - 6.0
+      symbol:
+        offset: 76.0
+        points:
+        - - -5
+          - 0
+        - - 5
+          - 0
+        - - 5
+          - -15
+        - - -5
+          - -15
+        color:
+        - 255
+        - 255
+        - 255
+        - 255
+        filled: false
+        width: 2.0
+    preview_angle: -20.0
+    deviation_bar:
+      dataref: sim/cockpit/radios/nav1_hdef_dot
+      points:
+      - - 5
+        - 58
+      - - -5
+        - 58
+      - - -5
+        - -58
+      - - 5
+        - -58
+      color:
+      - 242
+      - 161
+      - 239
+      - 255
+      filled: false
+      table:
+      - - -2.5
+        - -80
+      - - 0.0
+        - 0.0
+      - - 2.5
+        - 80
+      preview_deviation: 106.0
+      width: 2.0
   viewport:
   - 0
-  - 124
+  - 0
   - 600
-  - 476
+  - 600
 - name: HDG_TEXT_NR
   type: Text
   position:
@@ -467,3 +556,36 @@ components:
   - 255
   - 255
   - 255
+- name: TCAS_OFF_txt
+  type: Text
+  position:
+  - 13
+  - 78
+  text: TCAS\nOFF
+  font_name: ST_Boeing_PFD
+  font_size: 19.0
+  color:
+  - 255
+  - 170
+  - 0
+  - 255
+  visibility:
+    dataref: laminar/B738/EFIS/tcas_off_show
+    predicate: true_if_equals_1
+- name: EFIS MODE DISAGREE TXT
+  type: Text
+  position:
+  - 300
+  - 390
+  text: EFIS MODE/NAV FREQ DISAGREE
+  font_name: ST_Boeing_PFD
+  font_size: 22.0
+  color:
+  - 255
+  - 170
+  - 0
+  - 255
+  anchor_x: center
+  visibility:
+    dataref: laminar/B738/nd/capt/efis_disagree
+    predicate: true_if_equals_1
