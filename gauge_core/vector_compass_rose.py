@@ -313,6 +313,23 @@ YAML schema
           outline_color: null
           outline_width: 1.0
 
+        deviation_markers:                   # optional: 4 fixed reference
+                                             # marks (2 each side) on the
+                                             # same perpendicular-to-course
+                                             # axis as the deviation bar —
+                                             # the classic CDI dots/ticks.
+                                             # Not dataref-driven themselves
+                                             # (no sliding) — only rotate
+                                             # with the CDI's own course angle
+          shape: circle                     # circle (default, unfilled) | tick
+          spacing: 40                       # px between adjacent markers;
+                                             # they sit at ±spacing and
+                                             # ±2*spacing from centre
+          size: 4                           # circle radius, or tick half-length
+          width: 2.0                        # circle outline stroke width,
+                                             # or tick line width
+          color: [255, 255, 255, 255]
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -639,6 +656,19 @@ class VectorCompassRose(_VecBase):
         self._deviation_bar_outline_color: tuple[int, int, int, int] | None = None
         self._deviation_bar_outline_width = 1.0
 
+        # Deviation markers (optional; enabled by calling
+        # set_deviation_markers()) — 4 fixed reference marks (2 each side),
+        # unfilled circles or ticks, on the same perpendicular-to-course
+        # axis as the deviation bar, at ±spacing and ±2*spacing from centre.
+        # Not dataref-driven themselves — only rotate with the CDI's own
+        # course angle, like everything else on this shared axis.
+        self._dev_markers_shown = False
+        self._dev_markers_shape = "circle"
+        self._dev_markers_spacing = 40.0
+        self._dev_markers_size = 4.0
+        self._dev_markers_width = 2.0
+        self._dev_markers_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
@@ -811,6 +841,21 @@ class VectorCompassRose(_VecBase):
         self._deviation_bar_outline_color = outline_color
         self._deviation_bar_outline_width = float(outline_width)
 
+    def set_deviation_markers(
+        self,
+        shape: str,
+        spacing: float,
+        size: float,
+        width: float,
+        color: tuple[int, int, int, int],
+    ) -> None:
+        self._dev_markers_shown = True
+        self._dev_markers_shape = shape if shape in ("circle", "tick") else "circle"
+        self._dev_markers_spacing = float(spacing)
+        self._dev_markers_size = float(size)
+        self._dev_markers_width = float(width)
+        self._dev_markers_color = color
+
     def set_range_rings(
         self,
         count: int,
@@ -910,6 +955,9 @@ class VectorCompassRose(_VecBase):
         self._deviation_bar_points = [(x * scale, y * scale) for x, y in self._deviation_bar_points]
         self._deviation_bar_width *= scale
         self._deviation_bar_outline_width *= scale
+        self._dev_markers_spacing *= scale
+        self._dev_markers_size *= scale
+        self._dev_markers_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -1109,6 +1157,8 @@ class VectorCompassRose(_VecBase):
             self._draw_cdi()
             if self._deviation_bar_dr is not None:
                 self._draw_deviation_bar()
+            if self._dev_markers_shown:
+                self._draw_deviation_markers()
 
     def _draw_range_label(self) -> None:
         # Fixed relative to the rose centre — like heading_marker, does not
@@ -1278,6 +1328,29 @@ class VectorCompassRose(_VecBase):
                 arcade.draw_polygon_outline(pts, self._deviation_bar_outline_color, self._deviation_bar_outline_width)
         else:
             arcade.draw_polygon_outline(pts, self._deviation_bar_color, self._deviation_bar_width)
+
+    def _draw_deviation_markers(self) -> None:
+        # 4 fixed marks (2 each side) on the same perpendicular-to-course
+        # axis as the deviation bar, at ±spacing and ±2*spacing from centre
+        # — unlike the bar, these don't slide with a dataref, but they do
+        # rotate with the CDI's own course angle like everything else here.
+        angle = math.radians(self._heading - self._cdi_angle)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        for k in (-2, -1, 1, 2):
+            mx, my = self._point_at(self._cdi_angle + 90.0, k * self._dev_markers_spacing)
+            if self._dev_markers_shape == "tick":
+                # Local endpoints (0, -half)/(0, half), rotated the same way
+                # as the deviation bar's own polygon points — a tick reads
+                # as a short segment along the course direction.
+                half = self._dev_markers_size
+                x0, y0 = mx + half * sin_a, my - half * cos_a
+                x1, y1 = mx - half * sin_a, my + half * cos_a
+                arcade.draw_line(x0, y0, x1, y1, self._dev_markers_color, self._dev_markers_width)
+            else:
+                arcade.draw_circle_outline(
+                    mx, my, self._dev_markers_size, self._dev_markers_color,
+                    self._dev_markers_width, num_segments=self._segments,
+                )
 
     @staticmethod
     def _draw_dashed_line(
@@ -1523,6 +1596,16 @@ def _compass_rose_factory(
                 outline_color=_as_color(dboc) if dboc is not None else None,
                 outline_width=float(dev_bar_cfg.get("outline_width", 1.0)),
                 table=dev_bar_cfg.get("table"),
+            )
+
+        markers_cfg = cdi_cfg.get("deviation_markers")
+        if markers_cfg:
+            rose.set_deviation_markers(
+                shape=str(markers_cfg.get("shape", "circle")),
+                spacing=float(markers_cfg.get("spacing", 40.0)),
+                size=float(markers_cfg.get("size", 4.0)),
+                width=float(markers_cfg.get("width", 2.0)),
+                color=_as_color(markers_cfg.get("color", [255, 255, 255, 255])),
             )
 
     if "visibility" in comp:

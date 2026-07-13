@@ -1208,6 +1208,29 @@ class InstrumentCanvas(QWidget):
                     point_at, draw, cdi_angle, preview_px, devbar_cfg,
                 )
 
+            markers_cfg = cdi_cfg.get("deviation_markers")
+            if markers_cfg:
+                self._draw_compassrose_deviation_markers(point_at, draw, cdi_angle, markers_cfg)
+
+    def _draw_compassrose_deviation_markers(
+        self, point_at, draw: ImageDraw.ImageDraw, cdi_angle: float, markers_cfg: dict,
+    ) -> None:
+        spacing = float(markers_cfg.get("spacing", 40.0))
+        size = float(markers_cfg.get("size", 4.0))
+        width = max(1, int(round(float(markers_cfg.get("width", 2.0)))))
+        color = _rgba(markers_cfg.get("color"))
+        shape = markers_cfg.get("shape", "circle")
+        angle = math.radians(-cdi_angle)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        for k in (-2, -1, 1, 2):
+            mx, my = point_at(cdi_angle + 90.0, k * spacing)
+            if shape == "tick":
+                x0, y0 = mx + size * sin_a, my + size * cos_a
+                x1, y1 = mx - size * sin_a, my - size * cos_a
+                draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
+            else:
+                draw.ellipse([mx - size, my - size, mx + size, my + size], outline=color, width=width)
+
     def _draw_compassrose_deviation_bar(
         self, point_at, draw: ImageDraw.ImageDraw, cdi_angle: float,
         deviation_px: float, devbar_cfg: dict,

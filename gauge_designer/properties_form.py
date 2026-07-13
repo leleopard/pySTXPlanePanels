@@ -4257,6 +4257,60 @@ class PropertiesForm(QWidget):
 
         _cr_cdi.row_widget(_cr_devbar)
 
+        # ── Deviation Markers ────────────────────────────────────────────────
+        _cr_devmarkers = _SubSection("Deviation Markers", collapsed=True)
+        _cr_devmarkers.row_widget(_sep_label(
+            "4 fixed reference marks (2 each side) on the same\n"
+            "perpendicular-to-course axis as the deviation bar — the\n"
+            "classic CDI dots/ticks. Not dataref-driven; only rotate with\n"
+            "the CDI's own course angle."
+        ))
+
+        self._cr_devmarkers_chk = QCheckBox("Add deviation markers")
+        self._cr_devmarkers_chk.toggled.connect(self._on_cr_devmarkers_toggled)
+        self._cr_devmarkers_chk.toggled.connect(self._emit)
+        _cr_devmarkers.row_widget(self._cr_devmarkers_chk)
+
+        self._cr_devmarkers_shape = _NoScrollComboBox()
+        self._cr_devmarkers_shape.addItems(["circle", "tick"])
+        self._cr_devmarkers_shape.setEnabled(False)
+        self._cr_devmarkers_shape.currentTextChanged.connect(self._emit)
+        _cr_devmarkers.row("Shape", self._cr_devmarkers_shape)
+
+        self._cr_devmarkers_spacing = QDoubleSpinBox()
+        self._cr_devmarkers_spacing.setRange(0.5, 500.0); self._cr_devmarkers_spacing.setDecimals(1)
+        self._cr_devmarkers_spacing.setValue(40.0)
+        self._cr_devmarkers_spacing.setEnabled(False)
+        self._cr_devmarkers_spacing.setToolTip(
+            "Px between adjacent markers — they sit at ±spacing and\n"
+            "±2×spacing from the rose centre."
+        )
+        self._cr_devmarkers_spacing.valueChanged.connect(self._emit)
+        _cr_devmarkers.row("Spacing px", self._cr_devmarkers_spacing)
+
+        self._cr_devmarkers_size = QDoubleSpinBox()
+        self._cr_devmarkers_size.setRange(0.5, 200.0); self._cr_devmarkers_size.setDecimals(1)
+        self._cr_devmarkers_size.setValue(4.0)
+        self._cr_devmarkers_size.setEnabled(False)
+        self._cr_devmarkers_size.setToolTip("Circle radius, or tick half-length.")
+        self._cr_devmarkers_size.valueChanged.connect(self._emit)
+        _cr_devmarkers.row("Size", self._cr_devmarkers_size)
+
+        self._cr_devmarkers_width = QDoubleSpinBox()
+        self._cr_devmarkers_width.setRange(0.5, 50.0); self._cr_devmarkers_width.setDecimals(1)
+        self._cr_devmarkers_width.setValue(2.0)
+        self._cr_devmarkers_width.setEnabled(False)
+        self._cr_devmarkers_width.setToolTip("Circle outline stroke width, or tick line width.")
+        self._cr_devmarkers_width.valueChanged.connect(self._emit)
+        _cr_devmarkers.row("Width", self._cr_devmarkers_width)
+
+        self._cr_devmarkers_color = _ColorButton()
+        self._cr_devmarkers_color.setEnabled(False)
+        self._cr_devmarkers_color.color_changed.connect(self._emit)
+        _cr_devmarkers.row("Color", self._cr_devmarkers_color)
+
+        _cr_cdi.row_widget(_cr_devmarkers)
+
         self._cr_sec.row_widget(_cr_cdi)
 
         self._vbox.addWidget(self._cr_sec)
@@ -4277,6 +4331,13 @@ class PropertiesForm(QWidget):
 
     def _on_cr_devbar_preview_toggled(self, on: bool) -> None:
         self._cr_devbar_preview_px.setEnabled(on)
+
+    def _on_cr_devmarkers_toggled(self, on: bool) -> None:
+        self._cr_devmarkers_shape.setEnabled(on)
+        self._cr_devmarkers_spacing.setEnabled(on)
+        self._cr_devmarkers_size.setEnabled(on)
+        self._cr_devmarkers_width.setEnabled(on)
+        self._cr_devmarkers_color.setEnabled(on)
 
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
         self._cr_marker_width.setEnabled(not filled)
@@ -5563,6 +5624,18 @@ class PropertiesForm(QWidget):
         self._cr_devbar_outline_width.setEnabled(devbar_has_outline)
         self._cr_devbar_form.setRowVisible(self._cr_devbar_outline_width, devbar_filled)
         self._cr_devbar_outline_width.setValue(float(devbar.get("outline_width", 1.0)))
+        devmarkers = cdi.get("deviation_markers")
+        devmarkers_on = devmarkers is not None
+        self._cr_devmarkers_chk.blockSignals(True)
+        self._cr_devmarkers_chk.setChecked(devmarkers_on)
+        self._cr_devmarkers_chk.blockSignals(False)
+        self._on_cr_devmarkers_toggled(devmarkers_on)
+        devmarkers = devmarkers or {}
+        self._cr_devmarkers_shape.setCurrentText(str(devmarkers.get("shape", "circle")))
+        self._cr_devmarkers_spacing.setValue(float(devmarkers.get("spacing", 40.0)))
+        self._cr_devmarkers_size.setValue(float(devmarkers.get("size", 4.0)))
+        self._cr_devmarkers_width.setValue(float(devmarkers.get("width", 2.0)))
+        self._cr_devmarkers_color.set_rgba(devmarkers.get("color", [255, 255, 255, 255]))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -6005,6 +6078,14 @@ class PropertiesForm(QWidget):
                             devbar["outline_color"] = list(self._cr_devbar_outline_color.get_rgba())
                             devbar["outline_width"] = self._cr_devbar_outline_width.value()
                         cdi["deviation_bar"] = devbar
+                if self._cr_devmarkers_chk.isChecked():
+                    cdi["deviation_markers"] = {
+                        "shape": self._cr_devmarkers_shape.currentText(),
+                        "spacing": self._cr_devmarkers_spacing.value(),
+                        "size": self._cr_devmarkers_size.value(),
+                        "width": self._cr_devmarkers_width.value(),
+                        "color": list(self._cr_devmarkers_color.get_rgba()),
+                    }
                 data["course_deviation_indicator"] = cdi
 
         elif ct == "AttitudeIndicator":
@@ -6611,6 +6692,12 @@ class PropertiesForm(QWidget):
         self._cr_devbar_filled.setChecked(True); self._cr_devbar_width.setValue(2.0)
         self._cr_devbar_outline_chk.setChecked(False)
         self._cr_devbar_outline_color.set_rgba(None); self._cr_devbar_outline_width.setValue(1.0)
+        self._cr_devmarkers_chk.setChecked(False)
+        self._cr_devmarkers_shape.setCurrentText("circle")
+        self._cr_devmarkers_spacing.setValue(40.0)
+        self._cr_devmarkers_size.setValue(4.0)
+        self._cr_devmarkers_width.setValue(2.0)
+        self._cr_devmarkers_color.set_rgba(None)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
