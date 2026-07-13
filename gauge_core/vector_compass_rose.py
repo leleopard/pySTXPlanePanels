@@ -275,12 +275,20 @@ YAML schema
                                              # amount — the classic CDI
                                              # left/right deviation bar
           dataref: sim/cockpit/radios/nav1_hdef_dot
-          convert_function: null            # optional; result is used
-                                             # directly as the translation in
-                                             # px — positive moves toward
+          convert_function: null            # optional; applied to the raw
+                                             # dataref value BEFORE table
+                                             # (same order as needle_angle
+                                             # elsewhere in this codebase)
+          table: [[0, 0], [1, 40], [-1, -40]]  # optional piecewise-linear
+                                             # lookup, e.g. dots-of-deviation
+                                             # -> actual px translation; omit
+                                             # to use the (possibly
+                                             # converted) raw value directly
+                                             # as px — positive moves toward
                                              # (course_angle + 90°); flip
-                                             # sign via convert_function if a
-                                             # given dataref runs the other way
+                                             # sign via convert_function/table
+                                             # if a given dataref runs the
+                                             # other way
           points: [[-4, -30], [4, -30], [4, 30], [-4, 30]]  # relative to the
                                              # bar's own (translated) origin,
                                              # oriented ALONG the course line
@@ -607,6 +615,7 @@ class VectorCompassRose(_VecBase):
         # course_deviation_indicator to be configured — uses its angle.
         self._deviation_bar_dr: Any | None = None
         self._deviation_bar_convert: Callable | None = None
+        self._deviation_bar_table: list = []
         self._deviation_bar_scale = 1.0
         self._deviation_bar_value = 0.0
         self._deviation_bar_points: list[tuple[float, float]] = []
@@ -775,10 +784,12 @@ class VectorCompassRose(_VecBase):
         width: float,
         outline_color: tuple[int, int, int, int] | None,
         outline_width: float,
+        table: list | None = None,
     ) -> None:
         self._deviation_bar_dr = _as_dataref(dataref)
         if convert_fn:
             self._deviation_bar_convert = get_convert(convert_fn)
+        self._deviation_bar_table = table or []
         self._deviation_bar_points = [(float(x), float(y)) for x, y in points]
         self._deviation_bar_color = color
         self._deviation_bar_filled = bool(filled)
@@ -934,6 +945,8 @@ class VectorCompassRose(_VecBase):
             raw = float(get_data(self._deviation_bar_dr))
             if self._deviation_bar_convert is not None:
                 raw = float(self._deviation_bar_convert(raw, get_data))
+            if self._deviation_bar_table:
+                raw = lookup_piecewise(self._deviation_bar_table, raw)
             self._deviation_bar_value = raw * self._deviation_bar_scale
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
@@ -1480,6 +1493,7 @@ def _compass_rose_factory(
                 width=float(dev_bar_cfg.get("width", 2.0)),
                 outline_color=_as_color(dboc) if dboc is not None else None,
                 outline_width=float(dev_bar_cfg.get("outline_width", 1.0)),
+                table=dev_bar_cfg.get("table"),
             )
 
     if "visibility" in comp:

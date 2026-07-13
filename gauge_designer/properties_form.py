@@ -4176,6 +4176,17 @@ class PropertiesForm(QWidget):
         self._cr_devbar_fn.currentTextChanged.connect(self._emit)
         _cr_devbar.row("Convert function", self._cr_devbar_fn)
 
+        self._cr_devbar_table_data: list = []
+        self._cr_devbar_table_btn = QPushButton("Table…")
+        self._cr_devbar_table_btn.setFixedWidth(58)
+        self._cr_devbar_table_btn.setToolTip(
+            "Optional piecewise-linear lookup table, e.g. dots-of-deviation\n"
+            "-> actual px translation. Applied after Convert fn; omit to use\n"
+            "the (possibly converted) raw value directly as px."
+        )
+        self._cr_devbar_table_btn.clicked.connect(self._edit_cr_devbar_table)
+        _cr_devbar.row("Table", self._cr_devbar_table_btn)
+
         self._cr_devbar_pts = _PointsTableEditor()
         self._cr_devbar_pts.changed.connect(self._emit)
         self._cr_devbar_pts.setToolTip(
@@ -4326,6 +4337,22 @@ class PropertiesForm(QWidget):
         lay.addWidget(btns)
         if dlg.exec() == QDialog.Accepted:
             self._cr_range_label_table_data = tbl.get_data()
+            self._emit()
+
+    def _edit_cr_devbar_table(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Deviation bar lookup table")
+        dlg.resize(300, 300)
+        tbl = _TableEditor("Input", "Output px", expanding=True)
+        tbl.load(self._cr_devbar_table_data)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(tbl, 1)
+        lay.addWidget(btns)
+        if dlg.exec() == QDialog.Accepted:
+            self._cr_devbar_table_data = tbl.get_data()
             self._emit()
 
     def _pick_cr_range_label_font(self) -> None:
@@ -5477,6 +5504,7 @@ class PropertiesForm(QWidget):
         self._cr_devbar_dr.setText(str(devbar.get("dataref", "")))
         devbar_fn_idx = self._cr_devbar_fn.findText(str(devbar.get("convert_function") or _NONE))
         self._cr_devbar_fn.setCurrentIndex(max(devbar_fn_idx, 0))
+        self._cr_devbar_table_data = devbar.get("table", [])
         self._cr_devbar_pts.load([[p[0], p[1]] for p in devbar.get("points", [])])
         self._cr_devbar_color.set_rgba(devbar.get("color", [255, 255, 255, 255]))
         devbar_filled = bool(devbar.get("filled", True))
@@ -5927,6 +5955,8 @@ class PropertiesForm(QWidget):
                         devbar_fn = self._cr_devbar_fn.currentText()
                         if devbar_fn != _NONE:
                             devbar["convert_function"] = devbar_fn
+                        if self._cr_devbar_table_data:
+                            devbar["table"] = self._cr_devbar_table_data
                         if not devbar_filled:
                             devbar["width"] = self._cr_devbar_width.value()
                         elif self._cr_devbar_outline_chk.isChecked():
@@ -6530,6 +6560,7 @@ class PropertiesForm(QWidget):
         self._cr_cdi_preview_angle.setValue(0.0)
         self._cr_cdi_head.reset(); self._cr_cdi_tail.reset()
         self._cr_devbar_dr.clear(); self._cr_devbar_fn.setCurrentIndex(0)
+        self._cr_devbar_table_data = []
         self._cr_devbar_pts.load([])
         self._cr_devbar_color.set_rgba(None)
         self._cr_devbar_filled.setChecked(True); self._cr_devbar_width.setValue(2.0)
