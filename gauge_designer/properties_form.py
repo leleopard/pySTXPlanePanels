@@ -4144,15 +4144,100 @@ class PropertiesForm(QWidget):
         self._cr_cdi_fn.currentTextChanged.connect(self._emit)
         _cr_cdi.row("Convert function", self._cr_cdi_fn)
 
+        self._cr_cdi_preview_angle = QDoubleSpinBox()
+        self._cr_cdi_preview_angle.setRange(-360.0, 360.0); self._cr_cdi_preview_angle.setDecimals(1)
+        self._cr_cdi_preview_angle.setToolTip(
+            "Designer preview only — has no effect on the running panel."
+        )
+        self._cr_cdi_preview_angle.valueChanged.connect(self._emit)
+        _cr_cdi.row("Preview angle (designer only)", self._cr_cdi_preview_angle)
+
         self._cr_cdi_head = _CdiLineSection("Head", self)
         _cr_cdi.row_widget(self._cr_cdi_head)
 
         self._cr_cdi_tail = _CdiLineSection("Tail", self)
         _cr_cdi.row_widget(self._cr_cdi_tail)
 
+        # ── Deviation Bar ─────────────────────────────────────────────────
+        _cr_devbar = _SubSection("Deviation Bar", collapsed=True)
+        self._cr_devbar_form = _cr_devbar._form
+        _cr_devbar.row_widget(_sep_label(
+            "A polygon that translates from the rose centre along the line\n"
+            "perpendicular to the course line, by a dataref-driven px\n"
+            "amount — the classic CDI left/right deviation bar."
+        ))
+
+        self._cr_devbar_dr = QLineEdit()
+        self._cr_devbar_dr.editingFinished.connect(self._emit)
+        _cr_devbar.row("Dataref", self._dr_field(self._cr_devbar_dr))
+
+        self._cr_devbar_fn = _NoScrollComboBox()
+        self._cr_devbar_fn.addItems(_VALUE_FUNCS)
+        self._cr_devbar_fn.currentTextChanged.connect(self._emit)
+        _cr_devbar.row("Convert function", self._cr_devbar_fn)
+
+        self._cr_devbar_pts = _PointsTableEditor()
+        self._cr_devbar_pts.changed.connect(self._emit)
+        self._cr_devbar_pts.setToolTip(
+            "Relative to the bar's own (translated) origin, oriented along\n"
+            "the course line — same convention as bearing_pointers/symbols."
+        )
+        _cr_devbar.row("Points (relative to origin)", self._cr_devbar_pts)
+
+        self._cr_devbar_color = _ColorButton()
+        self._cr_devbar_color.color_changed.connect(self._emit)
+        _cr_devbar.row("Fill color", self._cr_devbar_color)
+
+        self._cr_devbar_filled = QCheckBox("Filled")
+        self._cr_devbar_filled.setChecked(True)
+        self._cr_devbar_filled.toggled.connect(self._on_cr_devbar_filled_toggled)
+        self._cr_devbar_filled.toggled.connect(self._emit)
+        _cr_devbar.row_widget(self._cr_devbar_filled)
+
+        self._cr_devbar_width = QDoubleSpinBox()
+        self._cr_devbar_width.setRange(0.5, 50.0); self._cr_devbar_width.setDecimals(1)
+        self._cr_devbar_width.setValue(2.0)
+        self._cr_devbar_width.setEnabled(False)
+        self._cr_devbar_width.valueChanged.connect(self._emit)
+        _cr_devbar.row("Outline width", self._cr_devbar_width)
+
+        self._cr_devbar_outline_chk = QCheckBox("Add outline")
+        self._cr_devbar_outline_chk.toggled.connect(self._on_cr_devbar_outline_toggled)
+        self._cr_devbar_outline_chk.toggled.connect(self._emit)
+        _cr_devbar.row_widget(self._cr_devbar_outline_chk)
+
+        self._cr_devbar_outline_color = _ColorButton()
+        self._cr_devbar_outline_color.set_rgba((255, 255, 255, 255))
+        self._cr_devbar_outline_color.setEnabled(False)
+        self._cr_devbar_outline_color.color_changed.connect(self._emit)
+        _cr_devbar.row("Outline color", self._cr_devbar_outline_color)
+
+        self._cr_devbar_outline_width = QDoubleSpinBox()
+        self._cr_devbar_outline_width.setRange(0.5, 50.0); self._cr_devbar_outline_width.setDecimals(1)
+        self._cr_devbar_outline_width.setValue(1.0)
+        self._cr_devbar_outline_width.setEnabled(False)
+        self._cr_devbar_outline_width.valueChanged.connect(self._emit)
+        _cr_devbar.row("Outline width ", self._cr_devbar_outline_width)
+
+        _cr_cdi.row_widget(_cr_devbar)
+
         self._cr_sec.row_widget(_cr_cdi)
 
         self._vbox.addWidget(self._cr_sec)
+
+    def _on_cr_devbar_filled_toggled(self, filled: bool) -> None:
+        self._cr_devbar_width.setEnabled(not filled)
+        self._cr_devbar_outline_chk.setVisible(filled)
+        self._cr_devbar_form.setRowVisible(self._cr_devbar_outline_color, filled)
+        self._cr_devbar_form.setRowVisible(self._cr_devbar_outline_width, filled)
+        if not filled:
+            self._cr_devbar_outline_chk.blockSignals(True)
+            self._cr_devbar_outline_chk.setChecked(False)
+            self._cr_devbar_outline_chk.blockSignals(False)
+
+    def _on_cr_devbar_outline_toggled(self, on: bool) -> None:
+        self._cr_devbar_outline_color.setEnabled(on)
+        self._cr_devbar_outline_width.setEnabled(on)
 
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
         self._cr_marker_width.setEnabled(not filled)
@@ -5385,8 +5470,34 @@ class PropertiesForm(QWidget):
         self._cr_cdi_dr.setText(str(cdi.get("dataref", "")))
         cdi_fn_idx = self._cr_cdi_fn.findText(str(cdi.get("convert_function") or _NONE))
         self._cr_cdi_fn.setCurrentIndex(max(cdi_fn_idx, 0))
+        self._cr_cdi_preview_angle.setValue(float(cdi.get("preview_angle", 0.0)))
         self._cr_cdi_head.load(cdi.get("head"))
         self._cr_cdi_tail.load(cdi.get("tail"))
+        devbar = cdi.get("deviation_bar") or {}
+        self._cr_devbar_dr.setText(str(devbar.get("dataref", "")))
+        devbar_fn_idx = self._cr_devbar_fn.findText(str(devbar.get("convert_function") or _NONE))
+        self._cr_devbar_fn.setCurrentIndex(max(devbar_fn_idx, 0))
+        self._cr_devbar_pts.load([[p[0], p[1]] for p in devbar.get("points", [])])
+        self._cr_devbar_color.set_rgba(devbar.get("color", [255, 255, 255, 255]))
+        devbar_filled = bool(devbar.get("filled", True))
+        self._cr_devbar_filled.blockSignals(True)
+        self._cr_devbar_filled.setChecked(devbar_filled)
+        self._cr_devbar_filled.blockSignals(False)
+        self._cr_devbar_width.setEnabled(not devbar_filled)
+        self._cr_devbar_width.setValue(float(devbar.get("width", 2.0)))
+        devbar_oc = devbar.get("outline_color")
+        devbar_has_outline = devbar_oc is not None and devbar_filled
+        self._cr_devbar_outline_chk.blockSignals(True)
+        self._cr_devbar_outline_chk.setChecked(devbar_has_outline)
+        self._cr_devbar_outline_chk.blockSignals(False)
+        self._cr_devbar_outline_chk.setVisible(devbar_filled)
+        self._cr_devbar_outline_color.setEnabled(devbar_has_outline)
+        self._cr_devbar_form.setRowVisible(self._cr_devbar_outline_color, devbar_filled)
+        self._cr_devbar_outline_color.set_rgba(
+            devbar_oc if devbar_oc is not None else (255, 255, 255, 255))
+        self._cr_devbar_outline_width.setEnabled(devbar_has_outline)
+        self._cr_devbar_form.setRowVisible(self._cr_devbar_outline_width, devbar_filled)
+        self._cr_devbar_outline_width.setValue(float(devbar.get("outline_width", 1.0)))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -5800,6 +5911,28 @@ class PropertiesForm(QWidget):
                 cdi_fn = self._cr_cdi_fn.currentText()
                 if cdi_fn != _NONE:
                     cdi["convert_function"] = cdi_fn
+                if self._cr_cdi_preview_angle.value() != 0.0:
+                    cdi["preview_angle"] = self._cr_cdi_preview_angle.value()
+                devbar_dr = self._cr_devbar_dr.text().strip()
+                if devbar_dr:
+                    devbar_pts = self._cr_devbar_pts.get_data()
+                    if devbar_pts:
+                        devbar_filled = self._cr_devbar_filled.isChecked()
+                        devbar: dict = {
+                            "dataref": devbar_dr,
+                            "points": devbar_pts,
+                            "color": list(self._cr_devbar_color.get_rgba()),
+                            "filled": devbar_filled,
+                        }
+                        devbar_fn = self._cr_devbar_fn.currentText()
+                        if devbar_fn != _NONE:
+                            devbar["convert_function"] = devbar_fn
+                        if not devbar_filled:
+                            devbar["width"] = self._cr_devbar_width.value()
+                        elif self._cr_devbar_outline_chk.isChecked():
+                            devbar["outline_color"] = list(self._cr_devbar_outline_color.get_rgba())
+                            devbar["outline_width"] = self._cr_devbar_outline_width.value()
+                        cdi["deviation_bar"] = devbar
                 data["course_deviation_indicator"] = cdi
 
         elif ct == "AttitudeIndicator":
@@ -6394,7 +6527,14 @@ class PropertiesForm(QWidget):
         for section in self._cr_bearing_pointers.values():
             section.reset()
         self._cr_cdi_dr.clear(); self._cr_cdi_fn.setCurrentIndex(0)
+        self._cr_cdi_preview_angle.setValue(0.0)
         self._cr_cdi_head.reset(); self._cr_cdi_tail.reset()
+        self._cr_devbar_dr.clear(); self._cr_devbar_fn.setCurrentIndex(0)
+        self._cr_devbar_pts.load([])
+        self._cr_devbar_color.set_rgba(None)
+        self._cr_devbar_filled.setChecked(True); self._cr_devbar_width.setValue(2.0)
+        self._cr_devbar_outline_chk.setChecked(False)
+        self._cr_devbar_outline_color.set_rgba(None); self._cr_devbar_outline_width.setValue(1.0)
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)

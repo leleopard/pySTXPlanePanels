@@ -1173,14 +1173,55 @@ class InstrumentCanvas(QWidget):
 
         cdi_cfg = comp.get("course_deviation_indicator")
         if cdi_cfg:
-            # Angle=0 (straight up) for the static preview — no live dataref
-            # value here, and head/tail start/end are typically small
-            # relative to the rose radius (near the centre), so unlike
+            # 0° (straight up) default for the static preview — no live
+            # dataref value here, and head/tail start/end are typically
+            # small relative to the rose radius (near the centre), so unlike
             # bearing_pointers there's little risk of landing off-canvas
             # regardless of angle; 0° just matches heading_marker's own
-            # simplest-case convention.
-            self._draw_compassrose_cdi_segment(point_at, draw, 0.0, cdi_cfg.get("head") or {}, r)
-            self._draw_compassrose_cdi_segment(point_at, draw, 180.0, cdi_cfg.get("tail") or {}, r)
+            # simplest-case convention. `preview_angle` overrides this when
+            # the user has set one explicitly — designer-only, no effect on
+            # the running panel.
+            cdi_angle = float(cdi_cfg.get("preview_angle", 0.0))
+            self._draw_compassrose_cdi_segment(point_at, draw, cdi_angle, cdi_cfg.get("head") or {}, r)
+            self._draw_compassrose_cdi_segment(point_at, draw, cdi_angle + 180.0, cdi_cfg.get("tail") or {}, r)
+
+            devbar_cfg = cdi_cfg.get("deviation_bar")
+            if devbar_cfg and devbar_cfg.get("points"):
+                # No live dataref value here either — a representative
+                # translation (a third of the rose radius) shows the bar
+                # visibly off-centre for layout purposes, same spirit as
+                # heading_bug/track's own representative-angle previews.
+                self._draw_compassrose_deviation_bar(
+                    point_at, draw, cdi_angle, r / 3.0, devbar_cfg,
+                )
+
+    def _draw_compassrose_deviation_bar(
+        self, point_at, draw: ImageDraw.ImageDraw, cdi_angle: float,
+        deviation_px: float, devbar_cfg: dict,
+    ) -> None:
+        # Translates perpendicular to the course line (cdi_angle + 90°) but
+        # its own points are oriented ALONG the course line (cdi_angle) —
+        # same decoupled position/rotation angle as the runtime's
+        # _draw_deviation_bar(), so this can't reuse
+        # _draw_compassrose_pointer_shape (which assumes both angles match).
+        pcx, pcy = point_at(cdi_angle + 90.0, deviation_px)
+        angle = math.radians(-cdi_angle)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        pts = []
+        for px, py in devbar_cfg["points"]:
+            rx = px * cos_a - py * sin_a
+            ry = px * sin_a + py * cos_a
+            pts.append((pcx + rx, pcy - ry))
+        color = _rgba(devbar_cfg.get("color"))
+        if bool(devbar_cfg.get("filled", True)):
+            draw.polygon(pts, fill=color)
+            oc = devbar_cfg.get("outline_color")
+            if oc is not None:
+                ow = max(1, int(round(float(devbar_cfg.get("outline_width", 1.0)))))
+                draw.polygon(pts, outline=_rgba(oc), width=ow)
+        else:
+            width = max(1, int(round(float(devbar_cfg.get("width", 1.0)))))
+            draw.line(pts + [pts[0]], fill=color, width=width)
 
     def _draw_compassrose_cdi_segment(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float,

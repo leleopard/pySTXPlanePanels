@@ -220,11 +220,18 @@ YAML schema
                                              # rose around its own centre,
                                              # positioned by a course dataref
                                              # — the classic CDI course line
-                                             # on an HSI. The deviation
-                                             # bar/dots are a planned
-                                             # follow-up, not implemented yet.
+                                             # on an HSI. Deviation dots are a
+                                             # planned follow-up, not
+                                             # implemented yet.
         dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
         convert_function: null              # optional
+        preview_angle: 0                    # optional, designer-only: which
+                                             # course angle this is drawn at
+                                             # in the designer's static
+                                             # preview, since there's no live
+                                             # dataref value there — purely a
+                                             # designer convenience, has NO
+                                             # effect on the running panel
         head:                                # segment towards the course angle
           start: 20                          # px from the rose centre
           end: 180                           # px from the rose centre
@@ -259,6 +266,31 @@ YAML schema
           width: 2.0
           dash: null
           symbol: null                      # optional, same shape as head's
+
+        deviation_bar:                       # optional: a polygon that
+                                             # translates from the rose
+                                             # centre along the line
+                                             # perpendicular to the course
+                                             # line, by a dataref-driven px
+                                             # amount — the classic CDI
+                                             # left/right deviation bar
+          dataref: sim/cockpit/radios/nav1_hdef_dot
+          convert_function: null            # optional; result is used
+                                             # directly as the translation in
+                                             # px — positive moves toward
+                                             # (course_angle + 90°); flip
+                                             # sign via convert_function if a
+                                             # given dataref runs the other way
+          points: [[-4, -30], [4, -30], [4, 30], [-4, 30]]  # relative to the
+                                             # bar's own (translated) origin,
+                                             # oriented ALONG the course line
+                                             # (+y outward), same convention
+                                             # as bearing_pointers/symbols
+          color: [255, 255, 255, 255]
+          filled: true
+          width: 2.0
+          outline_color: null
+          outline_width: 1.0
 
       visibility:                           # optional, same as other components
         dataref: ...
@@ -557,14 +589,32 @@ class VectorCompassRose(_VecBase):
         # (head towards the course angle, tail diametrically opposite)
         # rotating with the rose around its own centre, positioned by a
         # course dataref, each segment optionally carrying a polygon symbol
-        # (e.g. an arrowhead). The deviation bar/dots are a planned
-        # follow-up, not implemented here.
+        # (e.g. an arrowhead). Deviation dots are a planned follow-up, not
+        # implemented here.
         self._show_cdi = False
         self._cdi_dr: Any | None = None
         self._cdi_convert: Callable | None = None
         self._cdi_angle = 0.0
         self._cdi_head: _CdiSegment | None = None
         self._cdi_tail: _CdiSegment | None = None
+
+        # Deviation bar (optional; enabled by calling set_deviation_bar()) —
+        # a polygon that translates from the rose centre along the line
+        # perpendicular to the CDI's own course line, by a dataref-driven px
+        # amount (positive = cdi_angle + 90°, i.e. to the right of the
+        # course looking outward; flip sign via convert_function if a given
+        # dataref's convention runs the other way). Requires
+        # course_deviation_indicator to be configured — uses its angle.
+        self._deviation_bar_dr: Any | None = None
+        self._deviation_bar_convert: Callable | None = None
+        self._deviation_bar_scale = 1.0
+        self._deviation_bar_value = 0.0
+        self._deviation_bar_points: list[tuple[float, float]] = []
+        self._deviation_bar_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._deviation_bar_filled = True
+        self._deviation_bar_width = 2.0
+        self._deviation_bar_outline_color: tuple[int, int, int, int] | None = None
+        self._deviation_bar_outline_width = 1.0
 
         self._init_visibility()
 
@@ -715,6 +765,27 @@ class VectorCompassRose(_VecBase):
         self._cdi_head = head
         self._cdi_tail = tail
 
+    def set_deviation_bar(
+        self,
+        dataref: Any,
+        convert_fn: str | None,
+        points: list[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        filled: bool,
+        width: float,
+        outline_color: tuple[int, int, int, int] | None,
+        outline_width: float,
+    ) -> None:
+        self._deviation_bar_dr = _as_dataref(dataref)
+        if convert_fn:
+            self._deviation_bar_convert = get_convert(convert_fn)
+        self._deviation_bar_points = [(float(x), float(y)) for x, y in points]
+        self._deviation_bar_color = color
+        self._deviation_bar_filled = bool(filled)
+        self._deviation_bar_width = float(width)
+        self._deviation_bar_outline_color = outline_color
+        self._deviation_bar_outline_width = float(outline_width)
+
     def set_range_rings(
         self,
         count: int,
@@ -808,6 +879,10 @@ class VectorCompassRose(_VecBase):
             seg.symbol_points = [(x * scale, y * scale) for x, y in seg.symbol_points]
             seg.symbol_width *= scale
             seg.symbol_outline_width *= scale
+        self._deviation_bar_scale *= scale
+        self._deviation_bar_points = [(x * scale, y * scale) for x, y in self._deviation_bar_points]
+        self._deviation_bar_width *= scale
+        self._deviation_bar_outline_width *= scale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -855,6 +930,11 @@ class VectorCompassRose(_VecBase):
             if self._cdi_convert is not None:
                 raw = float(self._cdi_convert(raw, get_data))
             self._cdi_angle = raw % 360.0
+        if self._deviation_bar_dr is not None:
+            raw = float(get_data(self._deviation_bar_dr))
+            if self._deviation_bar_convert is not None:
+                raw = float(self._deviation_bar_convert(raw, get_data))
+            self._deviation_bar_value = raw * self._deviation_bar_scale
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -986,6 +1066,8 @@ class VectorCompassRose(_VecBase):
 
         if self._show_cdi:
             self._draw_cdi()
+            if self._deviation_bar_dr is not None:
+                self._draw_deviation_bar()
 
     def _draw_range_label(self) -> None:
         # Fixed relative to the rose centre — like heading_marker, does not
@@ -1134,6 +1216,27 @@ class VectorCompassRose(_VecBase):
                 seg.symbol_filled, seg.symbol_width, seg.symbol_outline_color,
                 seg.symbol_outline_width,
             )
+
+    def _draw_deviation_bar(self) -> None:
+        # Translates from the rose centre along the perpendicular to the CDI
+        # course line (cdi_angle + 90°) by a dataref-driven px amount, but
+        # its own polygon points are oriented ALONG the course line
+        # (cdi_angle), like a symbol — so, unlike _draw_pointer_shape, the
+        # position angle and rotation angle are different and computed
+        # separately here rather than reusing that method.
+        cx, cy = self._point_at(self._cdi_angle + 90.0, self._deviation_bar_value)
+        angle = math.radians(self._heading - self._cdi_angle)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        pts = [
+            (cx + px * cos_a - py * sin_a, cy + px * sin_a + py * cos_a)
+            for px, py in self._deviation_bar_points
+        ]
+        if self._deviation_bar_filled:
+            arcade.draw_polygon_filled(pts, self._deviation_bar_color)
+            if self._deviation_bar_outline_color is not None:
+                arcade.draw_polygon_outline(pts, self._deviation_bar_outline_color, self._deviation_bar_outline_width)
+        else:
+            arcade.draw_polygon_outline(pts, self._deviation_bar_color, self._deviation_bar_width)
 
     @staticmethod
     def _draw_dashed_line(
@@ -1364,6 +1467,20 @@ def _compass_rose_factory(
             head=_parse_cdi_segment(cdi_cfg.get("head", {}), default_end),
             tail=_parse_cdi_segment(cdi_cfg.get("tail", {}), default_end),
         )
+
+        dev_bar_cfg = cdi_cfg.get("deviation_bar")
+        if dev_bar_cfg:
+            dboc = dev_bar_cfg.get("outline_color")
+            rose.set_deviation_bar(
+                dataref=dev_bar_cfg["dataref"],
+                convert_fn=dev_bar_cfg.get("convert_function"),
+                points=[tuple(p) for p in dev_bar_cfg["points"]],
+                color=_as_color(dev_bar_cfg.get("color", [255, 255, 255, 255])),
+                filled=bool(dev_bar_cfg.get("filled", True)),
+                width=float(dev_bar_cfg.get("width", 2.0)),
+                outline_color=_as_color(dboc) if dboc is not None else None,
+                outline_width=float(dev_bar_cfg.get("outline_width", 1.0)),
+            )
 
     if "visibility" in comp:
         v = comp["visibility"]
