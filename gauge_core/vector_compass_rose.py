@@ -275,6 +275,14 @@ YAML schema
                                              # amount — the classic CDI
                                              # left/right deviation bar
           dataref: sim/cockpit/radios/nav1_hdef_dot
+          preview_deviation: 50             # optional, designer-only: px
+                                             # translation shown in the
+                                             # designer's static preview,
+                                             # since there's no live dataref
+                                             # value there — purely a
+                                             # designer convenience, has NO
+                                             # effect on the running panel;
+                                             # default is radius / 3
           convert_function: null            # optional; applied to the raw
                                              # dataref value BEFORE table
                                              # (same order as needle_angle

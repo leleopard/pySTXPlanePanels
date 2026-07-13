@@ -1188,11 +1188,15 @@ class InstrumentCanvas(QWidget):
             devbar_cfg = cdi_cfg.get("deviation_bar")
             if devbar_cfg and devbar_cfg.get("points"):
                 # No live dataref value here either — a representative
-                # translation (a third of the rose radius) shows the bar
-                # visibly off-centre for layout purposes, same spirit as
-                # heading_bug/track's own representative-angle previews.
+                # translation (a third of the rose radius, by default) shows
+                # the bar visibly off-centre for layout purposes, same
+                # spirit as heading_bug/track's own representative-angle
+                # previews. `preview_deviation` overrides this when the user
+                # has set one explicitly — designer-only, no effect on the
+                # running panel.
+                preview_px = float(devbar_cfg.get("preview_deviation", r / 3.0))
                 self._draw_compassrose_deviation_bar(
-                    point_at, draw, cdi_angle, r / 3.0, devbar_cfg,
+                    point_at, draw, cdi_angle, preview_px, devbar_cfg,
                 )
 
     def _draw_compassrose_deviation_bar(

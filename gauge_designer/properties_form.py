@@ -4187,6 +4187,21 @@ class PropertiesForm(QWidget):
         self._cr_devbar_table_btn.clicked.connect(self._edit_cr_devbar_table)
         _cr_devbar.row("Table", self._cr_devbar_table_btn)
 
+        self._cr_devbar_preview_chk = QCheckBox("Override preview deviation")
+        self._cr_devbar_preview_chk.toggled.connect(self._on_cr_devbar_preview_toggled)
+        self._cr_devbar_preview_chk.toggled.connect(self._emit)
+        _cr_devbar.row_widget(self._cr_devbar_preview_chk)
+
+        self._cr_devbar_preview_px = QDoubleSpinBox()
+        self._cr_devbar_preview_px.setRange(-4096.0, 4096.0); self._cr_devbar_preview_px.setDecimals(1)
+        self._cr_devbar_preview_px.setEnabled(False)
+        self._cr_devbar_preview_px.setToolTip(
+            "Designer preview only — has no effect on the running panel.\n"
+            "Default (unchecked) shows the bar at radius/3 px for visibility."
+        )
+        self._cr_devbar_preview_px.valueChanged.connect(self._emit)
+        _cr_devbar.row("Preview deviation px (designer only)", self._cr_devbar_preview_px)
+
         self._cr_devbar_pts = _PointsTableEditor()
         self._cr_devbar_pts.changed.connect(self._emit)
         self._cr_devbar_pts.setToolTip(
@@ -4249,6 +4264,9 @@ class PropertiesForm(QWidget):
     def _on_cr_devbar_outline_toggled(self, on: bool) -> None:
         self._cr_devbar_outline_color.setEnabled(on)
         self._cr_devbar_outline_width.setEnabled(on)
+
+    def _on_cr_devbar_preview_toggled(self, on: bool) -> None:
+        self._cr_devbar_preview_px.setEnabled(on)
 
     def _on_cr_marker_filled_toggled(self, filled: bool) -> None:
         self._cr_marker_width.setEnabled(not filled)
@@ -5505,6 +5523,12 @@ class PropertiesForm(QWidget):
         devbar_fn_idx = self._cr_devbar_fn.findText(str(devbar.get("convert_function") or _NONE))
         self._cr_devbar_fn.setCurrentIndex(max(devbar_fn_idx, 0))
         self._cr_devbar_table_data = devbar.get("table", [])
+        devbar_preview = devbar.get("preview_deviation")
+        self._cr_devbar_preview_chk.blockSignals(True)
+        self._cr_devbar_preview_chk.setChecked(devbar_preview is not None)
+        self._cr_devbar_preview_chk.blockSignals(False)
+        self._cr_devbar_preview_px.setEnabled(devbar_preview is not None)
+        self._cr_devbar_preview_px.setValue(float(devbar_preview) if devbar_preview is not None else 0.0)
         self._cr_devbar_pts.load([[p[0], p[1]] for p in devbar.get("points", [])])
         self._cr_devbar_color.set_rgba(devbar.get("color", [255, 255, 255, 255]))
         devbar_filled = bool(devbar.get("filled", True))
@@ -5957,6 +5981,8 @@ class PropertiesForm(QWidget):
                             devbar["convert_function"] = devbar_fn
                         if self._cr_devbar_table_data:
                             devbar["table"] = self._cr_devbar_table_data
+                        if self._cr_devbar_preview_chk.isChecked():
+                            devbar["preview_deviation"] = self._cr_devbar_preview_px.value()
                         if not devbar_filled:
                             devbar["width"] = self._cr_devbar_width.value()
                         elif self._cr_devbar_outline_chk.isChecked():
@@ -6561,6 +6587,8 @@ class PropertiesForm(QWidget):
         self._cr_cdi_head.reset(); self._cr_cdi_tail.reset()
         self._cr_devbar_dr.clear(); self._cr_devbar_fn.setCurrentIndex(0)
         self._cr_devbar_table_data = []
+        self._cr_devbar_preview_chk.setChecked(False)
+        self._cr_devbar_preview_px.setValue(0.0)
         self._cr_devbar_pts.load([])
         self._cr_devbar_color.set_rgba(None)
         self._cr_devbar_filled.setChecked(True); self._cr_devbar_width.setValue(2.0)
