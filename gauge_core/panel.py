@@ -42,6 +42,20 @@ Unlike Grid, a Container renders an actual background box at runtime when
 A Container may itself be a grid cell (`grid.instruments[j]` can be either a
 plain `{file, ...}` entry or a `{container: {...}}` entry) — no other
 nesting is supported (no Container-in-Container, no Grid-in-Container/Grid).
+
+Panel-level layout transform (optional, top-level keys, sibling of `instruments`):
+    layout_scale: 1.0        # uniformly rescales the WHOLE arrangement of
+                              # already-positioned instruments (pivoting
+                              # around panel origin (0,0)), on top of each
+                              # instrument's own individual `scale` —
+                              # shrinks/grows the whole cluster as a unit
+                              # without touching any instrument's own
+                              # position/scale values in the YAML
+    layout_offset: [0, 0]    # translates the (possibly rescaled) whole
+                              # cluster, applied after layout_scale — lets
+                              # the user reposition where the cluster shows
+                              # up in the panel without moving instruments
+                              # individually
 """
 
 from __future__ import annotations
@@ -67,6 +81,8 @@ class Panel:
     fullscreen: bool = False
     screen_index: int = 0
     hit_padding_multiplier: float = 1.5
+    layout_scale: float = 1.0
+    layout_offset: tuple[float, float] = (0.0, 0.0)
 
     def all_components(self) -> list[Any]:
         """Flat list of every component across every instrument, in order."""
@@ -123,6 +139,24 @@ def load_panel(yaml_path: str | Path) -> Panel:
             _load_container(entry["container"], base_dir, panel)
         else:
             _load_instrument(entry, base_dir, panel)
+
+    # Global layout transform — rescales and repositions the whole arrangement
+    # of already-loaded instruments as a single unit, on top of each
+    # instrument's own scale/position. Applied last, uniformly, regardless of
+    # how deeply an instrument was nested in a grid/container, since every
+    # loading path above has already resolved each component to its final
+    # panel-space position by this point (scale first so it pivots around
+    # panel origin (0,0), same convention as everywhere else in this file,
+    # then offset to reposition the whole scaled cluster).
+    panel.layout_scale = float(data.get("layout_scale", 1.0))
+    layout_offset_raw = data.get("layout_offset", [0.0, 0.0])
+    panel.layout_offset = (float(layout_offset_raw[0]), float(layout_offset_raw[1]))
+    if panel.layout_scale != 1.0 or panel.layout_offset != (0.0, 0.0):
+        for comp in panel.all_components():
+            if panel.layout_scale != 1.0:
+                comp.apply_scale(panel.layout_scale)
+            if panel.layout_offset != (0.0, 0.0):
+                comp.apply_offset(*panel.layout_offset)
 
     return panel
 

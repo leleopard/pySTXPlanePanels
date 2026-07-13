@@ -931,6 +931,16 @@ class MainWindow(QMainWindow):
         self._panel_data["instruments"] = self._panel_view.get_instruments()
         self._panel_data["size"] = self._panel_view.get_size()
         self._panel_data["background_color"] = self._panel_view.get_background_color()
+        layout_scale = self._panel_view.get_layout_scale()
+        if abs(layout_scale - 1.0) > 1e-4:
+            self._panel_data["layout_scale"] = layout_scale
+        else:
+            self._panel_data.pop("layout_scale", None)
+        layout_offset = self._panel_view.get_layout_offset()
+        if any(abs(v) > 1e-4 for v in layout_offset):
+            self._panel_data["layout_offset"] = layout_offset
+        else:
+            self._panel_data.pop("layout_offset", None)
         port = self._panel_view.get_listen_port()
         if port is not None:
             self._panel_data.setdefault("udp", {})["listen_port"] = port

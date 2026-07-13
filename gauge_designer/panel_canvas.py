@@ -152,6 +152,16 @@ class PanelCanvas(QWidget):
             self._data["background_color"] = [round(r / 255, 4), round(g / 255, 4), round(b / 255, 4)]
             self._render()
 
+    def set_layout_scale(self, scale: float):
+        if self._data:
+            self._data["layout_scale"] = scale
+            self._render()
+
+    def set_layout_offset(self, dx: float, dy: float):
+        if self._data:
+            self._data["layout_offset"] = [dx, dy]
+            self._render()
+
     def inst_size(self, file_rel: str, scale: float = 1.0) -> tuple[int, int]:
         """Return the rendered (width, height) of an instrument, using cache."""
         w, h = self._inst_size(file_rel)
@@ -215,27 +225,37 @@ class PanelCanvas(QWidget):
         cx = event.position().x() / self._zoom
         cy = event.position().y() / self._zoom
         pw, ph = self._data.get("size", [1540, 920])
+        layout_scale = float(self._data.get("layout_scale", 1.0))
+        layout_off = self._data.get("layout_offset", [0.0, 0.0])
+        lox, loy = float(layout_off[0]), float(layout_off[1])
         hit = -1
         for i, entry in enumerate(self._data.get("instruments", [])):
             if "grid" in entry:
                 g = entry["grid"]
                 gx, gy = g.get("position", [0, 0])
-                gw = g.get("columns", 1) * g.get("cell_width", 310)
-                gh = g.get("rows", 1) * g.get("cell_height", 310)
+                gx = gx * layout_scale + lox
+                gy = gy * layout_scale + loy
+                gw = g.get("columns", 1) * g.get("cell_width", 310) * layout_scale
+                gh = g.get("rows", 1) * g.get("cell_height", 310) * layout_scale
                 left, top = gx, ph - gy - gh
                 if left <= cx < left + gw and top <= cy < top + gh:
                     hit = i
             elif "container" in entry:
                 c = entry["container"]
                 ccx, ccy = c.get("position", [0, 0])
+                ccx = ccx * layout_scale + lox
+                ccy = ccy * layout_scale + loy
                 cw, ch = c.get("size", [300, 300])
+                cw *= layout_scale; ch *= layout_scale
                 left, top = ccx, ph - ccy - ch
                 if left <= cx < left + cw and top <= cy < top + ch:
                     hit = i
             else:
                 ix, iy = entry.get("position", [0, 0])
+                ix = ix * layout_scale + lox
+                iy = iy * layout_scale + loy
                 iw, ih = self._inst_size(entry.get("file", ""))
-                scale = float(entry.get("scale", 1.0))
+                scale = float(entry.get("scale", 1.0)) * layout_scale
                 iw = int(round(iw * scale))
                 ih = int(round(ih * scale))
                 left = ix
@@ -274,6 +294,18 @@ class PanelCanvas(QWidget):
         canvas = Image.new("RGBA", (pw, ph), bg_rgb)
         draw = ImageDraw.Draw(canvas)
 
+        # Global layout transform (optional) — rescales the whole arrangement
+        # around panel origin (0,0), then repositions it; applied to every
+        # top-level entry's own anchor position/size and, recursively, to
+        # every nested instrument's own scale, matching gauge_core/panel.py's
+        # runtime treatment (there it's a final apply_scale/apply_offset pass
+        # over already-loaded components; here — since this canvas draws
+        # straight from the raw YAML dict, not loaded components — the same
+        # multiplier is threaded through the position/scale reads instead).
+        layout_scale = float(self._data.get("layout_scale", 1.0))
+        layout_off = self._data.get("layout_offset", [0.0, 0.0])
+        lox, loy = float(layout_off[0]), float(layout_off[1])
+
         for i, entry in enumerate(self._data.get("instruments", [])):
             is_sel = (i == self._selected_idx)
             sel_outline = (255, 220, 0, 255)
@@ -282,10 +314,12 @@ class PanelCanvas(QWidget):
             if "grid" in entry:
                 g = entry["grid"]
                 gx, gy = g.get("position", [0, 0])
+                gx = gx * layout_scale + lox
+                gy = gy * layout_scale + loy
                 cols = g.get("columns", 1)
                 rows = g.get("rows", 1)
-                cw = g.get("cell_width", 310)
-                ch = g.get("cell_height", 310)
+                cw = g.get("cell_width", 310) * layout_scale
+                ch = g.get("cell_height", 310) * layout_scale
                 gw = cols * cw
                 gh = rows * ch
                 gl = gx
@@ -313,16 +347,18 @@ class PanelCanvas(QWidget):
                     row = j // cols
                     if "container" in inst_entry:
                         c_cfg = inst_entry["container"]
-                        cw_, ch_ = c_cfg.get("size", [200, 200])
+                        cw_raw, ch_raw = c_cfg.get("size", [200, 200])
+                        cw_ = cw_raw * layout_scale
+                        ch_ = ch_raw * layout_scale
                         cl = int(gx + col * cw + (cw - cw_) / 2)
                         ct = int(ph - gy - (rows - row) * ch + (ch - ch_) / 2)
                         self._draw_container_box(
                             draw, c_cfg, cl, ct, int(cw_), int(ch_),
-                            False, sel_outline, def_outline,
+                            False, sel_outline, def_outline, layout_scale,
                         )
                         continue
                     iw, ih = self._inst_size(inst_entry.get("file", ""))
-                    sc = float(inst_entry.get("scale", 1.0))
+                    sc = float(inst_entry.get("scale", 1.0)) * layout_scale
                     iw = int(round(iw * sc))
                     ih = int(round(ih * sc))
                     il = int(gx + col * cw + (cw - iw) / 2)
@@ -339,16 +375,23 @@ class PanelCanvas(QWidget):
             elif "container" in entry:
                 c = entry["container"]
                 ccx, ccy = c.get("position", [0, 0])
-                cw, ch = c.get("size", [300, 300])
+                ccx = ccx * layout_scale + lox
+                ccy = ccy * layout_scale + loy
+                cw_raw, ch_raw = c.get("size", [300, 300])
+                cw = cw_raw * layout_scale
+                ch = ch_raw * layout_scale
                 cl = int(ccx)
                 ct = int(ph - ccy - ch)
                 self._draw_container_box(
                     draw, c, cl, ct, int(cw), int(ch), is_sel, sel_outline, def_outline,
+                    layout_scale,
                 )
             else:
                 ix, iy = entry.get("position", [0, 0])
+                ix = ix * layout_scale + lox
+                iy = iy * layout_scale + loy
                 iw, ih = self._inst_size(entry.get("file", ""))
-                scale = float(entry.get("scale", 1.0))
+                scale = float(entry.get("scale", 1.0)) * layout_scale
                 iw = int(round(iw * scale))
                 ih = int(round(ih * scale))
                 left = ix
@@ -376,10 +419,16 @@ class PanelCanvas(QWidget):
         self, draw: ImageDraw.ImageDraw, c_cfg: dict,
         left: int, top: int, w: int, h: int,
         is_sel: bool, sel_outline: tuple, def_outline: tuple,
+        layout_scale: float = 1.0,
     ) -> None:
         """Draw a container's box + its children, given the box's already-
         resolved PIL (top, left) and size — shared by the top-level branch
         and the grid-cell branch (a grid cell may itself be a container).
+
+        `layout_scale` only (no offset): the container's own outer position
+        already carries the panel-level offset (applied once, by the
+        caller); children are positioned relative to the container's own
+        origin, so only the scale multiplier propagates down to them.
         """
         right, bottom = left + w - 1, top + h - 1
         bg = c_cfg.get("background_color")
@@ -397,8 +446,10 @@ class PanelCanvas(QWidget):
 
         for inst_entry in c_cfg.get("instruments", []):
             ix, iy = inst_entry.get("position", [0, 0])
+            ix = ix * layout_scale
+            iy = iy * layout_scale
             iw, ih = self._inst_size(inst_entry.get("file", ""))
-            sc = float(inst_entry.get("scale", 1.0))
+            sc = float(inst_entry.get("scale", 1.0)) * layout_scale
             iw = int(round(iw * sc))
             ih = int(round(ih * sc))
             il = int(left + ix)

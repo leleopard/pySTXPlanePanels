@@ -301,6 +301,50 @@ class PanelView(QWidget):
         color_bar.addStretch()
         ea.addLayout(color_bar)
 
+        # Layout scale/offset — uniformly rescales and repositions the whole
+        # arrangement of instruments as a unit, without touching any single
+        # instrument's own position/scale. Live in the preview.
+        layout_bar = QHBoxLayout()
+        layout_bar.setContentsMargins(0, 0, 0, 4)
+        layout_bar.setSpacing(4)
+        layout_bar.addWidget(QLabel("Layout scale:"))
+        self._layout_scale_sb = QDoubleSpinBox()
+        self._layout_scale_sb.setRange(0.1, 5.0)
+        self._layout_scale_sb.setDecimals(3)
+        self._layout_scale_sb.setSingleStep(0.05)
+        self._layout_scale_sb.setValue(1.0)
+        self._layout_scale_sb.setFixedWidth(90)
+        self._layout_scale_sb.setToolTip(
+            "Rescales every instrument's own scale and position together,\n"
+            "pivoting around the panel origin — shrinks/grows the whole\n"
+            "arrangement as a single unit without editing instruments\n"
+            "individually."
+        )
+        self._layout_scale_sb.valueChanged.connect(self._on_layout_transform_changed)
+        layout_bar.addWidget(self._layout_scale_sb)
+
+        layout_bar.addSpacing(12)
+        layout_bar.addWidget(QLabel("Layout offset X / Y:"))
+        self._layout_offset_x = QDoubleSpinBox()
+        self._layout_offset_x.setRange(-9999.0, 9999.0)
+        self._layout_offset_x.setDecimals(1)
+        self._layout_offset_x.setFixedWidth(80)
+        self._layout_offset_x.valueChanged.connect(self._on_layout_transform_changed)
+        layout_bar.addWidget(self._layout_offset_x)
+        self._layout_offset_y = QDoubleSpinBox()
+        self._layout_offset_y.setRange(-9999.0, 9999.0)
+        self._layout_offset_y.setDecimals(1)
+        self._layout_offset_y.setFixedWidth(80)
+        self._layout_offset_y.setToolTip(
+            "Translates the (possibly rescaled) whole arrangement, applied\n"
+            "after Layout scale — repositions where the instrument cluster\n"
+            "shows up in the panel."
+        )
+        self._layout_offset_y.valueChanged.connect(self._on_layout_transform_changed)
+        layout_bar.addWidget(self._layout_offset_y)
+        layout_bar.addStretch()
+        ea.addLayout(layout_bar)
+
         # UDP listen port bar
         port_bar = QHBoxLayout()
         port_bar.setContentsMargins(0, 0, 0, 4)
@@ -571,6 +615,18 @@ class PanelView(QWidget):
         except (TypeError, IndexError, ValueError):
             self._bg_color_btn.set_rgba((13, 13, 13))
 
+        layout_scale = float(panel_data.get("layout_scale", 1.0))
+        layout_offset = panel_data.get("layout_offset", [0.0, 0.0])
+        self._layout_scale_sb.blockSignals(True)
+        self._layout_offset_x.blockSignals(True)
+        self._layout_offset_y.blockSignals(True)
+        self._layout_scale_sb.setValue(layout_scale)
+        self._layout_offset_x.setValue(float(layout_offset[0]))
+        self._layout_offset_y.setValue(self._layout_offset_y_disp(float(layout_offset[1])))
+        self._layout_scale_sb.blockSignals(False)
+        self._layout_offset_x.blockSignals(False)
+        self._layout_offset_y.blockSignals(False)
+
         win = panel_data.get("window") or {}
         self._fullscreen_chk.blockSignals(True)
         self._screen_combo.blockSignals(True)
@@ -617,6 +673,9 @@ class PanelView(QWidget):
         self._listen_port_sb.setValue(0)
         self._port_warning.setText("")
         self._bg_color_btn.set_rgba((13, 13, 13))
+        self._layout_scale_sb.setValue(1.0)
+        self._layout_offset_x.setValue(0.0)
+        self._layout_offset_y.setValue(0.0)
         self._fullscreen_chk.blockSignals(True)
         self._fullscreen_chk.setChecked(False)
         self._fullscreen_chk.blockSignals(False)
@@ -752,6 +811,32 @@ class PanelView(QWidget):
         r, g, b, _a = self._bg_color_btn.get_rgba()
         self._canvas.set_background_color(r, g, b)
         self.changed.emit()
+
+    # ── Layout scale/offset ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _layout_offset_y_disp(dy: float) -> float:
+        """Convert layout_offset's Y between YAML y-up and display y-down
+        (self-inverse). Unlike an absolute position, this is a pure delta —
+        no reference height needed, just a sign flip: "move up" in y-up
+        storage is still "move up" on screen, but a y-down-oriented control
+        reads that as a decreasing distance-from-top."""
+        return -dy if is_y_down() else dy
+
+    def _on_layout_transform_changed(self):
+        if self._loading:
+            return
+        self._canvas.set_layout_scale(self._layout_scale_sb.value())
+        dy = self._layout_offset_y_disp(self._layout_offset_y.value())
+        self._canvas.set_layout_offset(self._layout_offset_x.value(), dy)
+        self.changed.emit()
+
+    def get_layout_scale(self) -> float:
+        return round(self._layout_scale_sb.value(), 3)
+
+    def get_layout_offset(self) -> list[float]:
+        dy = self._layout_offset_y_disp(self._layout_offset_y.value())
+        return [round(self._layout_offset_x.value(), 1), round(dy, 1)]
 
     def refresh_form(self):
         """Re-populate the active form using the current coord convention."""
