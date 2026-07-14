@@ -1321,7 +1321,7 @@ class InstrumentCanvas(QWidget):
             if not style_cfg or not style_cfg.get("points"):
                 continue
             radius = 40.0
-            self._draw_compassrose_pointer_shape(
+            self._draw_compassrose_map_symbol_shape(
                 point_at, draw, bearing_deg, radius,
                 style_cfg["points"], style_cfg.get("color"),
                 bool(style_cfg.get("filled", True)), style_cfg.get("width", 1.0),
@@ -1334,6 +1334,27 @@ class InstrumentCanvas(QWidget):
                 draw.text((lx + 6, ly), placeholder_ident,
                           fill=_rgba(style_cfg.get("label_color", [255, 255, 255, 255])),
                           font=font, anchor="lm")
+
+    def _draw_compassrose_map_symbol_shape(
+        self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,
+        points: list, color, filled: bool, width, outline_color, outline_width,
+    ) -> None:
+        # Map symbols stay north-up (unlike bearing_pointers' radial
+        # needles) — heading=0 in the static preview, so "north-up" means
+        # no rotation at all here; bearing_deg is only used for placement
+        # via point_at(), matching the runtime's own decoupling of symbol
+        # position from symbol rotation.
+        pcx, pcy = point_at(bearing_deg, radius)
+        pts = [(pcx + px, pcy - py) for px, py in points]
+        rgba = _rgba(color)
+        if filled:
+            draw.polygon(pts, fill=rgba)
+            if outline_color is not None:
+                ow = max(1, int(round(float(outline_width))))
+                draw.polygon(pts, outline=_rgba(outline_color), width=ow)
+        else:
+            lw = max(1, int(round(float(width))))
+            draw.line(pts + [pts[0]], fill=rgba, width=lw)
 
     def _draw_compassrose_pointer_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,

@@ -333,9 +333,15 @@ YAML schema
       moving_map:                            # optional: airports/VORs/NDBs
                                              # positioned by their real GPS
                                              # coordinates relative to the
-                                             # aircraft's own GPS position,
-                                             # heading-up rotated like
-                                             # everything else on this rose.
+                                             # aircraft's own GPS position —
+                                             # position is heading-up rotated
+                                             # like everything else on this
+                                             # rose, but each symbol itself
+                                             # stays north-up (like a map
+                                             # icon, not a radial needle) —
+                                             # only rotated by the rose's own
+                                             # heading, not by its individual
+                                             # bearing from the aircraft.
                                              # Scaled so the rose's outer
                                              # edge equals TWICE whatever
                                              # range range_rings.label is
@@ -1548,7 +1554,14 @@ class VectorCompassRose(_VecBase):
             label_idx = 0
             for distance_nm, bearing_deg, entry in items[: self._map_max_per_type]:
                 cx, cy = self._point_at(bearing_deg, distance_nm * px_per_nm)
-                angle = math.radians(self._heading - bearing_deg)
+                # Symbols stay north-up (like map icons, not radial needles) —
+                # rotated only by the rose's own heading-up rotation, not by
+                # each feature's individual bearing_deg. This is the same
+                # angle _point_at() implicitly applies to a bearing-0 (due
+                # north) direction vector, so a symbol authored with local
+                # "up" = north stays pointing at true north on screen
+                # regardless of where it sits on the rose.
+                angle = math.radians(self._heading)
                 cos_a, sin_a = math.cos(angle), math.sin(angle)
                 pts = [
                     (cx + px * cos_a - py * sin_a, cy + px * sin_a + py * cos_a)
