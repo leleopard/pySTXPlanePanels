@@ -232,12 +232,20 @@ class MainWindow(QMainWindow):
         aa_act.triggered.connect(self._open_antialiasing)
         settings_menu.addAction(aa_act)
 
+        navdata_act = QAction("&Navigation Data…", self)
+        navdata_act.triggered.connect(self._open_navdata)
+        settings_menu.addAction(navdata_act)
+
         settings_menu.addSeparator()
 
         prefs_act = QAction("&Preferences…", self)
         prefs_act.setShortcut("Ctrl+,")
         prefs_act.triggered.connect(self._open_preferences)
         settings_menu.addAction(prefs_act)
+
+    def _open_navdata(self):
+        from gauge_designer.navdata_dialog import NavDataDialog
+        NavDataDialog(self).exec()
 
     def _open_antialiasing(self):
         from gauge_designer.antialiasing_dialog import AntialiasingDialog
