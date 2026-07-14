@@ -330,6 +330,69 @@ YAML schema
                                              # or tick line width
           color: [255, 255, 255, 255]
 
+      moving_map:                            # optional: airports/VORs/NDBs
+                                             # positioned by their real GPS
+                                             # coordinates relative to the
+                                             # aircraft's own GPS position,
+                                             # heading-up rotated like
+                                             # everything else on this rose,
+                                             # scaled to whatever range
+                                             # range_rings.label is currently
+                                             # showing — requires that to be
+                                             # configured (no range, no map).
+                                             # Drawn UNDERNEATH every other
+                                             # rose element (right after the
+                                             # optional background fill).
+                                             # Positions come from a local
+                                             # cache built via Settings ->
+                                             # Navigation Data... in the
+                                             # designer — see gauge_core/navdata.py.
+        gps_lat_dataref: sim/flightmodel/position/latitude
+        gps_lon_dataref: sim/flightmodel/position/longitude
+        max_per_type: 60                    # optional cap per feature type,
+                                             # closest-first, so a dense area
+                                             # at a large range doesn't flood
+                                             # the frame with draw calls.
+                                             # Polygons are cheap (batched
+                                             # into one draw call); `label:
+                                             # true` labels are the expensive
+                                             # part (individual text draws,
+                                             # ~0.1-0.15ms each) — keep this
+                                             # conservative for types with
+                                             # labels enabled, especially over
+                                             # dense areas
+        visibility:                         # optional; independent of the
+                                             # whole rose's own visibility,
+                                             # same as bearing_pointers
+          dataref: ...
+          predicate: true_if_over_zero
+        airport:                            # optional per-type styling;
+                                             # omit a type to hide it
+          points: [[-4, 0], [0, 4], [4, 0], [0, -4]]  # relative to the
+                                             # feature's own screen position,
+                                             # rotated with heading like a
+                                             # bearing_pointer/CDI symbol
+          color: [255, 255, 255, 200]
+          filled: true
+          width: 2.0                        # stroke width when filled: false
+          outline_color: null                # optional outline when filled: true
+          outline_width: 1.0
+          label: true                       # optional ident label — stays
+                                             # upright (not rotated), unlike
+                                             # the polygon itself
+          label_font_size: 10.0
+          label_color: [255, 255, 255, 200]
+          label_font: null                   # optional; blank = designer/OS default
+        vor:                                 # same shape as airport:
+          points: [[-5, -5], [5, -5], [5, 5], [-5, 5]]
+          color: [0, 200, 255, 200]
+          filled: false
+          width: 1.5
+        ndb:                                 # same shape as airport:
+          points: [[0, -5], [5, 4], [-5, 4]]
+          color: [255, 200, 0, 200]
+          filled: true
+
       visibility:                           # optional, same as other components
         dataref: ...
         predicate: true_if_over_zero
@@ -343,6 +406,7 @@ from typing import Any, Callable
 
 import arcade
 
+from gauge_core import geo, navdata
 from gauge_core.font_utils import resolve_font_for_arcade
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component, resolve_predicate_name
@@ -438,6 +502,45 @@ class _CdiSegment:
         self.symbol_width = float(symbol_width)
         self.symbol_outline_color = symbol_outline_color
         self.symbol_outline_width = float(symbol_outline_width)
+
+
+class _MapFeatureStyle:
+    """Polygon + optional label styling for one moving_map feature type
+    (airport/vor/ndb) — same points/color/filled/width/outline convention
+    as bearing_pointers and CDI symbols."""
+
+    def __init__(
+        self,
+        points: list[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        filled: bool,
+        width: float,
+        outline_color: tuple[int, int, int, int] | None,
+        outline_width: float,
+        label: bool,
+        label_font_size: float,
+        label_color: tuple[int, int, int, int],
+        label_font: str | None,
+        label_bold: bool = False,
+        label_italic: bool = False,
+    ) -> None:
+        self.points = [(float(x), float(y)) for x, y in points]
+        self.color = color
+        self.filled = bool(filled)
+        self.width = float(width)
+        self.outline_color = outline_color
+        self.outline_width = float(outline_width)
+        self.label = bool(label)
+        self.label_font_size = float(label_font_size)
+        self.label_color = label_color
+        self.label_font = label_font
+        self.label_bold = bool(label_bold)
+        self.label_italic = bool(label_italic)
+        # Own pool, not shared across styles — each style may have its own
+        # label_font, which (unlike font_size/color/position) can only be
+        # set at arcade.Text construction time, so pool objects can't be
+        # reused across styles with different fonts.
+        self.label_pool: list[arcade.Text] = []
 
 
 class VectorCompassRose(_VecBase):
@@ -669,6 +772,24 @@ class VectorCompassRose(_VecBase):
         self._dev_markers_width = 2.0
         self._dev_markers_color: tuple[int, int, int, int] = (255, 255, 255, 255)
 
+        # Moving map (optional; enabled by calling set_moving_map()) —
+        # airports/VORs/NDBs positioned by their real GPS coordinates
+        # relative to the aircraft's own GPS position, heading-up rotated
+        # like every other element on this rose, scaled to whatever range
+        # range_rings.label is currently showing (self._range_label_value).
+        # Independently visibility-gated, like a bearing pointer, not tied
+        # to the whole rose's own visibility.
+        self._map_shown = False
+        self._map_gps_lat_dr: Any | None = None
+        self._map_gps_lon_dr: Any | None = None
+        self._map_lat = 0.0
+        self._map_lon = 0.0
+        self._map_max_per_type = 60
+        self._map_styles: dict[str, _MapFeatureStyle] = {}
+        self._map_vis_dr: Any | None = None
+        self._map_vis_predicate: Callable | None = None
+        self._map_visible = True
+
         self._init_visibility()
 
     def set_heading_dataref(self, dataref: Any, convert_fn: str | None = None) -> None:
@@ -856,6 +977,23 @@ class VectorCompassRose(_VecBase):
         self._dev_markers_width = float(width)
         self._dev_markers_color = color
 
+    def set_moving_map(
+        self,
+        gps_lat_dataref: Any,
+        gps_lon_dataref: Any,
+        max_per_type: int,
+        styles: dict[str, _MapFeatureStyle],
+        vis_dataref: Any | None = None,
+        vis_predicate: str | None = None,
+    ) -> None:
+        self._map_shown = True
+        self._map_gps_lat_dr = _as_dataref(gps_lat_dataref)
+        self._map_gps_lon_dr = _as_dataref(gps_lon_dataref)
+        self._map_max_per_type = max(1, int(max_per_type))
+        self._map_styles = styles
+        self._map_vis_dr = _as_dataref(vis_dataref) if vis_dataref is not None else None
+        self._map_vis_predicate = get_convert(vis_predicate) if vis_predicate else None
+
     def set_range_rings(
         self,
         count: int,
@@ -958,6 +1096,12 @@ class VectorCompassRose(_VecBase):
         self._dev_markers_spacing *= scale
         self._dev_markers_size *= scale
         self._dev_markers_width *= scale
+        for style in self._map_styles.values():
+            style.points = [(x * scale, y * scale) for x, y in style.points]
+            style.width *= scale
+            style.outline_width *= scale
+            style.label_font_size *= scale
+            style.label_pool.clear()  # font size changed; pool objects are stale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
             self._viewport = (vx * scale, vy * scale, vw * scale, vh * scale)
@@ -1012,6 +1156,11 @@ class VectorCompassRose(_VecBase):
             if self._deviation_bar_table:
                 raw = lookup_piecewise(self._deviation_bar_table, raw)
             self._deviation_bar_value = raw * self._deviation_bar_scale
+        if self._map_gps_lat_dr is not None:
+            self._map_lat = float(get_data(self._map_gps_lat_dr))
+            self._map_lon = float(get_data(self._map_gps_lon_dr))
+            if self._map_vis_dr is not None and self._map_vis_predicate is not None:
+                self._map_visible = bool(self._map_vis_predicate(float(get_data(self._map_vis_dr)), get_data))
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -1054,6 +1203,10 @@ class VectorCompassRose(_VecBase):
                 self._cx, self._cy, self._radius, self._background_color,
                 num_segments=self._segments,
             )
+
+        if self._map_shown and self._map_visible:
+            self._draw_moving_map()
+
         if self._show_line:
             arcade.draw_circle_outline(
                 self._cx, self._cy, self._radius, self._line_color,
@@ -1328,6 +1481,101 @@ class VectorCompassRose(_VecBase):
                 arcade.draw_polygon_outline(pts, self._deviation_bar_outline_color, self._deviation_bar_outline_width)
         else:
             arcade.draw_polygon_outline(pts, self._deviation_bar_color, self._deviation_bar_width)
+
+    def _draw_moving_map(self) -> None:
+        # Scaled to whatever range range_rings.label is currently showing —
+        # px_per_nm = radius / range, so a feature at exactly the edge of
+        # the configured range lands exactly on the rose's own radius, no
+        # separate circle-clip needed. No range configured (0, the
+        # unset-table-lookup default) means no defined scale, so draw
+        # nothing rather than divide by zero.
+        if self._range_label_value <= 0:
+            return
+        index = navdata.get_index()
+        if index is None:
+            return
+        range_nm = self._range_label_value
+        px_per_nm = self._radius / range_nm
+
+        by_type: dict[str, list[tuple[float, float, dict]]] = {}
+        for entry in index.nearby(self._map_lat, self._map_lon, range_nm):
+            style = self._map_styles.get(entry["type"])
+            if style is None:
+                continue
+            bearing_deg, distance_nm = geo.bearing_distance_nm(
+                self._map_lat, self._map_lon, entry["lat"], entry["lon"],
+            )
+            if distance_nm > range_nm:
+                continue
+            by_type.setdefault(entry["type"], []).append((distance_nm, bearing_deg, entry))
+
+        # Individual arcade.draw_polygon_* calls don't scale to the dozens-
+        # to-hundreds of features a dense area can put in range — measured
+        # ~10x faster rebuilding a ShapeElementList from scratch every
+        # frame than calling draw_polygon_filled/outline per feature
+        # (confirmed empirically: 180 individual polygons ~20ms/frame vs
+        # ~2ms/frame batched). Rebuilding every frame (rather than caching
+        # across frames) is safe — Arcade's GL buffer objects clean up via
+        # weakref.finalize when garbage collected (gauge_core/gl backend,
+        # not something this file needs to manage), not a leak-prone
+        # __del__, so there's no accumulation to worry about.
+        shapes = arcade.shape_list.ShapeElementList()
+        labels_to_draw: list[arcade.Text] = []
+
+        for type_name, style in self._map_styles.items():
+            items = by_type.get(type_name, [])
+            items.sort(key=lambda t: t[0])
+            label_idx = 0
+            for distance_nm, bearing_deg, entry in items[: self._map_max_per_type]:
+                cx, cy = self._point_at(bearing_deg, distance_nm * px_per_nm)
+                angle = math.radians(self._heading - bearing_deg)
+                cos_a, sin_a = math.cos(angle), math.sin(angle)
+                pts = [
+                    (cx + px * cos_a - py * sin_a, cy + px * sin_a + py * cos_a)
+                    for px, py in style.points
+                ]
+                if style.filled:
+                    shapes.append(arcade.shape_list.create_polygon(pts, style.color))
+                    if style.outline_color is not None:
+                        shapes.append(arcade.shape_list.create_line_loop(
+                            pts, style.outline_color, style.outline_width,
+                        ))
+                else:
+                    shapes.append(arcade.shape_list.create_line_loop(pts, style.color, style.width))
+
+                if style.label:
+                    if label_idx >= len(style.label_pool):
+                        kw: dict = dict(bold=style.label_bold, italic=style.label_italic)
+                        if style.label_font:
+                            kw["font_name"] = style.label_font
+                        style.label_pool.append(arcade.Text(
+                            "", 0, 0,
+                            color=style.label_color,
+                            font_size=style.label_font_size,
+                            anchor_x="left", anchor_y="center",
+                            **kw,
+                        ))
+                    t = style.label_pool[label_idx]
+                    t.text = str(entry.get("ident", ""))
+                    # color/font_size are constant per-style (already set at
+                    # construction above) — deliberately NOT reassigned here
+                    # every frame: pyglet's text layout re-triggers a full
+                    # document relayout on every property write regardless
+                    # of whether the value actually changed, and profiling
+                    # showed font_size alone accounting for roughly half of
+                    # this method's total cost when reassigned needlessly.
+                    t.x, t.y = cx + 6, cy
+                    labels_to_draw.append(t)
+                    label_idx += 1
+
+        shapes.draw()
+        # Labels draw after the whole batch, not interleaved per-feature —
+        # a label always sits offset to the right of its own symbol rather
+        # than overlapping it, so drawing all labels on top of all symbols
+        # (instead of each label only above its own symbol) is visually
+        # equivalent here.
+        for t in labels_to_draw:
+            t.draw()
 
     def _draw_deviation_markers(self) -> None:
         # 4 fixed marks (2 each side) on the same perpendicular-to-course
@@ -1607,6 +1855,44 @@ def _compass_rose_factory(
                 width=float(markers_cfg.get("width", 2.0)),
                 color=_as_color(markers_cfg.get("color", [255, 255, 255, 255])),
             )
+
+    map_cfg = comp.get("moving_map")
+    if map_cfg:
+        styles: dict[str, _MapFeatureStyle] = {}
+        for type_name in ("airport", "vor", "ndb"):
+            style_cfg = map_cfg.get(type_name)
+            if not style_cfg:
+                continue
+            style_oc = style_cfg.get("outline_color")
+            label_font, label_bold, label_italic = resolve_font_for_arcade(
+                style_cfg.get("label_font"), base_dir,
+                bold=bool(style_cfg.get("label_bold", False)),
+                italic=bool(style_cfg.get("label_italic", False)),
+                explicit_file=style_cfg.get("label_font_file"),
+            )
+            styles[type_name] = _MapFeatureStyle(
+                points=[tuple(p) for p in style_cfg["points"]],
+                color=_as_color(style_cfg.get("color", [255, 255, 255, 255])),
+                filled=bool(style_cfg.get("filled", True)),
+                width=float(style_cfg.get("width", 2.0)),
+                outline_color=_as_color(style_oc) if style_oc is not None else None,
+                outline_width=float(style_cfg.get("outline_width", 1.0)),
+                label=bool(style_cfg.get("label", False)),
+                label_font_size=float(style_cfg.get("label_font_size", 10.0)),
+                label_color=_as_color(style_cfg.get("label_color", [255, 255, 255, 255])),
+                label_font=label_font,
+                label_bold=label_bold,
+                label_italic=label_italic,
+            )
+        map_vis_cfg = map_cfg.get("visibility")
+        rose.set_moving_map(
+            gps_lat_dataref=map_cfg["gps_lat_dataref"],
+            gps_lon_dataref=map_cfg["gps_lon_dataref"],
+            max_per_type=int(map_cfg.get("max_per_type", 60)),
+            styles=styles,
+            vis_dataref=map_vis_cfg["dataref"] if map_vis_cfg else None,
+            vis_predicate=resolve_predicate_name(map_vis_cfg) if map_vis_cfg else None,
+        )
 
     if "visibility" in comp:
         v = comp["visibility"]

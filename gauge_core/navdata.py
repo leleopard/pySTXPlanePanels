@@ -24,6 +24,7 @@ dot-on-a-map accuracy, and there's no bounded way to discover them all).
 from __future__ import annotations
 
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -213,3 +214,47 @@ def load_cache(path: Path = CACHE_PATH) -> dict[str, Any] | None:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
+
+
+class NavDataIndex:
+    """Cache entries bucketed into 1°×1° lat/lon cells, so a moving map
+    doesn't have to scan the whole (tens-of-thousands-of-entries) cache
+    every frame — only the handful of cells around the aircraft's current
+    position and the currently-selected range."""
+
+    def __init__(self, cache: dict[str, Any]) -> None:
+        self._buckets: dict[tuple[int, int], list[dict[str, Any]]] = {}
+        for entry in (*cache.get("airports", []), *cache.get("navaids", [])):
+            cell = (int(entry["lat"] // 1), int(entry["lon"] // 1))
+            self._buckets.setdefault(cell, []).append(entry)
+
+    def nearby(self, lat: float, lon: float, range_nm: float) -> list[dict[str, Any]]:
+        """Return every entry within the cell neighbourhood covering
+        `range_nm` around (lat, lon) — a cheap superset, not an exact
+        distance filter (the caller filters exactly, e.g. via
+        geo.bearing_distance_nm, since that also gives the bearing needed
+        for on-screen placement)."""
+        cell_radius = max(1, math.ceil(range_nm / 60.0))  # 1 deg lat ~= 60 NM
+        clat, clon = int(lat // 1), int(lon // 1)
+        out: list[dict[str, Any]] = []
+        for dlat in range(-cell_radius, cell_radius + 1):
+            for dlon in range(-cell_radius, cell_radius + 1):
+                out.extend(self._buckets.get((clat + dlat, clon + dlon), ()))
+        return out
+
+
+_index_cache: NavDataIndex | None = None
+_index_loaded = False
+
+
+def get_index() -> NavDataIndex | None:
+    """Lazily load the on-disk cache and build its spatial index once per
+    process, shared by every VectorCompassRose moving_map instance —
+    tens of thousands of entries is cheap to hold in memory once, not
+    worth reloading/rebucketing per instrument."""
+    global _index_cache, _index_loaded
+    if not _index_loaded:
+        _index_loaded = True
+        cache = load_cache()
+        _index_cache = NavDataIndex(cache) if cache else None
+    return _index_cache

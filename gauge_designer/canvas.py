@@ -967,6 +967,16 @@ class InstrumentCanvas(QWidget):
         bg = comp.get("background_color")
         if bg is not None:
             draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r], fill=_rgba(bg))
+
+        map_cfg = comp.get("moving_map")
+        if map_cfg:
+            # No live GPS position or generated nav data cache in the
+            # designer — a few fixed placeholder positions around the
+            # centre show each configured type's styling without
+            # implying real data, same "representative, not data-driven"
+            # spirit as other no-live-value previews in this file.
+            self._draw_compassrose_map_placeholders(map_cfg, point_at, draw)
+
         if comp.get("show_line", True):
             line_w = max(1, int(round(float(comp.get("line_width", 2.0)))))
             draw.ellipse([cx_p - r, cy_p - r, cx_p + r, cy_p + r],
@@ -1297,6 +1307,32 @@ class InstrumentCanvas(QWidget):
                 bool(symbol_cfg.get("filled", True)), symbol_cfg.get("width", 1.0),
                 symbol_cfg.get("outline_color"), symbol_cfg.get("outline_width", 1.0),
             )
+
+    def _draw_compassrose_map_placeholders(self, map_cfg: dict, point_at, draw: ImageDraw.ImageDraw) -> None:
+        # One representative position per configured type, spread around
+        # the centre so they don't overlap — no live GPS position or
+        # generated nav data cache in the designer, so this only previews
+        # each type's own styling, not real placement.
+        for type_name, bearing_deg, placeholder_ident in (
+            ("airport", 45.0, "APT"), ("vor", 135.0, "VOR"), ("ndb", 225.0, "NDB"),
+        ):
+            style_cfg = map_cfg.get(type_name)
+            if not style_cfg or not style_cfg.get("points"):
+                continue
+            radius = 40.0
+            self._draw_compassrose_pointer_shape(
+                point_at, draw, bearing_deg, radius,
+                style_cfg["points"], style_cfg.get("color"),
+                bool(style_cfg.get("filled", True)), style_cfg.get("width", 1.0),
+                style_cfg.get("outline_color"), style_cfg.get("outline_width", 1.0),
+            )
+            if style_cfg.get("label"):
+                lx, ly = point_at(bearing_deg, radius)
+                size = max(6, int(float(style_cfg.get("label_font_size", 10.0))))
+                font = _pil_font(None, size)
+                draw.text((lx + 6, ly), placeholder_ident,
+                          fill=_rgba(style_cfg.get("label_color", [255, 255, 255, 255])),
+                          font=font, anchor="lm")
 
     def _draw_compassrose_pointer_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,

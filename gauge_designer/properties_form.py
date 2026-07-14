@@ -1681,6 +1681,163 @@ class _CdiLineSection(_SubSection):
         self._symbol_outline_color.set_rgba(None); self._symbol_outline_width.setValue(1.0)
 
 
+class _MapStyleSection(_SubSection):
+    """One feature-type style (airport/vor/ndb) for VectorCompassRose's
+    moving_map — points/color/filled/width/outline, same convention as
+    bearing_pointers/CDI symbols, plus an optional upright ident label
+    (labels don't rotate with heading, unlike the polygon itself). Reused
+    3x; self-contained load/get_data/reset. Presence is implied by a
+    non-empty points table, same "omit to hide" convention as every other
+    optional polygon in this form — omitting a type in get_data() is how
+    the user hides that whole feature type on the map."""
+
+    def __init__(self, label: str, owner: "PropertiesForm", parent=None):
+        super().__init__(label, collapsed=True, parent=parent)
+        self._owner = owner
+        emit = owner._emit
+
+        self._pts = _PointsTableEditor()
+        self._pts.changed.connect(emit)
+        self._pts.setToolTip(
+            "Relative to the feature's own screen position, rotated with\n"
+            "heading like a bearing_pointer/CDI symbol. Leave empty to hide\n"
+            "this feature type on the map."
+        )
+        self.row("Points (relative to position)", self._pts)
+
+        self._color = _ColorButton()
+        self._color.color_changed.connect(emit)
+        self.row("Fill color", self._color)
+
+        self._filled = QCheckBox("Filled")
+        self._filled.setChecked(True)
+        self._filled.toggled.connect(self._on_filled_toggled)
+        self._filled.toggled.connect(emit)
+        self.row_widget(self._filled)
+
+        self._width = QDoubleSpinBox()
+        self._width.setRange(0.5, 50.0); self._width.setDecimals(1)
+        self._width.setValue(2.0)
+        self._width.setEnabled(False)  # shown only when not filled
+        self._width.valueChanged.connect(emit)
+        self.row("Outline width", self._width)
+
+        self._outline_chk = QCheckBox("Add outline")
+        self._outline_chk.toggled.connect(self._on_outline_toggled)
+        self._outline_chk.toggled.connect(emit)
+        self.row_widget(self._outline_chk)
+
+        self._outline_color = _ColorButton()
+        self._outline_color.set_rgba((255, 255, 255, 255))
+        self._outline_color.setEnabled(False)
+        self._outline_color.color_changed.connect(emit)
+        self.row("Outline color", self._outline_color)
+
+        self._outline_width = QDoubleSpinBox()
+        self._outline_width.setRange(0.5, 50.0); self._outline_width.setDecimals(1)
+        self._outline_width.setValue(1.0)
+        self._outline_width.setEnabled(False)
+        self._outline_width.valueChanged.connect(emit)
+        self.row("Outline width ", self._outline_width)
+
+        self._label_chk = QCheckBox("Show ident label")
+        self._label_chk.toggled.connect(self._on_label_toggled)
+        self._label_chk.toggled.connect(emit)
+        self.row_widget(self._label_chk)
+
+        self._label_font_size = QDoubleSpinBox()
+        self._label_font_size.setRange(4.0, 72.0); self._label_font_size.setDecimals(1)
+        self._label_font_size.setValue(10.0)
+        self._label_font_size.setEnabled(False)
+        self._label_font_size.valueChanged.connect(emit)
+        self.row("Label font size", self._label_font_size)
+
+        self._label_color = _ColorButton()
+        self._label_color.setEnabled(False)
+        self._label_color.color_changed.connect(emit)
+        self.row("Label color", self._label_color)
+
+    def _on_filled_toggled(self, filled: bool) -> None:
+        self._width.setEnabled(not filled)
+        self._outline_chk.setVisible(filled)
+        self._form.setRowVisible(self._outline_color, filled)
+        self._form.setRowVisible(self._outline_width, filled)
+        if not filled:
+            self._outline_chk.blockSignals(True)
+            self._outline_chk.setChecked(False)
+            self._outline_chk.blockSignals(False)
+
+    def _on_outline_toggled(self, on: bool) -> None:
+        self._outline_color.setEnabled(on)
+        self._outline_width.setEnabled(on)
+
+    def _on_label_toggled(self, on: bool) -> None:
+        self._label_font_size.setEnabled(on)
+        self._label_color.setEnabled(on)
+
+    def load(self, cfg: dict | None) -> None:
+        cfg = cfg or {}
+        self._pts.load([[p[0], p[1]] for p in cfg.get("points", [])])
+        self._color.set_rgba(cfg.get("color", [255, 255, 255, 255]))
+        filled = bool(cfg.get("filled", True))
+        self._filled.blockSignals(True)
+        self._filled.setChecked(filled)
+        self._filled.blockSignals(False)
+        self._width.setEnabled(not filled)
+        self._width.setValue(float(cfg.get("width", 2.0)))
+        oc = cfg.get("outline_color")
+        has_outline = oc is not None and filled
+        self._outline_chk.blockSignals(True)
+        self._outline_chk.setChecked(has_outline)
+        self._outline_chk.blockSignals(False)
+        self._outline_chk.setVisible(filled)
+        self._outline_color.setEnabled(has_outline)
+        self._form.setRowVisible(self._outline_color, filled)
+        self._outline_color.set_rgba(oc if oc is not None else (255, 255, 255, 255))
+        self._outline_width.setEnabled(has_outline)
+        self._form.setRowVisible(self._outline_width, filled)
+        self._outline_width.setValue(float(cfg.get("outline_width", 1.0)))
+        label_on = bool(cfg.get("label", False))
+        self._label_chk.blockSignals(True)
+        self._label_chk.setChecked(label_on)
+        self._label_chk.blockSignals(False)
+        self._label_font_size.setEnabled(label_on)
+        self._label_font_size.setValue(float(cfg.get("label_font_size", 10.0)))
+        self._label_color.setEnabled(label_on)
+        self._label_color.set_rgba(cfg.get("label_color", [255, 255, 255, 255]))
+
+    def get_data(self) -> dict | None:
+        pts = self._pts.get_data()
+        if not pts:
+            return None
+        filled = self._filled.isChecked()
+        data: dict = {
+            "points": pts,
+            "color": list(self._color.get_rgba()),
+            "filled": filled,
+        }
+        if not filled:
+            data["width"] = self._width.value()
+        elif self._outline_chk.isChecked():
+            data["outline_color"] = list(self._outline_color.get_rgba())
+            data["outline_width"] = self._outline_width.value()
+        if self._label_chk.isChecked():
+            data["label"] = True
+            data["label_font_size"] = self._label_font_size.value()
+            data["label_color"] = list(self._label_color.get_rgba())
+        return data
+
+    def reset(self) -> None:
+        self._pts.load([])
+        self._color.set_rgba(None)
+        self._filled.setChecked(True); self._width.setValue(2.0)
+        self._outline_chk.setChecked(False)
+        self._outline_color.set_rgba(None); self._outline_width.setValue(1.0)
+        self._label_chk.setChecked(False)
+        self._label_font_size.setValue(10.0)
+        self._label_color.set_rgba(None)
+
+
 class _AutoSizeStack(QStackedWidget):
     """QStackedWidget that sizes itself to the CURRENT page instead of the
     largest page. Plain QStackedWidget reports a size hint big enough for
@@ -4313,7 +4470,68 @@ class PropertiesForm(QWidget):
 
         self._cr_sec.row_widget(_cr_cdi)
 
+        # ── Moving Map ────────────────────────────────────────────────────────
+        _cr_map = _SubSection("Moving Map", collapsed=True)
+        _cr_map.row_widget(_sep_label(
+            "Airports/VORs/NDBs positioned by real GPS coordinates relative\n"
+            "to the aircraft, heading-up rotated, drawn underneath the rest\n"
+            "of the rose. Requires Range Rings' own label (below) to be\n"
+            "configured — the map scale follows whatever range that shows.\n"
+            "Positions come from a local cache built via Settings ->\n"
+            "Navigation Data… in the designer."
+        ))
+
+        self._cr_map_lat_dr = QLineEdit()
+        self._cr_map_lat_dr.editingFinished.connect(self._emit)
+        _cr_map.row("GPS latitude dataref", self._dr_field(self._cr_map_lat_dr))
+
+        self._cr_map_lon_dr = QLineEdit()
+        self._cr_map_lon_dr.editingFinished.connect(self._emit)
+        _cr_map.row("GPS longitude dataref", self._dr_field(self._cr_map_lon_dr))
+
+        self._cr_map_max_per_type = QSpinBox()
+        self._cr_map_max_per_type.setRange(1, 500)
+        self._cr_map_max_per_type.setValue(60)
+        self._cr_map_max_per_type.setToolTip(
+            "Cap per feature type, closest-first, so a dense area at a\n"
+            "large range doesn't flood the frame with draw calls."
+        )
+        self._cr_map_max_per_type.valueChanged.connect(self._emit)
+        _cr_map.row("Max per type", self._cr_map_max_per_type)
+
+        self._cr_map_vis_chk = QCheckBox()
+        self._cr_map_vis_chk.toggled.connect(self._on_cr_map_vis_toggled)
+        self._cr_map_vis_chk.toggled.connect(self._emit)
+        self._cr_map_vis_dr = QLineEdit()
+        self._cr_map_vis_dr.editingFinished.connect(self._emit)
+        self._cr_map_vis_dr_box = self._dr_field(self._cr_map_vis_dr)
+        self._cr_map_vis_dr_box.setEnabled(False)
+        _cr_map_vis_row = QWidget()
+        _cr_map_vis_hl = QHBoxLayout(_cr_map_vis_row)
+        _cr_map_vis_hl.setContentsMargins(0, 0, 0, 0); _cr_map_vis_hl.setSpacing(6)
+        _cr_map_vis_hl.addWidget(self._cr_map_vis_chk)
+        _cr_map_vis_hl.addWidget(self._cr_map_vis_dr_box, 1)
+        _cr_map.row("Show/hide dataref", _cr_map_vis_row)
+        self._cr_map_vis_pred = _NoScrollComboBox()
+        self._cr_map_vis_pred.addItems(_PREDICATES)
+        self._cr_map_vis_pred.setEnabled(False)
+        self._cr_map_vis_pred.currentTextChanged.connect(self._emit)
+        _cr_map.row("Show/hide predicate", self._cr_map_vis_pred)
+
+        self._cr_map_airport = _MapStyleSection("Airport", self)
+        _cr_map.row_widget(self._cr_map_airport)
+        self._cr_map_vor = _MapStyleSection("VOR", self)
+        _cr_map.row_widget(self._cr_map_vor)
+        self._cr_map_ndb = _MapStyleSection("NDB", self)
+        _cr_map.row_widget(self._cr_map_ndb)
+
+        self._cr_sec.row_widget(_cr_map)
+
         self._vbox.addWidget(self._cr_sec)
+
+    def _on_cr_map_vis_toggled(self, on: bool) -> None:
+        self._cr_map_vis_dr_box.setEnabled(on)
+        self._cr_map_vis_pred.setEnabled(on)
 
     def _on_cr_devbar_filled_toggled(self, filled: bool) -> None:
         self._cr_devbar_width.setEnabled(not filled)
@@ -4886,7 +5104,7 @@ class PropertiesForm(QWidget):
             "label_font", "label_bold", "label_italic", "label_format", "label_color",
             "label_emphasize_interval", "label_emphasize_font_size", "label_anchor_y",
             "heading", "track", "heading_bug", "heading_marker", "center_marker",
-            "bearing_pointers", "course_deviation_indicator", "range_rings",
+            "bearing_pointers", "course_deviation_indicator", "moving_map", "range_rings",
             # shared across all
             "viewport", "visibility",
         }
@@ -5636,6 +5854,20 @@ class PropertiesForm(QWidget):
         self._cr_devmarkers_size.setValue(float(devmarkers.get("size", 4.0)))
         self._cr_devmarkers_width.setValue(float(devmarkers.get("width", 2.0)))
         self._cr_devmarkers_color.set_rgba(devmarkers.get("color", [255, 255, 255, 255]))
+        map_cfg = comp.get("moving_map") or {}
+        self._cr_map_lat_dr.setText(str(map_cfg.get("gps_lat_dataref", "")))
+        self._cr_map_lon_dr.setText(str(map_cfg.get("gps_lon_dataref", "")))
+        self._cr_map_max_per_type.setValue(int(map_cfg.get("max_per_type", 60)))
+        map_vis = map_cfg.get("visibility")
+        self._cr_map_vis_chk.setChecked(map_vis is not None)
+        self._cr_map_vis_dr_box.setEnabled(map_vis is not None)
+        self._cr_map_vis_pred.setEnabled(map_vis is not None)
+        self._cr_map_vis_dr.setText(str((map_vis or {}).get("dataref", "")))
+        map_pred_idx = self._cr_map_vis_pred.findText(str((map_vis or {}).get("predicate", "")))
+        self._cr_map_vis_pred.setCurrentIndex(max(map_pred_idx, 0))
+        self._cr_map_airport.load(map_cfg.get("airport"))
+        self._cr_map_vor.load(map_cfg.get("vor"))
+        self._cr_map_ndb.load(map_cfg.get("ndb"))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -6087,6 +6319,31 @@ class PropertiesForm(QWidget):
                         "color": list(self._cr_devmarkers_color.get_rgba()),
                     }
                 data["course_deviation_indicator"] = cdi
+            map_lat_dr = self._cr_map_lat_dr.text().strip()
+            if map_lat_dr:
+                map_data: dict = {
+                    "gps_lat_dataref": map_lat_dr,
+                    "gps_lon_dataref": self._cr_map_lon_dr.text().strip(),
+                }
+                if self._cr_map_max_per_type.value() != 60:
+                    map_data["max_per_type"] = self._cr_map_max_per_type.value()
+                if self._cr_map_vis_chk.isChecked():
+                    map_vis_dr = self._cr_map_vis_dr.text().strip()
+                    if map_vis_dr:
+                        map_data["visibility"] = {
+                            "dataref": map_vis_dr,
+                            "predicate": self._cr_map_vis_pred.currentText(),
+                        }
+                airport_data = self._cr_map_airport.get_data()
+                if airport_data is not None:
+                    map_data["airport"] = airport_data
+                vor_data = self._cr_map_vor.get_data()
+                if vor_data is not None:
+                    map_data["vor"] = vor_data
+                ndb_data = self._cr_map_ndb.get_data()
+                if ndb_data is not None:
+                    map_data["ndb"] = ndb_data
+                data["moving_map"] = map_data
 
         elif ct == "AttitudeIndicator":
             ai_vh = self._ai_vp_h.value()
@@ -6698,6 +6955,14 @@ class PropertiesForm(QWidget):
         self._cr_devmarkers_size.setValue(4.0)
         self._cr_devmarkers_width.setValue(2.0)
         self._cr_devmarkers_color.set_rgba(None)
+        self._cr_map_lat_dr.clear(); self._cr_map_lon_dr.clear()
+        self._cr_map_max_per_type.setValue(60)
+        self._cr_map_vis_chk.setChecked(False)
+        self._cr_map_vis_dr_box.setEnabled(False); self._cr_map_vis_pred.setEnabled(False)
+        self._cr_map_vis_dr.clear(); self._cr_map_vis_pred.setCurrentIndex(0)
+        self._cr_map_airport.reset()
+        self._cr_map_vor.reset()
+        self._cr_map_ndb.reset()
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)
