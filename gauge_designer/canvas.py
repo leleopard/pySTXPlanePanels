@@ -1315,6 +1315,7 @@ class InstrumentCanvas(QWidget):
         # each type's own styling, not real placement.
         for type_name, bearing_deg, placeholder_ident in (
             ("airport", 45.0, "APT"), ("vor", 135.0, "VOR"), ("ndb", 225.0, "NDB"),
+            ("waypoint", 315.0, "WPT"),
         ):
             style_cfg = map_cfg.get(type_name)
             if not style_cfg or not style_cfg.get("points"):

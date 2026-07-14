@@ -4524,6 +4524,13 @@ class PropertiesForm(QWidget):
         _cr_map.row_widget(self._cr_map_vor)
         self._cr_map_ndb = _MapStyleSection("NDB", self)
         _cr_map.row_widget(self._cr_map_ndb)
+        self._cr_map_waypoint = _MapStyleSection("Waypoint", self)
+        self._cr_map_waypoint.setToolTip(
+            "En route fixes are much denser than airports/navaids (~200k\n"
+            "worldwide) — keep Max per type conservative if this is enabled,\n"
+            "especially with labels on."
+        )
+        _cr_map.row_widget(self._cr_map_waypoint)
 
         self._cr_sec.row_widget(_cr_map)
 
@@ -5868,6 +5875,7 @@ class PropertiesForm(QWidget):
         self._cr_map_airport.load(map_cfg.get("airport"))
         self._cr_map_vor.load(map_cfg.get("vor"))
         self._cr_map_ndb.load(map_cfg.get("ndb"))
+        self._cr_map_waypoint.load(map_cfg.get("waypoint"))
 
         # Viewport (shared) — not for AttitudeIndicator which manages its own viewport
         if ct != "AttitudeIndicator":
@@ -6343,6 +6351,9 @@ class PropertiesForm(QWidget):
                 ndb_data = self._cr_map_ndb.get_data()
                 if ndb_data is not None:
                     map_data["ndb"] = ndb_data
+                waypoint_data = self._cr_map_waypoint.get_data()
+                if waypoint_data is not None:
+                    map_data["waypoint"] = waypoint_data
                 data["moving_map"] = map_data
 
         elif ct == "AttitudeIndicator":
@@ -6963,6 +6974,7 @@ class PropertiesForm(QWidget):
         self._cr_map_airport.reset()
         self._cr_map_vor.reset()
         self._cr_map_ndb.reset()
+        self._cr_map_waypoint.reset()
         # AttitudeIndicator
         self._ai_vp_x.setValue(0); self._ai_vp_y.setValue(0)
         self._ai_vp_w.setValue(300); self._ai_vp_h.setValue(300)

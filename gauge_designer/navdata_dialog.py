@@ -1,5 +1,5 @@
 """Dialog for pointing at an X-Plane install and (re)building the local
-moving-map nav data cache (airports/VORs/NDBs) used by
+moving-map nav data cache (airports/VORs/NDBs/waypoints) used by
 VectorCompassRose's `moving_map`.
 
 The X-Plane install path is a machine-local preference (QSettings, not
@@ -84,7 +84,8 @@ class NavDataDialog(QDialog):
             f"Cache built {cache.get('generated', '?')} from "
             f"{cache.get('xplane_root', '?')} — "
             f"{len(cache.get('airports', []))} airports, "
-            f"{len(cache.get('navaids', []))} navaids. "
+            f"{len(cache.get('navaids', []))} navaids, "
+            f"{len(cache.get('waypoints', []))} waypoints. "
             f"Saved to {navdata.CACHE_PATH}"
         )
 
@@ -99,11 +100,11 @@ class NavDataDialog(QDialog):
         self.setCursor(Qt.WaitCursor)
         try:
             data = navdata.build_cache(root)
-            if not data["airports"] and not data["navaids"]:
+            if not data["airports"] and not data["navaids"] and not data["waypoints"]:
                 QMessageBox.warning(
                     self, "Navigation Data",
-                    "No apt.dat or earth_nav.dat found under that folder — "
-                    "check it's the X-Plane install root."
+                    "No apt.dat, earth_nav.dat, or earth_fix.dat found under that "
+                    "folder — check it's the X-Plane install root."
                 )
                 return
             navdata.save_cache(data)

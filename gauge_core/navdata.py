@@ -1,17 +1,21 @@
-"""X-Plane navdata (airports, VORs, NDBs) extraction and local caching.
+"""X-Plane navdata (airports, VORs, NDBs, waypoints/fixes) extraction and
+local caching.
 
 Reads directly from the user's own X-Plane install (`earth_nav.dat`,
-`apt.dat`) to build a small position-only cache for the VectorCompassRose
-moving map. Deliberately never bundled or committed to this repo:
-`earth_nav.dat` carries a Navigraph/Jeppesen copyright notice, and this is
-a public repo — the cache only ever exists locally, generated on-demand via
-`gauge_designer/navdata_dialog.py`, and lives outside the project directory
-entirely (`CACHE_PATH`) so there's no way to accidentally commit it.
+`apt.dat`, `earth_fix.dat`) to build a small position-only cache for the
+VectorCompassRose moving map. Deliberately never bundled or committed to
+this repo: `earth_nav.dat`/`earth_fix.dat` carry a Navigraph/Jeppesen
+copyright notice, and this is a public repo — the cache only ever exists
+locally, generated on-demand via `gauge_designer/navdata_dialog.py`, and
+lives outside the project directory entirely (`CACHE_PATH`) so there's no
+way to accidentally commit it.
 
 File layout on a typical X-Plane 11 install (confirmed against a real
 install this session):
     Resources/default data/earth_nav.dat                        - navaids
     Custom Data/earth_nav.dat                                    - override
+    Resources/default data/earth_fix.dat                         - waypoints/fixes
+    Custom Data/earth_fix.dat                                     - override
     Resources/default scenery/default apt dat/Earth nav data/apt.dat  - airports
     Custom Scenery/Global Airports/Earth nav data/apt.dat        - override (XP11)
     Global Scenery/Global Airports/Earth nav data/apt.dat        - override (XP12)
@@ -63,6 +67,40 @@ def parse_earth_nav(path: Path) -> list[dict[str, Any]]:
                 "lat": lat,
                 "lon": lon,
                 "elevation": elevation,
+            })
+    return out
+
+
+def parse_earth_fix(path: Path) -> list[dict[str, Any]]:
+    """Parse earth_fix.dat (waypoints/fixes) — every non-header row is a fix
+    entry; there's no row-type code to filter on here, unlike
+    earth_nav.dat/apt.dat.
+
+    Row format: lat lon ident airport_or_ENRT icao_region terminal_code.
+    The header ("I", the "1101 Version..." line, a blank line) and the "99"
+    terminator are skipped naturally by the field-count/float-parse checks
+    below, same as they would be by an explicit check — no special-casing
+    needed.
+    """
+    out: list[dict[str, Any]] = []
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            try:
+                lat = float(parts[0])
+                lon = float(parts[1])
+            except ValueError:
+                continue
+            ident = parts[2]
+            out.append({
+                "type": "waypoint",
+                "ident": ident,
+                "name": " ".join(parts[3:]) if len(parts) > 3 else ident,
+                "lat": lat,
+                "lon": lon,
+                "elevation": 0.0,
             })
     return out
 
@@ -166,6 +204,16 @@ def _resolve_earth_nav_path(xplane_root: Path) -> Path | None:
     return None
 
 
+def _resolve_earth_fix_path(xplane_root: Path) -> Path | None:
+    for candidate in (
+        xplane_root / "Custom Data" / "earth_fix.dat",
+        xplane_root / "Resources" / "default data" / "earth_fix.dat",
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _resolve_apt_dat_path(xplane_root: Path) -> Path | None:
     for candidate in (
         xplane_root / "Custom Scenery" / "Global Airports" / "Earth nav data" / "apt.dat",
@@ -183,6 +231,7 @@ def build_cache(xplane_root: str | Path) -> dict[str, Any]:
     xplane_root = Path(xplane_root)
     navaids: list[dict[str, Any]] = []
     airports: list[dict[str, Any]] = []
+    waypoints: list[dict[str, Any]] = []
 
     nav_path = _resolve_earth_nav_path(xplane_root)
     if nav_path is not None:
@@ -192,11 +241,16 @@ def build_cache(xplane_root: str | Path) -> dict[str, Any]:
     if apt_path is not None:
         airports = parse_apt_dat(apt_path)
 
+    fix_path = _resolve_earth_fix_path(xplane_root)
+    if fix_path is not None:
+        waypoints = parse_earth_fix(fix_path)
+
     return {
         "generated": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "xplane_root": str(xplane_root),
         "navaids": navaids,
         "airports": airports,
+        "waypoints": waypoints,
     }
 
 
@@ -224,7 +278,9 @@ class NavDataIndex:
 
     def __init__(self, cache: dict[str, Any]) -> None:
         self._buckets: dict[tuple[int, int], list[dict[str, Any]]] = {}
-        for entry in (*cache.get("airports", []), *cache.get("navaids", [])):
+        for entry in (
+            *cache.get("airports", []), *cache.get("navaids", []), *cache.get("waypoints", []),
+        ):
             cell = (int(entry["lat"] // 1), int(entry["lon"] // 1))
             self._buckets.setdefault(cell, []).append(entry)
 

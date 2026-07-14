@@ -392,6 +392,18 @@ YAML schema
           points: [[0, -5], [5, 4], [-5, 4]]
           color: [255, 200, 0, 200]
           filled: true
+        waypoint:                            # same shape as airport: — en
+                                             # route fixes are MUCH denser
+                                             # than airports/navaids (~200k
+                                             # worldwide vs tens of
+                                             # thousands), so keep
+                                             # max_per_type conservative if
+                                             # this type is enabled,
+                                             # especially with labels on
+          points: [[-3, -3], [3, -3], [3, 3], [-3, 3]]
+          color: [180, 180, 180, 150]
+          filled: false
+          width: 1.0
 
       visibility:                           # optional, same as other components
         dataref: ...
@@ -1859,7 +1871,7 @@ def _compass_rose_factory(
     map_cfg = comp.get("moving_map")
     if map_cfg:
         styles: dict[str, _MapFeatureStyle] = {}
-        for type_name in ("airport", "vor", "ndb"):
+        for type_name in ("airport", "vor", "ndb", "waypoint"):
             style_cfg = map_cfg.get(type_name)
             if not style_cfg:
                 continue
