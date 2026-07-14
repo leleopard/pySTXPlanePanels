@@ -335,13 +335,18 @@ YAML schema
                                              # coordinates relative to the
                                              # aircraft's own GPS position,
                                              # heading-up rotated like
-                                             # everything else on this rose,
-                                             # scaled to whatever range
-                                             # range_rings.label is currently
-                                             # showing — requires that to be
-                                             # configured (no range, no map).
-                                             # Drawn UNDERNEATH every other
-                                             # rose element (right after the
+                                             # everything else on this rose.
+                                             # Scaled so the rose's outer
+                                             # edge equals TWICE whatever
+                                             # range range_rings.label is
+                                             # currently showing (matches
+                                             # the real EFIS convention: the
+                                             # displayed range is the half-
+                                             # range ring, not the edge) —
+                                             # requires that to be configured
+                                             # (no range, no map). Drawn
+                                             # UNDERNEATH every other rose
+                                             # element (right after the
                                              # optional background fill).
                                              # Positions come from a local
                                              # cache built via Settings ->
@@ -1496,17 +1501,20 @@ class VectorCompassRose(_VecBase):
 
     def _draw_moving_map(self) -> None:
         # Scaled to whatever range range_rings.label is currently showing —
-        # px_per_nm = radius / range, so a feature at exactly the edge of
-        # the configured range lands exactly on the rose's own radius, no
-        # separate circle-clip needed. No range configured (0, the
-        # unset-table-lookup default) means no defined scale, so draw
+        # but the rose's outer edge represents *double* that value, matching
+        # the real EFIS convention (the displayed range is the half-range
+        # ring; the rose extends out to twice it), confirmed against the
+        # real Zibo ND. px_per_nm = radius / (2 * range), so a feature at
+        # twice the configured range lands exactly on the rose's own
+        # radius, no separate circle-clip needed. No range configured (0,
+        # the unset-table-lookup default) means no defined scale, so draw
         # nothing rather than divide by zero.
         if self._range_label_value <= 0:
             return
         index = navdata.get_index()
         if index is None:
             return
-        range_nm = self._range_label_value
+        range_nm = self._range_label_value * 2.0
         px_per_nm = self._radius / range_nm
 
         by_type: dict[str, list[tuple[float, float, dict]]] = {}
