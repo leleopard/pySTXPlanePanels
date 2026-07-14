@@ -326,12 +326,77 @@ components:
       filled: false
       table:
       - - -2.5
-        - -80
+        - -106
       - - 0.0
         - 0.0
       - - 2.5
-        - 80
+        - 106
       preview_deviation: 106.0
+      width: 2.0
+    deviation_markers:
+      shape: circle
+      spacing: 44.0
+      size: 5.0
+      width: 2.0
+      color:
+      - 255
+      - 255
+      - 255
+      - 255
+  moving_map:
+    gps_lat_dataref: sim/flightmodel/position/latitude
+    gps_lon_dataref: sim/flightmodel/position/longitude
+    airport:
+      points:
+      - - -5
+        - 0
+      - - 5
+        - 0
+      - - 5
+        - -5
+      - - -5
+        - -5
+      color:
+      - 255
+      - 255
+      - 255
+      - 255
+      filled: true
+      label: true
+      label_font_size: 12.0
+      label_color:
+      - 255
+      - 255
+      - 255
+      - 255
+    vor:
+      points:
+      - - 0
+        - 0
+      - - -8
+        - -16
+      - - 8
+        - -16
+      color:
+      - 255
+      - 255
+      - 255
+      - 255
+      filled: true
+    waypoint:
+      points:
+      - - 0
+        - 5
+      - - -5
+        - -5
+      - - 5
+        - -5
+      color:
+      - 0
+      - 170
+      - 255
+      - 255
+      filled: false
       width: 2.0
   viewport:
   - 0
@@ -343,7 +408,7 @@ components:
   position:
   - 300
   - 546
-  dataref: sim/cockpit/autopilot/heading_mag
+  dataref: sim/cockpit2/gauges/indicators/heading_electric_deg_mag_pilot
   text_format: '{:03.0f}'
   font_name: ST_Boeing_PFD
   font_size: 26.0
