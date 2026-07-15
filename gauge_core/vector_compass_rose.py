@@ -337,11 +337,13 @@ YAML schema
                                              # position is heading-up rotated
                                              # like everything else on this
                                              # rose, but each symbol itself
-                                             # stays north-up (like a map
-                                             # icon, not a radial needle) —
-                                             # only rotated by the rose's own
-                                             # heading, not by its individual
-                                             # bearing from the aircraft.
+                                             # is screen-fixed (like a paper-
+                                             # chart icon, not a radial
+                                             # needle) — never rotated by
+                                             # heading or by its individual
+                                             # bearing from the aircraft; a
+                                             # symbol's "up" is always the
+                                             # window's own +Y direction.
                                              # Scaled so the rose's outer
                                              # edge equals TWICE whatever
                                              # range range_rings.label is
@@ -378,16 +380,31 @@ YAML schema
           dataref: ...
           predicate: true_if_over_zero
         airport:                            # optional per-type styling;
-                                             # omit a type to hide it
+                                             # omit a type to hide it. Either
+                                             # points or circle (or both)
+                                             # must be set for a type to draw.
           points: [[-4, 0], [0, 4], [4, 0], [0, -4]]  # relative to the
                                              # feature's own screen position,
-                                             # rotated with heading like a
-                                             # bearing_pointer/CDI symbol
+                                             # screen-fixed (never rotated) —
+                                             # optional; omit for a circle-
+                                             # only symbol
           color: [255, 255, 255, 200]
           filled: true
           width: 2.0                        # stroke width when filled: false
           outline_color: null                # optional outline when filled: true
           outline_width: 1.0
+          circle:                           # optional; drawn centred on the
+                                             # feature's own screen position,
+                                             # UNDERNEATH the polygon (so a
+                                             # symbol can combine a circle
+                                             # background with a polygon
+                                             # glyph on top)
+            radius: 6.0
+            color: [255, 255, 255, 200]
+            filled: false
+            width: 1.5                      # stroke width when filled: false
+            outline_color: null              # optional outline when filled: true
+            outline_width: 1.0
           label: true                       # optional ident label — stays
                                              # upright (not rotated), unlike
                                              # the polygon itself
@@ -528,9 +545,14 @@ class _CdiSegment:
 
 
 class _MapFeatureStyle:
-    """Polygon + optional label styling for one moving_map feature type
-    (airport/vor/ndb) — same points/color/filled/width/outline convention
-    as bearing_pointers and CDI symbols."""
+    """Polygon + optional circle + optional label styling for one
+    moving_map feature type (airport/vor/ndb/waypoint) — same
+    points/color/filled/width/outline convention as bearing_pointers and
+    CDI symbols. The circle (if configured) is centred on the feature's own
+    screen position and drawn underneath the polygon, so a symbol can
+    combine both (e.g. a circle background with a polygon glyph on top).
+    Either points or circle_radius (or both) must be set for the type to
+    render at all."""
 
     def __init__(
         self,
@@ -546,6 +568,12 @@ class _MapFeatureStyle:
         label_font: str | None,
         label_bold: bool = False,
         label_italic: bool = False,
+        circle_radius: float = 0.0,
+        circle_color: tuple[int, int, int, int] = (255, 255, 255, 255),
+        circle_filled: bool = True,
+        circle_width: float = 1.0,
+        circle_outline_color: tuple[int, int, int, int] | None = None,
+        circle_outline_width: float = 1.0,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
         self.color = color
@@ -559,6 +587,12 @@ class _MapFeatureStyle:
         self.label_font = label_font
         self.label_bold = bool(label_bold)
         self.label_italic = bool(label_italic)
+        self.circle_radius = float(circle_radius)
+        self.circle_color = circle_color
+        self.circle_filled = bool(circle_filled)
+        self.circle_width = float(circle_width)
+        self.circle_outline_color = circle_outline_color
+        self.circle_outline_width = float(circle_outline_width)
         # Own pool, not shared across styles — each style may have its own
         # label_font, which (unlike font_size/color/position) can only be
         # set at arcade.Text construction time, so pool objects can't be
@@ -1124,6 +1158,9 @@ class VectorCompassRose(_VecBase):
             style.width *= scale
             style.outline_width *= scale
             style.label_font_size *= scale
+            style.circle_radius *= scale
+            style.circle_width *= scale
+            style.circle_outline_width *= scale
             style.label_pool.clear()  # font size changed; pool objects are stale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
@@ -1554,27 +1591,38 @@ class VectorCompassRose(_VecBase):
             label_idx = 0
             for distance_nm, bearing_deg, entry in items[: self._map_max_per_type]:
                 cx, cy = self._point_at(bearing_deg, distance_nm * px_per_nm)
-                # Symbols stay north-up (like map icons, not radial needles) —
-                # rotated only by the rose's own heading-up rotation, not by
-                # each feature's individual bearing_deg. This is the same
-                # angle _point_at() implicitly applies to a bearing-0 (due
-                # north) direction vector, so a symbol authored with local
-                # "up" = north stays pointing at true north on screen
-                # regardless of where it sits on the rose.
-                angle = math.radians(self._heading)
-                cos_a, sin_a = math.cos(angle), math.sin(angle)
-                pts = [
-                    (cx + px * cos_a - py * sin_a, cy + px * sin_a + py * cos_a)
-                    for px, py in style.points
-                ]
-                if style.filled:
-                    shapes.append(arcade.shape_list.create_polygon(pts, style.color))
-                    if style.outline_color is not None:
-                        shapes.append(arcade.shape_list.create_line_loop(
-                            pts, style.outline_color, style.outline_width,
+                # Symbols stay screen-fixed (not rotated with heading or
+                # bearing) — a map icon's "up" is always the window's own
+                # +Y direction, like north-up on a paper chart, not the
+                # heading-up convention the rest of this rose uses.
+                pts = [(cx + px, cy + py) for px, py in style.points]
+
+                if style.circle_radius > 0.0:
+                    d = style.circle_radius * 2.0
+                    if style.circle_filled:
+                        shapes.append(arcade.shape_list.create_ellipse_filled(
+                            cx, cy, d, d, style.circle_color,
                         ))
-                else:
-                    shapes.append(arcade.shape_list.create_line_loop(pts, style.color, style.width))
+                        if style.circle_outline_color is not None:
+                            shapes.append(arcade.shape_list.create_ellipse_outline(
+                                cx, cy, d, d, style.circle_outline_color,
+                                border_width=style.circle_outline_width,
+                            ))
+                    else:
+                        shapes.append(arcade.shape_list.create_ellipse_outline(
+                            cx, cy, d, d, style.circle_color,
+                            border_width=style.circle_width,
+                        ))
+
+                if style.points:
+                    if style.filled:
+                        shapes.append(arcade.shape_list.create_polygon(pts, style.color))
+                        if style.outline_color is not None:
+                            shapes.append(arcade.shape_list.create_line_loop(
+                                pts, style.outline_color, style.outline_width,
+                            ))
+                    else:
+                        shapes.append(arcade.shape_list.create_line_loop(pts, style.color, style.width))
 
                 if style.label:
                     if label_idx >= len(style.label_pool):
@@ -1903,8 +1951,10 @@ def _compass_rose_factory(
                 italic=bool(style_cfg.get("label_italic", False)),
                 explicit_file=style_cfg.get("label_font_file"),
             )
+            circle_cfg = style_cfg.get("circle") or {}
+            circle_oc = circle_cfg.get("outline_color")
             styles[type_name] = _MapFeatureStyle(
-                points=[tuple(p) for p in style_cfg["points"]],
+                points=[tuple(p) for p in style_cfg.get("points", [])],
                 color=_as_color(style_cfg.get("color", [255, 255, 255, 255])),
                 filled=bool(style_cfg.get("filled", True)),
                 width=float(style_cfg.get("width", 2.0)),
@@ -1916,6 +1966,12 @@ def _compass_rose_factory(
                 label_font=label_font,
                 label_bold=label_bold,
                 label_italic=label_italic,
+                circle_radius=float(circle_cfg.get("radius", 0.0)),
+                circle_color=_as_color(circle_cfg.get("color", [255, 255, 255, 255])),
+                circle_filled=bool(circle_cfg.get("filled", True)),
+                circle_width=float(circle_cfg.get("width", 1.0)),
+                circle_outline_color=_as_color(circle_oc) if circle_oc is not None else None,
+                circle_outline_width=float(circle_cfg.get("outline_width", 1.0)),
             )
         map_vis_cfg = map_cfg.get("visibility")
         rose.set_moving_map(

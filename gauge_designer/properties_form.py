@@ -1682,14 +1682,16 @@ class _CdiLineSection(_SubSection):
 
 
 class _MapStyleSection(_SubSection):
-    """One feature-type style (airport/vor/ndb) for VectorCompassRose's
-    moving_map — points/color/filled/width/outline, same convention as
-    bearing_pointers/CDI symbols, plus an optional upright ident label
-    (labels don't rotate with heading, unlike the polygon itself). Reused
-    3x; self-contained load/get_data/reset. Presence is implied by a
-    non-empty points table, same "omit to hide" convention as every other
-    optional polygon in this form — omitting a type in get_data() is how
-    the user hides that whole feature type on the map."""
+    """One feature-type style (airport/vor/ndb/waypoint) for
+    VectorCompassRose's moving_map — a polygon and/or a circle
+    (points/color/filled/width/outline, same convention as
+    bearing_pointers/CDI symbols) plus an optional upright ident label
+    (labels don't rotate, unlike the polygon itself — nothing on the map
+    rotates with heading either, symbols are screen-fixed). Reused 4x;
+    self-contained load/get_data/reset. Presence is implied by a non-empty
+    points table and/or an enabled circle, same "omit to hide" convention
+    as every other optional polygon in this form — omitting a type in
+    get_data() is how the user hides that whole feature type on the map."""
 
     def __init__(self, label: str, owner: "PropertiesForm", parent=None):
         super().__init__(label, collapsed=True, parent=parent)
@@ -1699,9 +1701,10 @@ class _MapStyleSection(_SubSection):
         self._pts = _PointsTableEditor()
         self._pts.changed.connect(emit)
         self._pts.setToolTip(
-            "Relative to the feature's own screen position, rotated with\n"
-            "heading like a bearing_pointer/CDI symbol. Leave empty to hide\n"
-            "this feature type on the map."
+            "Relative to the feature's own screen position. Screen-fixed —\n"
+            "never rotated by heading or bearing, like a paper-chart icon.\n"
+            "Leave empty (with the circle below also disabled) to hide this\n"
+            "feature type on the map."
         )
         self.row("Points (relative to position)", self._pts)
 
@@ -1740,6 +1743,61 @@ class _MapStyleSection(_SubSection):
         self._outline_width.valueChanged.connect(emit)
         self.row("Outline width ", self._outline_width)
 
+        self._circle_chk = QCheckBox("Add circle")
+        self._circle_chk.setToolTip(
+            "Drawn centred on the feature's own screen position, underneath\n"
+            "the polygon above — combine both for e.g. a circle background\n"
+            "with a polygon glyph on top."
+        )
+        self._circle_chk.toggled.connect(self._on_circle_toggled)
+        self._circle_chk.toggled.connect(emit)
+        self.row_widget(self._circle_chk)
+
+        self._circle_radius = QDoubleSpinBox()
+        self._circle_radius.setRange(0.5, 200.0); self._circle_radius.setDecimals(1)
+        self._circle_radius.setValue(6.0)
+        self._circle_radius.setEnabled(False)
+        self._circle_radius.valueChanged.connect(emit)
+        self.row("Circle radius", self._circle_radius)
+
+        self._circle_color = _ColorButton()
+        self._circle_color.setEnabled(False)
+        self._circle_color.color_changed.connect(emit)
+        self.row("Circle color", self._circle_color)
+
+        self._circle_filled = QCheckBox("Circle filled")
+        self._circle_filled.setChecked(True)
+        self._circle_filled.setEnabled(False)
+        self._circle_filled.toggled.connect(self._on_circle_filled_toggled)
+        self._circle_filled.toggled.connect(emit)
+        self.row_widget(self._circle_filled)
+
+        self._circle_width = QDoubleSpinBox()
+        self._circle_width.setRange(0.5, 50.0); self._circle_width.setDecimals(1)
+        self._circle_width.setValue(1.0)
+        self._circle_width.setEnabled(False)  # shown only when circle not filled
+        self._circle_width.valueChanged.connect(emit)
+        self.row("Circle outline width", self._circle_width)
+
+        self._circle_outline_chk = QCheckBox("Add circle outline")
+        self._circle_outline_chk.setEnabled(False)
+        self._circle_outline_chk.toggled.connect(self._on_circle_outline_toggled)
+        self._circle_outline_chk.toggled.connect(emit)
+        self.row_widget(self._circle_outline_chk)
+
+        self._circle_outline_color = _ColorButton()
+        self._circle_outline_color.set_rgba((255, 255, 255, 255))
+        self._circle_outline_color.setEnabled(False)
+        self._circle_outline_color.color_changed.connect(emit)
+        self.row("Circle outline color", self._circle_outline_color)
+
+        self._circle_outline_width = QDoubleSpinBox()
+        self._circle_outline_width.setRange(0.5, 50.0); self._circle_outline_width.setDecimals(1)
+        self._circle_outline_width.setValue(1.0)
+        self._circle_outline_width.setEnabled(False)
+        self._circle_outline_width.valueChanged.connect(emit)
+        self.row("Circle outline width ", self._circle_outline_width)
+
         self._label_chk = QCheckBox("Show ident label")
         self._label_chk.toggled.connect(self._on_label_toggled)
         self._label_chk.toggled.connect(emit)
@@ -1751,6 +1809,22 @@ class _MapStyleSection(_SubSection):
         self._label_font_size.setEnabled(False)
         self._label_font_size.valueChanged.connect(emit)
         self.row("Label font size", self._label_font_size)
+
+        self._label_font = QLineEdit()
+        self._label_font.setPlaceholderText("Arial  (blank = default)")
+        self._label_font.setEnabled(False)
+        self._label_font.editingFinished.connect(emit)
+        self._label_font_btn = QPushButton("…")
+        self._label_font_btn.setFixedWidth(28)
+        self._label_font_btn.setToolTip("Choose font")
+        self._label_font_btn.setEnabled(False)
+        self._label_font_btn.clicked.connect(self._pick_label_font)
+        _font_hl = QHBoxLayout()
+        _font_hl.setContentsMargins(0, 0, 0, 0)
+        _font_hl.addWidget(self._label_font)
+        _font_hl.addWidget(self._label_font_btn)
+        _font_w = QWidget(); _font_w.setLayout(_font_hl)
+        self.row("Label font", _font_w)
 
         self._label_color = _ColorButton()
         self._label_color.setEnabled(False)
@@ -1771,9 +1845,49 @@ class _MapStyleSection(_SubSection):
         self._outline_color.setEnabled(on)
         self._outline_width.setEnabled(on)
 
+    def _on_circle_toggled(self, on: bool) -> None:
+        self._circle_radius.setEnabled(on)
+        self._circle_color.setEnabled(on)
+        self._circle_filled.setEnabled(on)
+        filled = self._circle_filled.isChecked()
+        self._circle_width.setEnabled(on and not filled)
+        self._circle_outline_chk.setEnabled(on and filled)
+        outline_on = on and filled and self._circle_outline_chk.isChecked()
+        self._circle_outline_color.setEnabled(outline_on)
+        self._circle_outline_width.setEnabled(outline_on)
+
+    def _on_circle_filled_toggled(self, filled: bool) -> None:
+        on = self._circle_chk.isChecked()
+        self._circle_width.setEnabled(on and not filled)
+        self._circle_outline_chk.setEnabled(on and filled)
+        if not filled:
+            self._circle_outline_chk.blockSignals(True)
+            self._circle_outline_chk.setChecked(False)
+            self._circle_outline_chk.blockSignals(False)
+            self._circle_outline_color.setEnabled(False)
+            self._circle_outline_width.setEnabled(False)
+
+    def _on_circle_outline_toggled(self, on: bool) -> None:
+        self._circle_outline_color.setEnabled(on)
+        self._circle_outline_width.setEnabled(on)
+
     def _on_label_toggled(self, on: bool) -> None:
         self._label_font_size.setEnabled(on)
+        self._label_font.setEnabled(on)
+        self._label_font_btn.setEnabled(on)
         self._label_color.setEnabled(on)
+
+    def _pick_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
+        current_name = self._label_font.text().strip() or "Arial"
+        current_size = int(self._label_font_size.value())
+        initial = QFont(current_name, current_size)
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._label_font.setText(strip_style_suffix(font.family()))
+            self._label_font_size.setValue(float(font.pointSize()))
+            self._owner._emit()
 
     def load(self, cfg: dict | None) -> None:
         cfg = cfg or {}
@@ -1797,34 +1911,77 @@ class _MapStyleSection(_SubSection):
         self._outline_width.setEnabled(has_outline)
         self._form.setRowVisible(self._outline_width, filled)
         self._outline_width.setValue(float(cfg.get("outline_width", 1.0)))
+
+        circle_cfg = cfg.get("circle")
+        circle_on = circle_cfg is not None
+        self._circle_chk.blockSignals(True)
+        self._circle_chk.setChecked(circle_on)
+        self._circle_chk.blockSignals(False)
+        circle_cfg = circle_cfg or {}
+        self._circle_radius.setValue(float(circle_cfg.get("radius", 6.0)))
+        self._circle_color.set_rgba(circle_cfg.get("color", [255, 255, 255, 255]))
+        circle_filled = bool(circle_cfg.get("filled", True))
+        self._circle_filled.blockSignals(True)
+        self._circle_filled.setChecked(circle_filled)
+        self._circle_filled.blockSignals(False)
+        self._circle_width.setValue(float(circle_cfg.get("width", 1.0)))
+        coc = circle_cfg.get("outline_color")
+        circle_has_outline = coc is not None and circle_filled
+        self._circle_outline_chk.blockSignals(True)
+        self._circle_outline_chk.setChecked(circle_has_outline)
+        self._circle_outline_chk.blockSignals(False)
+        self._circle_outline_color.set_rgba(coc if coc is not None else (255, 255, 255, 255))
+        self._circle_outline_width.setValue(float(circle_cfg.get("outline_width", 1.0)))
+        self._on_circle_toggled(circle_on)
+
         label_on = bool(cfg.get("label", False))
         self._label_chk.blockSignals(True)
         self._label_chk.setChecked(label_on)
         self._label_chk.blockSignals(False)
         self._label_font_size.setEnabled(label_on)
         self._label_font_size.setValue(float(cfg.get("label_font_size", 10.0)))
+        self._label_font.setEnabled(label_on)
+        self._label_font.setText(str(cfg.get("label_font", "")))
+        self._label_font_btn.setEnabled(label_on)
         self._label_color.setEnabled(label_on)
         self._label_color.set_rgba(cfg.get("label_color", [255, 255, 255, 255]))
 
     def get_data(self) -> dict | None:
         pts = self._pts.get_data()
-        if not pts:
+        circle_on = self._circle_chk.isChecked()
+        if not pts and not circle_on:
             return None
-        filled = self._filled.isChecked()
-        data: dict = {
-            "points": pts,
-            "color": list(self._color.get_rgba()),
-            "filled": filled,
-        }
-        if not filled:
-            data["width"] = self._width.value()
-        elif self._outline_chk.isChecked():
-            data["outline_color"] = list(self._outline_color.get_rgba())
-            data["outline_width"] = self._outline_width.value()
+        data: dict = {}
+        if pts:
+            filled = self._filled.isChecked()
+            data["points"] = pts
+            data["color"] = list(self._color.get_rgba())
+            data["filled"] = filled
+            if not filled:
+                data["width"] = self._width.value()
+            elif self._outline_chk.isChecked():
+                data["outline_color"] = list(self._outline_color.get_rgba())
+                data["outline_width"] = self._outline_width.value()
+        if circle_on:
+            circle_filled = self._circle_filled.isChecked()
+            circle: dict = {
+                "radius": self._circle_radius.value(),
+                "color": list(self._circle_color.get_rgba()),
+                "filled": circle_filled,
+            }
+            if not circle_filled:
+                circle["width"] = self._circle_width.value()
+            elif self._circle_outline_chk.isChecked():
+                circle["outline_color"] = list(self._circle_outline_color.get_rgba())
+                circle["outline_width"] = self._circle_outline_width.value()
+            data["circle"] = circle
         if self._label_chk.isChecked():
             data["label"] = True
             data["label_font_size"] = self._label_font_size.value()
             data["label_color"] = list(self._label_color.get_rgba())
+            font = self._label_font.text().strip()
+            if font:
+                data["label_font"] = font
         return data
 
     def reset(self) -> None:
@@ -1833,8 +1990,15 @@ class _MapStyleSection(_SubSection):
         self._filled.setChecked(True); self._width.setValue(2.0)
         self._outline_chk.setChecked(False)
         self._outline_color.set_rgba(None); self._outline_width.setValue(1.0)
+        self._circle_chk.setChecked(False)
+        self._circle_radius.setValue(6.0)
+        self._circle_color.set_rgba(None)
+        self._circle_filled.setChecked(True); self._circle_width.setValue(1.0)
+        self._circle_outline_chk.setChecked(False)
+        self._circle_outline_color.set_rgba(None); self._circle_outline_width.setValue(1.0)
         self._label_chk.setChecked(False)
         self._label_font_size.setValue(10.0)
+        self._label_font.clear()
         self._label_color.set_rgba(None)
 
 

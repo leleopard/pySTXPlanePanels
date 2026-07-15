@@ -1318,19 +1318,34 @@ class InstrumentCanvas(QWidget):
             ("waypoint", 315.0, "WPT"),
         ):
             style_cfg = map_cfg.get(type_name)
-            if not style_cfg or not style_cfg.get("points"):
+            circle_cfg = (style_cfg or {}).get("circle")
+            if not style_cfg or (not style_cfg.get("points") and not circle_cfg):
                 continue
             radius = 40.0
-            self._draw_compassrose_map_symbol_shape(
-                point_at, draw, bearing_deg, radius,
-                style_cfg["points"], style_cfg.get("color"),
-                bool(style_cfg.get("filled", True)), style_cfg.get("width", 1.0),
-                style_cfg.get("outline_color"), style_cfg.get("outline_width", 1.0),
-            )
+            if circle_cfg and circle_cfg.get("radius"):
+                cx, cy = point_at(bearing_deg, radius)
+                r = float(circle_cfg["radius"])
+                bbox = (cx - r, cy - r, cx + r, cy + r)
+                if bool(circle_cfg.get("filled", True)):
+                    draw.ellipse(bbox, fill=_rgba(circle_cfg.get("color")))
+                    oc = circle_cfg.get("outline_color")
+                    if oc is not None:
+                        ow = max(1, int(round(float(circle_cfg.get("outline_width", 1.0)))))
+                        draw.ellipse(bbox, outline=_rgba(oc), width=ow)
+                else:
+                    lw = max(1, int(round(float(circle_cfg.get("width", 1.0)))))
+                    draw.ellipse(bbox, outline=_rgba(circle_cfg.get("color")), width=lw)
+            if style_cfg.get("points"):
+                self._draw_compassrose_map_symbol_shape(
+                    point_at, draw, bearing_deg, radius,
+                    style_cfg["points"], style_cfg.get("color"),
+                    bool(style_cfg.get("filled", True)), style_cfg.get("width", 1.0),
+                    style_cfg.get("outline_color"), style_cfg.get("outline_width", 1.0),
+                )
             if style_cfg.get("label"):
                 lx, ly = point_at(bearing_deg, radius)
                 size = max(6, int(float(style_cfg.get("label_font_size", 10.0))))
-                font = _pil_font(None, size)
+                font = _pil_font(style_cfg.get("label_font"), size)
                 draw.text((lx + 6, ly), placeholder_ident,
                           fill=_rgba(style_cfg.get("label_color", [255, 255, 255, 255])),
                           font=font, anchor="lm")
