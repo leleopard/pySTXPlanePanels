@@ -390,6 +390,18 @@ YAML schema
                                              # has its own width). Same
                                              # convention for the polygon
                                              # and the circle below.
+          icao_only: true                   # airport type only — X-Plane's
+                                             # apt.dat includes tens of
+                                             # thousands of genuine but
+                                             # uncharted/private airfields
+                                             # with non-ICAO idents (e.g.
+                                             # X-Plane-invented "XEG4CM" or
+                                             # the US FAA's local 3-4 char
+                                             # LID scheme); true keeps only
+                                             # real 4-letter ICAO idents,
+                                             # matching a real charted EFIS.
+                                             # Set false to show everything
+                                             # X-Plane knows about.
           points: [[-4, 0], [0, 4], [4, 0], [0, -4]]  # relative to the
                                              # feature's own screen position,
                                              # screen-fixed (never rotated) —
@@ -584,7 +596,11 @@ class _MapFeatureStyle:
     feature's own screen position and drawn underneath the polygon, so a
     symbol can combine both (e.g. a circle background with a polygon glyph
     on top). Either points or a circle (or both) must be set for the type
-    to render at all."""
+    to render at all. `icao_only` (meaningful for the airport type only —
+    other types don't use 4-letter ICAO idents at all) drops candidates
+    whose ident isn't a real 4-letter ICAO code, filtering out the huge
+    number of genuine but uncharted/private airfields X-Plane's own
+    database carries that would never appear on a real EFIS."""
 
     def __init__(
         self,
@@ -607,8 +623,10 @@ class _MapFeatureStyle:
         circle_outline: bool = False,
         circle_outline_color: tuple[int, int, int, int] = (255, 255, 255, 255),
         circle_outline_width: float = 1.0,
+        icao_only: bool = True,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
+        self.icao_only = bool(icao_only)
         self.filled = bool(filled)
         self.color = color
         self.outline = bool(outline)
@@ -1598,6 +1616,11 @@ class VectorCompassRose(_VecBase):
             style = self._map_styles.get(entry["type"])
             if style is None:
                 continue
+            if (
+                entry["type"] == "airport" and style.icao_only
+                and not navdata.looks_like_icao_ident(entry.get("ident", ""))
+            ):
+                continue
             bearing_deg, distance_nm = geo.bearing_distance_nm(
                 self._map_lat, self._map_lon, entry["lat"], entry["lon"],
             )
@@ -2001,6 +2024,7 @@ def _compass_rose_factory(
                 circle_outline=bool(circle_cfg.get("outline", False)),
                 circle_outline_color=_as_color(circle_cfg.get("outline_color", [255, 255, 255, 255])),
                 circle_outline_width=float(circle_cfg.get("outline_width", 1.0)),
+                icao_only=bool(style_cfg.get("icao_only", True)),
             )
         map_vis_cfg = map_cfg.get("visibility")
         rose.set_moving_map(

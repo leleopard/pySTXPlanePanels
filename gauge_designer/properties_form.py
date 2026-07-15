@@ -1747,10 +1747,26 @@ class _MapStyleSection(_SubSection):
     form — omitting a type in get_data() is how the user hides that whole
     feature type on the map."""
 
-    def __init__(self, label: str, owner: "PropertiesForm", parent=None):
+    def __init__(self, label: str, owner: "PropertiesForm", parent=None,
+                 show_icao_only_option: bool = False):
         super().__init__(label, collapsed=True, parent=parent)
         self._owner = owner
         emit = owner._emit
+        self._show_icao_only = show_icao_only_option
+
+        if show_icao_only_option:
+            self._icao_only_chk = QCheckBox("Charted (ICAO 4-letter ident) airports only")
+            self._icao_only_chk.setChecked(True)
+            self._icao_only_chk.setToolTip(
+                "X-Plane's own airport database includes tens of thousands of\n"
+                "genuine but uncharted/private airfields (X-Plane-invented\n"
+                "idents like \"XEG4CM\", or the US FAA's local 3-4 char LID\n"
+                "scheme) that would never appear on a real EFIS. Checked\n"
+                "shows only real 4-letter ICAO idents; uncheck to show\n"
+                "everything X-Plane knows about."
+            )
+            self._icao_only_chk.toggled.connect(emit)
+            self.row_widget(self._icao_only_chk)
 
         self._pts = _PointsTableEditor()
         self._pts.changed.connect(emit)
@@ -1873,6 +1889,8 @@ class _MapStyleSection(_SubSection):
 
     def load(self, cfg: dict | None) -> None:
         cfg = cfg or {}
+        if self._show_icao_only:
+            self._icao_only_chk.setChecked(bool(cfg.get("icao_only", True)))
         self._pts.load([[p[0], p[1]] for p in cfg.get("points", [])])
         self._fill.load(
             bool(cfg.get("filled", True)), cfg.get("color", [255, 255, 255, 255]), None,
@@ -1923,6 +1941,8 @@ class _MapStyleSection(_SubSection):
         if not pts and not circle_on:
             return None
         data: dict = {}
+        if self._show_icao_only and not self._icao_only_chk.isChecked():
+            data["icao_only"] = False
         if pts:
             data["points"] = pts
             data["filled"] = self._fill.chk.isChecked()
@@ -1955,6 +1975,8 @@ class _MapStyleSection(_SubSection):
         return data
 
     def reset(self) -> None:
+        if self._show_icao_only:
+            self._icao_only_chk.setChecked(True)
         self._pts.load([])
         self._fill.reset(); self._fill.chk.setChecked(True)
         self._outline.reset()
@@ -4651,7 +4673,7 @@ class PropertiesForm(QWidget):
         self._cr_map_vis_pred.currentTextChanged.connect(self._emit)
         _cr_map.row("Show/hide predicate", self._cr_map_vis_pred)
 
-        self._cr_map_airport = _MapStyleSection("Airport", self)
+        self._cr_map_airport = _MapStyleSection("Airport", self, show_icao_only_option=True)
         _cr_map.row_widget(self._cr_map_airport)
         self._cr_map_vor = _MapStyleSection("VOR", self)
         _cr_map.row_widget(self._cr_map_vor)

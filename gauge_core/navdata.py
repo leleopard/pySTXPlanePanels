@@ -46,13 +46,16 @@ _AIRPORT_HEADER_CODES = {"1", "16", "17"}
 # "00CA"). None of these would ever appear on a real charted EFIS Nav
 # Display, which only draws from officially published, ICAO-coded
 # aerodromes. A real ICAO location indicator is exactly 4 uppercase
-# letters — confirmed against the real cache that this keeps every named
-# major airport (EGLL, KJFK, ...) while dropping ~55% of entries that are
-# local-only identifiers.
+# letters — confirmed against the real cache that this identifies every
+# named major airport (EGLL, KJFK, ...) while flagging ~55% of entries as
+# local-only identifiers. These are all still real, physical airfields (not
+# bad data), so this is exposed as an opt-in filter (`moving_map.airport.
+# icao_only` in VectorCompassRose) rather than dropped at parse time —
+# every airport stays in the cache either way.
 _ICAO_IDENT_RE = re.compile(r"[A-Z]{4}")
 
 
-def _looks_like_icao_ident(ident: str) -> bool:
+def looks_like_icao_ident(ident: str) -> bool:
     return bool(_ICAO_IDENT_RE.fullmatch(ident))
 
 
@@ -146,10 +149,10 @@ def parse_apt_dat(path: Path) -> list[dict[str, Any]]:
     when those keys are present with no value, which is common for small,
     minimally-modeled fields.
 
-    Only keeps airports with a real 4-letter ICAO ident (see
-    `_looks_like_icao_ident`) — apt.dat also carries tens of thousands of
-    small/private/unlicensed fields with X-Plane-invented or FAA-local
-    identifiers that would never appear on a real charted EFIS.
+    Every airport apt.dat carries is kept here, including small/private/
+    unlicensed fields with non-ICAO identifiers — see `looks_like_icao_ident`
+    and `moving_map.airport.icao_only` for filtering those out at render
+    time, an opt-in choice rather than a decision made once at parse time.
     """
     out: list[dict[str, Any]] = []
     cur: dict[str, Any] | None = None
@@ -162,7 +165,7 @@ def parse_apt_dat(path: Path) -> list[dict[str, Any]]:
             return
         lat = datum_lat if datum_lat is not None else fallback_lat
         lon = datum_lon if datum_lon is not None else fallback_lon
-        if lat is not None and lon is not None and _looks_like_icao_ident(cur["ident"]):
+        if lat is not None and lon is not None:
             cur["lat"] = lat
             cur["lon"] = lon
             out.append(cur)
