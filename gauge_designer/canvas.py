@@ -1344,9 +1344,11 @@ class InstrumentCanvas(QWidget):
                 )
             if style_cfg.get("label"):
                 lx, ly = point_at(bearing_deg, radius)
+                loff = style_cfg.get("label_offset", [6.0, 0.0])
+                lx += float(loff[0]); ly -= float(loff[1])  # PIL y-down vs. Arcade y-up
                 size = max(6, int(float(style_cfg.get("label_font_size", 10.0))))
                 font = _pil_font(style_cfg.get("label_font"), size)
-                draw.text((lx + 6, ly), placeholder_ident,
+                draw.text((lx, ly), placeholder_ident,
                           fill=_rgba(style_cfg.get("label_color", [255, 255, 255, 255])),
                           font=font, anchor="lm")
 

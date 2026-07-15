@@ -418,6 +418,12 @@ YAML schema
           label_font_size: 10.0
           label_color: [255, 255, 255, 200]
           label_font: null                   # optional; blank = designer/OS default
+          label_offset: [6.0, 0.0]           # optional; [x, y] from the
+                                             # symbol's own screen position,
+                                             # y-up (matches every other
+                                             # offset in this schema);
+                                             # default nudges the label to
+                                             # the right of the symbol
         vor:                                 # same shape as airport:
           points: [[-5, -5], [5, -5], [5, 5], [-5, 5]]
           filled: false
@@ -553,6 +559,22 @@ class _CdiSegment:
         self.symbol_outline_width = float(symbol_outline_width)
 
 
+def _circle_outline_points(cx: float, cy: float, radius: float, num_segments: int = 32) -> list[tuple[float, float]]:
+    # arcade.shape_list.create_ellipse_outline()'s own border_width is
+    # silently ignored — it draws a plain GL_LINE_STRIP with no thick-line
+    # geometry at all (unlike create_line_strip/create_line_loop, which
+    # generate real triangle geometry when line_width != 1). So a
+    # variable-width circle outline is built by hand here and drawn with
+    # create_line_loop(), the same call the polygon outline already uses.
+    return [
+        (
+            cx + radius * math.cos(2.0 * math.pi * i / num_segments),
+            cy + radius * math.sin(2.0 * math.pi * i / num_segments),
+        )
+        for i in range(num_segments)
+    ]
+
+
 class _MapFeatureStyle:
     """Polygon + optional circle + optional label styling for one
     moving_map feature type (airport/vor/ndb/waypoint). Fill and outline
@@ -578,6 +600,7 @@ class _MapFeatureStyle:
         label_font: str | None,
         label_bold: bool = False,
         label_italic: bool = False,
+        label_offset: tuple[float, float] = (6.0, 0.0),
         circle_radius: float = 0.0,
         circle_filled: bool = True,
         circle_color: tuple[int, int, int, int] = (255, 255, 255, 255),
@@ -597,6 +620,7 @@ class _MapFeatureStyle:
         self.label_font = label_font
         self.label_bold = bool(label_bold)
         self.label_italic = bool(label_italic)
+        self.label_offset_x, self.label_offset_y = float(label_offset[0]), float(label_offset[1])
         self.circle_radius = float(circle_radius)
         self.circle_filled = bool(circle_filled)
         self.circle_color = circle_color
@@ -1167,6 +1191,7 @@ class VectorCompassRose(_VecBase):
             style.points = [(x * scale, y * scale) for x, y in style.points]
             style.outline_width *= scale
             style.label_font_size *= scale
+            style.label_offset_x *= scale; style.label_offset_y *= scale
             style.circle_radius *= scale
             style.circle_outline_width *= scale
             style.label_pool.clear()  # font size changed; pool objects are stale
@@ -1616,9 +1641,9 @@ class VectorCompassRose(_VecBase):
                             cx, cy, d, d, style.circle_color,
                         ))
                     if style.circle_outline:
-                        shapes.append(arcade.shape_list.create_ellipse_outline(
-                            cx, cy, d, d, style.circle_outline_color,
-                            border_width=style.circle_outline_width,
+                        shapes.append(arcade.shape_list.create_line_loop(
+                            _circle_outline_points(cx, cy, style.circle_radius),
+                            style.circle_outline_color, style.circle_outline_width,
                         ))
 
                 if style.points:
@@ -1650,7 +1675,7 @@ class VectorCompassRose(_VecBase):
                     # of whether the value actually changed, and profiling
                     # showed font_size alone accounting for roughly half of
                     # this method's total cost when reassigned needlessly.
-                    t.x, t.y = cx + 6, cy
+                    t.x, t.y = cx + style.label_offset_x, cy + style.label_offset_y
                     labels_to_draw.append(t)
                     label_idx += 1
 
@@ -1969,6 +1994,7 @@ def _compass_rose_factory(
                 label_font=label_font,
                 label_bold=label_bold,
                 label_italic=label_italic,
+                label_offset=tuple(style_cfg.get("label_offset", [6.0, 0.0])),
                 circle_radius=float(circle_cfg.get("radius", 0.0)),
                 circle_filled=bool(circle_cfg.get("filled", True)),
                 circle_color=_as_color(circle_cfg.get("color", [255, 255, 255, 255])),

@@ -1823,6 +1823,23 @@ class _MapStyleSection(_SubSection):
         self._label_color.color_changed.connect(emit)
         self.row("Label color", self._label_color)
 
+        self._label_offset_x = QDoubleSpinBox()
+        self._label_offset_x.setRange(-200.0, 200.0); self._label_offset_x.setDecimals(1)
+        self._label_offset_x.setValue(6.0)
+        self._label_offset_x.setEnabled(False)
+        self._label_offset_x.valueChanged.connect(emit)
+        self._label_offset_y = QDoubleSpinBox()
+        self._label_offset_y.setRange(-200.0, 200.0); self._label_offset_y.setDecimals(1)
+        self._label_offset_y.setValue(0.0)
+        self._label_offset_y.setEnabled(False)
+        self._label_offset_y.valueChanged.connect(emit)
+        _off_hl = QHBoxLayout()
+        _off_hl.setContentsMargins(0, 0, 0, 0)
+        _off_hl.addWidget(QLabel("X")); _off_hl.addWidget(self._label_offset_x)
+        _off_hl.addWidget(QLabel("Y")); _off_hl.addWidget(self._label_offset_y)
+        _off_w = QWidget(); _off_w.setLayout(_off_hl)
+        self.row("Label offset", _off_w)
+
     def _on_circle_toggled(self, on: bool) -> None:
         # Grays sub-widgets out without discarding whatever fill/outline
         # choice was already made — re-enabling "Add circle" restores it
@@ -1839,6 +1856,8 @@ class _MapStyleSection(_SubSection):
         self._label_font.setEnabled(on)
         self._label_font_btn.setEnabled(on)
         self._label_color.setEnabled(on)
+        self._label_offset_x.setEnabled(on)
+        self._label_offset_y.setEnabled(on)
 
     def _pick_label_font(self) -> None:
         from PySide6.QtGui import QFont
@@ -1892,6 +1911,11 @@ class _MapStyleSection(_SubSection):
         self._label_font_btn.setEnabled(label_on)
         self._label_color.setEnabled(label_on)
         self._label_color.set_rgba(cfg.get("label_color", [255, 255, 255, 255]))
+        loff = cfg.get("label_offset", [6.0, 0.0])
+        self._label_offset_x.setEnabled(label_on)
+        self._label_offset_x.setValue(float(loff[0]))
+        self._label_offset_y.setEnabled(label_on)
+        self._label_offset_y.setValue(float(loff[1]))
 
     def get_data(self) -> dict | None:
         pts = self._pts.get_data()
@@ -1925,6 +1949,9 @@ class _MapStyleSection(_SubSection):
             font = self._label_font.text().strip()
             if font:
                 data["label_font"] = font
+            loff = (self._label_offset_x.value(), self._label_offset_y.value())
+            if loff != (6.0, 0.0):
+                data["label_offset"] = list(loff)
         return data
 
     def reset(self) -> None:
@@ -1940,6 +1967,8 @@ class _MapStyleSection(_SubSection):
         self._label_font_size.setValue(10.0)
         self._label_font.clear()
         self._label_color.set_rgba(None)
+        self._label_offset_x.setValue(6.0)
+        self._label_offset_y.setValue(0.0)
 
 
 class _AutoSizeStack(QStackedWidget):
