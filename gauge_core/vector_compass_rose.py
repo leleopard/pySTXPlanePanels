@@ -383,16 +383,23 @@ YAML schema
                                              # omit a type to hide it. Either
                                              # points or circle (or both)
                                              # must be set for a type to draw.
+                                             # fill and outline are
+                                             # independent — enable either,
+                                             # both, or neither, each with
+                                             # its own color (outline also
+                                             # has its own width). Same
+                                             # convention for the polygon
+                                             # and the circle below.
           points: [[-4, 0], [0, 4], [4, 0], [0, -4]]  # relative to the
                                              # feature's own screen position,
                                              # screen-fixed (never rotated) —
                                              # optional; omit for a circle-
                                              # only symbol
-          color: [255, 255, 255, 200]
           filled: true
-          width: 2.0                        # stroke width when filled: false
-          outline_color: null                # optional outline when filled: true
-          outline_width: 1.0
+          color: [255, 255, 255, 200]        # fill color, used when filled: true
+          outline: false
+          outline_color: [255, 255, 255, 255]  # used when outline: true
+          outline_width: 1.0                  # used when outline: true
           circle:                           # optional; drawn centred on the
                                              # feature's own screen position,
                                              # UNDERNEATH the polygon (so a
@@ -400,11 +407,11 @@ YAML schema
                                              # background with a polygon
                                              # glyph on top)
             radius: 6.0
-            color: [255, 255, 255, 200]
             filled: false
-            width: 1.5                      # stroke width when filled: false
-            outline_color: null              # optional outline when filled: true
-            outline_width: 1.0
+            color: [255, 255, 255, 200]
+            outline: true
+            outline_color: [255, 255, 255, 200]
+            outline_width: 1.5
           label: true                       # optional ident label — stays
                                              # upright (not rotated), unlike
                                              # the polygon itself
@@ -413,13 +420,14 @@ YAML schema
           label_font: null                   # optional; blank = designer/OS default
         vor:                                 # same shape as airport:
           points: [[-5, -5], [5, -5], [5, 5], [-5, 5]]
-          color: [0, 200, 255, 200]
           filled: false
-          width: 1.5
+          outline: true
+          outline_color: [0, 200, 255, 200]
+          outline_width: 1.5
         ndb:                                 # same shape as airport:
           points: [[0, -5], [5, 4], [-5, 4]]
-          color: [255, 200, 0, 200]
           filled: true
+          color: [255, 200, 0, 200]
         waypoint:                            # same shape as airport: — en
                                              # route fixes are MUCH denser
                                              # than airports/navaids (~200k
@@ -429,8 +437,9 @@ YAML schema
                                              # this type is enabled,
                                              # especially with labels on
           points: [[-3, -3], [3, -3], [3, 3], [-3, 3]]
-          color: [180, 180, 180, 150]
           filled: false
+          outline: true
+          outline_color: [180, 180, 180, 150]
           width: 1.0
 
       visibility:                           # optional, same as other components
@@ -546,21 +555,22 @@ class _CdiSegment:
 
 class _MapFeatureStyle:
     """Polygon + optional circle + optional label styling for one
-    moving_map feature type (airport/vor/ndb/waypoint) — same
-    points/color/filled/width/outline convention as bearing_pointers and
-    CDI symbols. The circle (if configured) is centred on the feature's own
-    screen position and drawn underneath the polygon, so a symbol can
-    combine both (e.g. a circle background with a polygon glyph on top).
-    Either points or circle_radius (or both) must be set for the type to
-    render at all."""
+    moving_map feature type (airport/vor/ndb/waypoint). Fill and outline
+    are independent toggles for both the polygon and the circle — either,
+    both, or neither can be enabled, each with its own color (and the
+    outline its own width). The circle (if radius > 0) is centred on the
+    feature's own screen position and drawn underneath the polygon, so a
+    symbol can combine both (e.g. a circle background with a polygon glyph
+    on top). Either points or a circle (or both) must be set for the type
+    to render at all."""
 
     def __init__(
         self,
         points: list[tuple[float, float]],
-        color: tuple[int, int, int, int],
         filled: bool,
-        width: float,
-        outline_color: tuple[int, int, int, int] | None,
+        color: tuple[int, int, int, int],
+        outline: bool,
+        outline_color: tuple[int, int, int, int],
         outline_width: float,
         label: bool,
         label_font_size: float,
@@ -569,16 +579,16 @@ class _MapFeatureStyle:
         label_bold: bool = False,
         label_italic: bool = False,
         circle_radius: float = 0.0,
-        circle_color: tuple[int, int, int, int] = (255, 255, 255, 255),
         circle_filled: bool = True,
-        circle_width: float = 1.0,
-        circle_outline_color: tuple[int, int, int, int] | None = None,
+        circle_color: tuple[int, int, int, int] = (255, 255, 255, 255),
+        circle_outline: bool = False,
+        circle_outline_color: tuple[int, int, int, int] = (255, 255, 255, 255),
         circle_outline_width: float = 1.0,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
-        self.color = color
         self.filled = bool(filled)
-        self.width = float(width)
+        self.color = color
+        self.outline = bool(outline)
         self.outline_color = outline_color
         self.outline_width = float(outline_width)
         self.label = bool(label)
@@ -588,9 +598,9 @@ class _MapFeatureStyle:
         self.label_bold = bool(label_bold)
         self.label_italic = bool(label_italic)
         self.circle_radius = float(circle_radius)
-        self.circle_color = circle_color
         self.circle_filled = bool(circle_filled)
-        self.circle_width = float(circle_width)
+        self.circle_color = circle_color
+        self.circle_outline = bool(circle_outline)
         self.circle_outline_color = circle_outline_color
         self.circle_outline_width = float(circle_outline_width)
         # Own pool, not shared across styles — each style may have its own
@@ -1155,11 +1165,9 @@ class VectorCompassRose(_VecBase):
         self._dev_markers_width *= scale
         for style in self._map_styles.values():
             style.points = [(x * scale, y * scale) for x, y in style.points]
-            style.width *= scale
             style.outline_width *= scale
             style.label_font_size *= scale
             style.circle_radius *= scale
-            style.circle_width *= scale
             style.circle_outline_width *= scale
             style.label_pool.clear()  # font size changed; pool objects are stale
         if self._viewport is not None:
@@ -1597,32 +1605,29 @@ class VectorCompassRose(_VecBase):
                 # heading-up convention the rest of this rose uses.
                 pts = [(cx + px, cy + py) for px, py in style.points]
 
+                # Fill and outline are independent — either, both, or
+                # neither can be enabled, for both the circle and the
+                # polygon, each with its own color (and the outline its
+                # own width).
                 if style.circle_radius > 0.0:
                     d = style.circle_radius * 2.0
                     if style.circle_filled:
                         shapes.append(arcade.shape_list.create_ellipse_filled(
                             cx, cy, d, d, style.circle_color,
                         ))
-                        if style.circle_outline_color is not None:
-                            shapes.append(arcade.shape_list.create_ellipse_outline(
-                                cx, cy, d, d, style.circle_outline_color,
-                                border_width=style.circle_outline_width,
-                            ))
-                    else:
+                    if style.circle_outline:
                         shapes.append(arcade.shape_list.create_ellipse_outline(
-                            cx, cy, d, d, style.circle_color,
-                            border_width=style.circle_width,
+                            cx, cy, d, d, style.circle_outline_color,
+                            border_width=style.circle_outline_width,
                         ))
 
                 if style.points:
                     if style.filled:
                         shapes.append(arcade.shape_list.create_polygon(pts, style.color))
-                        if style.outline_color is not None:
-                            shapes.append(arcade.shape_list.create_line_loop(
-                                pts, style.outline_color, style.outline_width,
-                            ))
-                    else:
-                        shapes.append(arcade.shape_list.create_line_loop(pts, style.color, style.width))
+                    if style.outline:
+                        shapes.append(arcade.shape_list.create_line_loop(
+                            pts, style.outline_color, style.outline_width,
+                        ))
 
                 if style.label:
                     if label_idx >= len(style.label_pool):
@@ -1944,7 +1949,6 @@ def _compass_rose_factory(
             style_cfg = map_cfg.get(type_name)
             if not style_cfg:
                 continue
-            style_oc = style_cfg.get("outline_color")
             label_font, label_bold, label_italic = resolve_font_for_arcade(
                 style_cfg.get("label_font"), base_dir,
                 bold=bool(style_cfg.get("label_bold", False)),
@@ -1952,13 +1956,12 @@ def _compass_rose_factory(
                 explicit_file=style_cfg.get("label_font_file"),
             )
             circle_cfg = style_cfg.get("circle") or {}
-            circle_oc = circle_cfg.get("outline_color")
             styles[type_name] = _MapFeatureStyle(
                 points=[tuple(p) for p in style_cfg.get("points", [])],
-                color=_as_color(style_cfg.get("color", [255, 255, 255, 255])),
                 filled=bool(style_cfg.get("filled", True)),
-                width=float(style_cfg.get("width", 2.0)),
-                outline_color=_as_color(style_oc) if style_oc is not None else None,
+                color=_as_color(style_cfg.get("color", [255, 255, 255, 255])),
+                outline=bool(style_cfg.get("outline", False)),
+                outline_color=_as_color(style_cfg.get("outline_color", [255, 255, 255, 255])),
                 outline_width=float(style_cfg.get("outline_width", 1.0)),
                 label=bool(style_cfg.get("label", False)),
                 label_font_size=float(style_cfg.get("label_font_size", 10.0)),
@@ -1967,10 +1970,10 @@ def _compass_rose_factory(
                 label_bold=label_bold,
                 label_italic=label_italic,
                 circle_radius=float(circle_cfg.get("radius", 0.0)),
-                circle_color=_as_color(circle_cfg.get("color", [255, 255, 255, 255])),
                 circle_filled=bool(circle_cfg.get("filled", True)),
-                circle_width=float(circle_cfg.get("width", 1.0)),
-                circle_outline_color=_as_color(circle_oc) if circle_oc is not None else None,
+                circle_color=_as_color(circle_cfg.get("color", [255, 255, 255, 255])),
+                circle_outline=bool(circle_cfg.get("outline", False)),
+                circle_outline_color=_as_color(circle_cfg.get("outline_color", [255, 255, 255, 255])),
                 circle_outline_width=float(circle_cfg.get("outline_width", 1.0)),
             )
         map_vis_cfg = map_cfg.get("visibility")

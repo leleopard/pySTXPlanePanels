@@ -1681,17 +1681,71 @@ class _CdiLineSection(_SubSection):
         self._symbol_outline_color.set_rgba(None); self._symbol_outline_width.setValue(1.0)
 
 
+class _FillOutlineRow:
+    """One independent fill-or-outline row: a checkbox, a color swatch,
+    and (outline only) a width spinbox, all combined on a single form row.
+    Fill and outline are independent toggles — either, both, or neither
+    can be enabled; this is not the "outline only available when filled"
+    pattern used elsewhere in this form. Used twice per _MapStyleSection
+    (polygon, circle) so the same widget wiring isn't duplicated 4x."""
+
+    def __init__(self, section: "_SubSection", check_text: str, emit, has_width: bool):
+        self.chk = QCheckBox(check_text)
+        self.color = _ColorButton()
+        self.color.setEnabled(False)
+        self.color.color_changed.connect(emit)
+        widgets = [self.chk, self.color]
+        if has_width:
+            self.width = QDoubleSpinBox()
+            self.width.setRange(0.5, 50.0); self.width.setDecimals(1)
+            self.width.setValue(1.0)
+            self.width.setEnabled(False)
+            self.width.valueChanged.connect(emit)
+            widgets.append(self.width)
+        else:
+            self.width = None
+        self.chk.toggled.connect(self._on_toggled)
+        self.chk.toggled.connect(emit)
+        hl = QHBoxLayout()
+        hl.setContentsMargins(0, 0, 0, 0)
+        for w in widgets:
+            hl.addWidget(w)
+        box = QWidget(); box.setLayout(hl)
+        section.row_widget(box)
+
+    def _on_toggled(self, on: bool) -> None:
+        self.color.setEnabled(on)
+        if self.width is not None:
+            self.width.setEnabled(on)
+
+    def load(self, on: bool, color, width: float | None) -> None:
+        self.chk.blockSignals(True)
+        self.chk.setChecked(on)
+        self.chk.blockSignals(False)
+        self.color.set_rgba(color)
+        if self.width is not None:
+            self.width.setValue(float(width if width is not None else 1.0))
+        self._on_toggled(on)
+
+    def reset(self) -> None:
+        self.chk.setChecked(False)
+        self.color.set_rgba(None)
+        if self.width is not None:
+            self.width.setValue(1.0)
+
+
 class _MapStyleSection(_SubSection):
     """One feature-type style (airport/vor/ndb/waypoint) for
-    VectorCompassRose's moving_map — a polygon and/or a circle
-    (points/color/filled/width/outline, same convention as
-    bearing_pointers/CDI symbols) plus an optional upright ident label
-    (labels don't rotate, unlike the polygon itself — nothing on the map
-    rotates with heading either, symbols are screen-fixed). Reused 4x;
-    self-contained load/get_data/reset. Presence is implied by a non-empty
-    points table and/or an enabled circle, same "omit to hide" convention
-    as every other optional polygon in this form — omitting a type in
-    get_data() is how the user hides that whole feature type on the map."""
+    VectorCompassRose's moving_map — a polygon and/or a circle, each with
+    independent fill/outline toggles (either, both, or neither, each with
+    its own color and — for outline — its own width), plus an optional
+    upright ident label (labels don't rotate, unlike the polygon itself —
+    nothing on the map rotates with heading either, symbols are
+    screen-fixed). Reused 4x; self-contained load/get_data/reset. Presence
+    is implied by a non-empty points table and/or an enabled circle, same
+    "omit to hide" convention as every other optional polygon in this
+    form — omitting a type in get_data() is how the user hides that whole
+    feature type on the map."""
 
     def __init__(self, label: str, owner: "PropertiesForm", parent=None):
         super().__init__(label, collapsed=True, parent=parent)
@@ -1708,40 +1762,8 @@ class _MapStyleSection(_SubSection):
         )
         self.row("Points (relative to position)", self._pts)
 
-        self._color = _ColorButton()
-        self._color.color_changed.connect(emit)
-        self.row("Fill color", self._color)
-
-        self._filled = QCheckBox("Filled")
-        self._filled.setChecked(True)
-        self._filled.toggled.connect(self._on_filled_toggled)
-        self._filled.toggled.connect(emit)
-        self.row_widget(self._filled)
-
-        self._width = QDoubleSpinBox()
-        self._width.setRange(0.5, 50.0); self._width.setDecimals(1)
-        self._width.setValue(2.0)
-        self._width.setEnabled(False)  # shown only when not filled
-        self._width.valueChanged.connect(emit)
-        self.row("Outline width", self._width)
-
-        self._outline_chk = QCheckBox("Add outline")
-        self._outline_chk.toggled.connect(self._on_outline_toggled)
-        self._outline_chk.toggled.connect(emit)
-        self.row_widget(self._outline_chk)
-
-        self._outline_color = _ColorButton()
-        self._outline_color.set_rgba((255, 255, 255, 255))
-        self._outline_color.setEnabled(False)
-        self._outline_color.color_changed.connect(emit)
-        self.row("Outline color", self._outline_color)
-
-        self._outline_width = QDoubleSpinBox()
-        self._outline_width.setRange(0.5, 50.0); self._outline_width.setDecimals(1)
-        self._outline_width.setValue(1.0)
-        self._outline_width.setEnabled(False)
-        self._outline_width.valueChanged.connect(emit)
-        self.row("Outline width ", self._outline_width)
+        self._fill = _FillOutlineRow(self, "Fill", emit, has_width=False)
+        self._outline = _FillOutlineRow(self, "Outline", emit, has_width=True)
 
         self._circle_chk = QCheckBox("Add circle")
         self._circle_chk.setToolTip(
@@ -1749,54 +1771,24 @@ class _MapStyleSection(_SubSection):
             "the polygon above — combine both for e.g. a circle background\n"
             "with a polygon glyph on top."
         )
-        self._circle_chk.toggled.connect(self._on_circle_toggled)
-        self._circle_chk.toggled.connect(emit)
-        self.row_widget(self._circle_chk)
-
         self._circle_radius = QDoubleSpinBox()
         self._circle_radius.setRange(0.5, 200.0); self._circle_radius.setDecimals(1)
         self._circle_radius.setValue(6.0)
         self._circle_radius.setEnabled(False)
         self._circle_radius.valueChanged.connect(emit)
-        self.row("Circle radius", self._circle_radius)
+        self._circle_chk.toggled.connect(self._on_circle_toggled)
+        self._circle_chk.toggled.connect(emit)
+        _circle_hl = QHBoxLayout()
+        _circle_hl.setContentsMargins(0, 0, 0, 0)
+        _circle_hl.addWidget(self._circle_chk)
+        _circle_hl.addWidget(QLabel("Radius"))
+        _circle_hl.addWidget(self._circle_radius)
+        _circle_w = QWidget(); _circle_w.setLayout(_circle_hl)
+        self.row_widget(_circle_w)
 
-        self._circle_color = _ColorButton()
-        self._circle_color.setEnabled(False)
-        self._circle_color.color_changed.connect(emit)
-        self.row("Circle color", self._circle_color)
-
-        self._circle_filled = QCheckBox("Circle filled")
-        self._circle_filled.setChecked(True)
-        self._circle_filled.setEnabled(False)
-        self._circle_filled.toggled.connect(self._on_circle_filled_toggled)
-        self._circle_filled.toggled.connect(emit)
-        self.row_widget(self._circle_filled)
-
-        self._circle_width = QDoubleSpinBox()
-        self._circle_width.setRange(0.5, 50.0); self._circle_width.setDecimals(1)
-        self._circle_width.setValue(1.0)
-        self._circle_width.setEnabled(False)  # shown only when circle not filled
-        self._circle_width.valueChanged.connect(emit)
-        self.row("Circle outline width", self._circle_width)
-
-        self._circle_outline_chk = QCheckBox("Add circle outline")
-        self._circle_outline_chk.setEnabled(False)
-        self._circle_outline_chk.toggled.connect(self._on_circle_outline_toggled)
-        self._circle_outline_chk.toggled.connect(emit)
-        self.row_widget(self._circle_outline_chk)
-
-        self._circle_outline_color = _ColorButton()
-        self._circle_outline_color.set_rgba((255, 255, 255, 255))
-        self._circle_outline_color.setEnabled(False)
-        self._circle_outline_color.color_changed.connect(emit)
-        self.row("Circle outline color", self._circle_outline_color)
-
-        self._circle_outline_width = QDoubleSpinBox()
-        self._circle_outline_width.setRange(0.5, 50.0); self._circle_outline_width.setDecimals(1)
-        self._circle_outline_width.setValue(1.0)
-        self._circle_outline_width.setEnabled(False)
-        self._circle_outline_width.valueChanged.connect(emit)
-        self.row("Circle outline width ", self._circle_outline_width)
+        self._circle_fill = _FillOutlineRow(self, "Circle fill", emit, has_width=False)
+        self._circle_outline = _FillOutlineRow(self, "Circle outline", emit, has_width=True)
+        self._on_circle_toggled(False)  # circle starts unchecked; gray out its sub-rows
 
         self._label_chk = QCheckBox("Show ident label")
         self._label_chk.toggled.connect(self._on_label_toggled)
@@ -1831,45 +1823,16 @@ class _MapStyleSection(_SubSection):
         self._label_color.color_changed.connect(emit)
         self.row("Label color", self._label_color)
 
-    def _on_filled_toggled(self, filled: bool) -> None:
-        self._width.setEnabled(not filled)
-        self._outline_chk.setVisible(filled)
-        self._form.setRowVisible(self._outline_color, filled)
-        self._form.setRowVisible(self._outline_width, filled)
-        if not filled:
-            self._outline_chk.blockSignals(True)
-            self._outline_chk.setChecked(False)
-            self._outline_chk.blockSignals(False)
-
-    def _on_outline_toggled(self, on: bool) -> None:
-        self._outline_color.setEnabled(on)
-        self._outline_width.setEnabled(on)
-
     def _on_circle_toggled(self, on: bool) -> None:
+        # Grays sub-widgets out without discarding whatever fill/outline
+        # choice was already made — re-enabling "Add circle" restores it
+        # rather than resetting to defaults.
         self._circle_radius.setEnabled(on)
-        self._circle_color.setEnabled(on)
-        self._circle_filled.setEnabled(on)
-        filled = self._circle_filled.isChecked()
-        self._circle_width.setEnabled(on and not filled)
-        self._circle_outline_chk.setEnabled(on and filled)
-        outline_on = on and filled and self._circle_outline_chk.isChecked()
-        self._circle_outline_color.setEnabled(outline_on)
-        self._circle_outline_width.setEnabled(outline_on)
-
-    def _on_circle_filled_toggled(self, filled: bool) -> None:
-        on = self._circle_chk.isChecked()
-        self._circle_width.setEnabled(on and not filled)
-        self._circle_outline_chk.setEnabled(on and filled)
-        if not filled:
-            self._circle_outline_chk.blockSignals(True)
-            self._circle_outline_chk.setChecked(False)
-            self._circle_outline_chk.blockSignals(False)
-            self._circle_outline_color.setEnabled(False)
-            self._circle_outline_width.setEnabled(False)
-
-    def _on_circle_outline_toggled(self, on: bool) -> None:
-        self._circle_outline_color.setEnabled(on)
-        self._circle_outline_width.setEnabled(on)
+        self._circle_fill.chk.setEnabled(on)
+        self._circle_outline.chk.setEnabled(on)
+        self._circle_fill.color.setEnabled(on and self._circle_fill.chk.isChecked())
+        self._circle_outline.color.setEnabled(on and self._circle_outline.chk.isChecked())
+        self._circle_outline.width.setEnabled(on and self._circle_outline.chk.isChecked())
 
     def _on_label_toggled(self, on: bool) -> None:
         self._label_font_size.setEnabled(on)
@@ -1892,25 +1855,14 @@ class _MapStyleSection(_SubSection):
     def load(self, cfg: dict | None) -> None:
         cfg = cfg or {}
         self._pts.load([[p[0], p[1]] for p in cfg.get("points", [])])
-        self._color.set_rgba(cfg.get("color", [255, 255, 255, 255]))
-        filled = bool(cfg.get("filled", True))
-        self._filled.blockSignals(True)
-        self._filled.setChecked(filled)
-        self._filled.blockSignals(False)
-        self._width.setEnabled(not filled)
-        self._width.setValue(float(cfg.get("width", 2.0)))
-        oc = cfg.get("outline_color")
-        has_outline = oc is not None and filled
-        self._outline_chk.blockSignals(True)
-        self._outline_chk.setChecked(has_outline)
-        self._outline_chk.blockSignals(False)
-        self._outline_chk.setVisible(filled)
-        self._outline_color.setEnabled(has_outline)
-        self._form.setRowVisible(self._outline_color, filled)
-        self._outline_color.set_rgba(oc if oc is not None else (255, 255, 255, 255))
-        self._outline_width.setEnabled(has_outline)
-        self._form.setRowVisible(self._outline_width, filled)
-        self._outline_width.setValue(float(cfg.get("outline_width", 1.0)))
+        self._fill.load(
+            bool(cfg.get("filled", True)), cfg.get("color", [255, 255, 255, 255]), None,
+        )
+        self._outline.load(
+            bool(cfg.get("outline", False)),
+            cfg.get("outline_color", [255, 255, 255, 255]),
+            cfg.get("outline_width", 1.0),
+        )
 
         circle_cfg = cfg.get("circle")
         circle_on = circle_cfg is not None
@@ -1919,19 +1871,14 @@ class _MapStyleSection(_SubSection):
         self._circle_chk.blockSignals(False)
         circle_cfg = circle_cfg or {}
         self._circle_radius.setValue(float(circle_cfg.get("radius", 6.0)))
-        self._circle_color.set_rgba(circle_cfg.get("color", [255, 255, 255, 255]))
-        circle_filled = bool(circle_cfg.get("filled", True))
-        self._circle_filled.blockSignals(True)
-        self._circle_filled.setChecked(circle_filled)
-        self._circle_filled.blockSignals(False)
-        self._circle_width.setValue(float(circle_cfg.get("width", 1.0)))
-        coc = circle_cfg.get("outline_color")
-        circle_has_outline = coc is not None and circle_filled
-        self._circle_outline_chk.blockSignals(True)
-        self._circle_outline_chk.setChecked(circle_has_outline)
-        self._circle_outline_chk.blockSignals(False)
-        self._circle_outline_color.set_rgba(coc if coc is not None else (255, 255, 255, 255))
-        self._circle_outline_width.setValue(float(circle_cfg.get("outline_width", 1.0)))
+        self._circle_fill.load(
+            bool(circle_cfg.get("filled", True)), circle_cfg.get("color", [255, 255, 255, 255]), None,
+        )
+        self._circle_outline.load(
+            bool(circle_cfg.get("outline", False)),
+            circle_cfg.get("outline_color", [255, 255, 255, 255]),
+            circle_cfg.get("outline_width", 1.0),
+        )
         self._on_circle_toggled(circle_on)
 
         label_on = bool(cfg.get("label", False))
@@ -1953,27 +1900,23 @@ class _MapStyleSection(_SubSection):
             return None
         data: dict = {}
         if pts:
-            filled = self._filled.isChecked()
             data["points"] = pts
-            data["color"] = list(self._color.get_rgba())
-            data["filled"] = filled
-            if not filled:
-                data["width"] = self._width.value()
-            elif self._outline_chk.isChecked():
-                data["outline_color"] = list(self._outline_color.get_rgba())
-                data["outline_width"] = self._outline_width.value()
+            data["filled"] = self._fill.chk.isChecked()
+            data["color"] = list(self._fill.color.get_rgba())
+            if self._outline.chk.isChecked():
+                data["outline"] = True
+                data["outline_color"] = list(self._outline.color.get_rgba())
+                data["outline_width"] = self._outline.width.value()
         if circle_on:
-            circle_filled = self._circle_filled.isChecked()
             circle: dict = {
                 "radius": self._circle_radius.value(),
-                "color": list(self._circle_color.get_rgba()),
-                "filled": circle_filled,
+                "filled": self._circle_fill.chk.isChecked(),
+                "color": list(self._circle_fill.color.get_rgba()),
             }
-            if not circle_filled:
-                circle["width"] = self._circle_width.value()
-            elif self._circle_outline_chk.isChecked():
-                circle["outline_color"] = list(self._circle_outline_color.get_rgba())
-                circle["outline_width"] = self._circle_outline_width.value()
+            if self._circle_outline.chk.isChecked():
+                circle["outline"] = True
+                circle["outline_color"] = list(self._circle_outline.color.get_rgba())
+                circle["outline_width"] = self._circle_outline.width.value()
             data["circle"] = circle
         if self._label_chk.isChecked():
             data["label"] = True
@@ -1986,16 +1929,13 @@ class _MapStyleSection(_SubSection):
 
     def reset(self) -> None:
         self._pts.load([])
-        self._color.set_rgba(None)
-        self._filled.setChecked(True); self._width.setValue(2.0)
-        self._outline_chk.setChecked(False)
-        self._outline_color.set_rgba(None); self._outline_width.setValue(1.0)
-        self._circle_chk.setChecked(False)
+        self._fill.reset(); self._fill.chk.setChecked(True)
+        self._outline.reset()
         self._circle_radius.setValue(6.0)
-        self._circle_color.set_rgba(None)
-        self._circle_filled.setChecked(True); self._circle_width.setValue(1.0)
-        self._circle_outline_chk.setChecked(False)
-        self._circle_outline_color.set_rgba(None); self._circle_outline_width.setValue(1.0)
+        self._circle_fill.reset(); self._circle_fill.chk.setChecked(True)
+        self._circle_outline.reset()
+        self._circle_chk.setChecked(False)
+        self._on_circle_toggled(False)
         self._label_chk.setChecked(False)
         self._label_font_size.setValue(10.0)
         self._label_font.clear()

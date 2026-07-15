@@ -346,27 +346,25 @@ components:
   moving_map:
     gps_lat_dataref: sim/flightmodel/position/latitude
     gps_lon_dataref: sim/flightmodel/position/longitude
+    visibility:
+      dataref: laminar/B738/EFIS_control/capt/map_mode_pos
+      predicate: true_if_equals_2
     airport:
-      points:
-      - - -5
+      circle:
+        radius: 10.0
+        filled: false
+        outline: true
+        outline_color:
         - 0
-      - - 5
-        - 0
-      - - 5
-        - -5
-      - - -5
-        - -5
-      color:
-      - 255
-      - 255
-      - 255
-      - 255
-      filled: true
+        - 170
+        - 255
+        - 255
+        outline_width: 3.0
       label: true
       label_font_size: 12.0
       label_color:
-      - 255
-      - 255
+      - 0
+      - 170
       - 255
       - 255
     vor:
@@ -391,13 +389,14 @@ components:
         - -5
       - - 5
         - -5
-      color:
+      filled: false
+      outline: true
+      outline_color:
       - 0
       - 170
       - 255
       - 255
-      filled: false
-      width: 2.0
+      outline_width: 2.0
   viewport:
   - 0
   - 0

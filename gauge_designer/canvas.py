@@ -1322,24 +1322,24 @@ class InstrumentCanvas(QWidget):
             if not style_cfg or (not style_cfg.get("points") and not circle_cfg):
                 continue
             radius = 40.0
+            # Fill and outline are independent — either, both, or neither
+            # can be enabled, each with its own color (outline also its
+            # own width). Same convention for the circle and the polygon.
             if circle_cfg and circle_cfg.get("radius"):
                 cx, cy = point_at(bearing_deg, radius)
                 r = float(circle_cfg["radius"])
                 bbox = (cx - r, cy - r, cx + r, cy + r)
                 if bool(circle_cfg.get("filled", True)):
                     draw.ellipse(bbox, fill=_rgba(circle_cfg.get("color")))
-                    oc = circle_cfg.get("outline_color")
-                    if oc is not None:
-                        ow = max(1, int(round(float(circle_cfg.get("outline_width", 1.0)))))
-                        draw.ellipse(bbox, outline=_rgba(oc), width=ow)
-                else:
-                    lw = max(1, int(round(float(circle_cfg.get("width", 1.0)))))
-                    draw.ellipse(bbox, outline=_rgba(circle_cfg.get("color")), width=lw)
+                if circle_cfg.get("outline"):
+                    ow = max(1, int(round(float(circle_cfg.get("outline_width", 1.0)))))
+                    draw.ellipse(bbox, outline=_rgba(circle_cfg.get("outline_color")), width=ow)
             if style_cfg.get("points"):
                 self._draw_compassrose_map_symbol_shape(
                     point_at, draw, bearing_deg, radius,
-                    style_cfg["points"], style_cfg.get("color"),
-                    bool(style_cfg.get("filled", True)), style_cfg.get("width", 1.0),
+                    style_cfg["points"],
+                    bool(style_cfg.get("filled", True)), style_cfg.get("color"),
+                    bool(style_cfg.get("outline", False)),
                     style_cfg.get("outline_color"), style_cfg.get("outline_width", 1.0),
                 )
             if style_cfg.get("label"):
@@ -1352,24 +1352,20 @@ class InstrumentCanvas(QWidget):
 
     def _draw_compassrose_map_symbol_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,
-        points: list, color, filled: bool, width, outline_color, outline_width,
+        points: list, filled: bool, color, outline: bool, outline_color, outline_width,
     ) -> None:
-        # Map symbols stay north-up (unlike bearing_pointers' radial
-        # needles) — heading=0 in the static preview, so "north-up" means
+        # Map symbols are screen-fixed (unlike bearing_pointers' radial
+        # needles) — heading=0 in the static preview, so screen-fixed means
         # no rotation at all here; bearing_deg is only used for placement
         # via point_at(), matching the runtime's own decoupling of symbol
-        # position from symbol rotation.
+        # position from symbol rotation. Fill and outline are independent.
         pcx, pcy = point_at(bearing_deg, radius)
         pts = [(pcx + px, pcy - py) for px, py in points]
-        rgba = _rgba(color)
         if filled:
-            draw.polygon(pts, fill=rgba)
-            if outline_color is not None:
-                ow = max(1, int(round(float(outline_width))))
-                draw.polygon(pts, outline=_rgba(outline_color), width=ow)
-        else:
-            lw = max(1, int(round(float(width))))
-            draw.line(pts + [pts[0]], fill=rgba, width=lw)
+            draw.polygon(pts, fill=_rgba(color))
+        if outline:
+            ow = max(1, int(round(float(outline_width))))
+            draw.polygon(pts, outline=_rgba(outline_color), width=ow)
 
     def _draw_compassrose_pointer_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,
