@@ -1366,8 +1366,13 @@ class InstrumentCanvas(QWidget):
         if filled:
             draw.polygon(pts, fill=_rgba(color))
         if outline:
+            # PIL's polygon(outline=..., width>1) has no joint fill at all,
+            # leaving visible gaps at concave/sharp vertices (confirmed by
+            # rendering this exact shape both ways — a plain draw.line()
+            # polyline has none of this problem). draw.line() closed back
+            # to its own first point draws the same outline without gaps.
             ow = max(1, int(round(float(outline_width))))
-            draw.polygon(pts, outline=_rgba(outline_color), width=ow)
+            draw.line(pts + [pts[0]], fill=_rgba(outline_color), width=ow)
 
     def _draw_compassrose_pointer_shape(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float, radius: float,
@@ -1388,8 +1393,11 @@ class InstrumentCanvas(QWidget):
         if filled:
             draw.polygon(pts, fill=rgba)
             if outline_color is not None:
+                # See _draw_compassrose_map_symbol_shape — polygon(outline=,
+                # width>1) leaves gaps at sharp/concave vertices; a closed
+                # line() polyline doesn't.
                 ow = max(1, int(round(float(outline_width))))
-                draw.polygon(pts, outline=_rgba(outline_color), width=ow)
+                draw.line(pts + [pts[0]], fill=_rgba(outline_color), width=ow)
         else:
             lw = max(1, int(round(float(width))))
             draw.line(pts + [pts[0]], fill=rgba, width=lw)
