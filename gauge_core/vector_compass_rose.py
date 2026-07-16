@@ -230,6 +230,13 @@ YAML schema
                                              # implemented yet.
         dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
         convert_function: null              # optional
+        visibility:                        # optional; shows/hides the whole
+                                             # CDI (head/tail/deviation_bar/
+                                             # deviation_markers together),
+                                             # same convention as
+                                             # bearing_pointers
+          dataref: ...
+          predicate: true_if_over_zero
         preview_angle: 0                    # optional, designer-only: which
                                              # course angle this is drawn at
                                              # in the designer's static
@@ -865,6 +872,9 @@ class VectorCompassRose(_VecBase):
         self._cdi_angle = 0.0
         self._cdi_head: _CdiSegment | None = None
         self._cdi_tail: _CdiSegment | None = None
+        self._cdi_vis_dr: Any | None = None
+        self._cdi_vis_predicate: Callable | None = None
+        self._cdi_visible = True
 
         # Deviation bar (optional; enabled by calling set_deviation_bar()) —
         # a polygon that translates from the rose centre along the line
@@ -1057,6 +1067,8 @@ class VectorCompassRose(_VecBase):
         convert_fn: str | None,
         head: _CdiSegment,
         tail: _CdiSegment,
+        vis_dataref: Any | None = None,
+        vis_predicate: str | None = None,
     ) -> None:
         self._show_cdi = True
         self._cdi_dr = _as_dataref(dataref)
@@ -1064,6 +1076,8 @@ class VectorCompassRose(_VecBase):
             self._cdi_convert = get_convert(convert_fn)
         self._cdi_head = head
         self._cdi_tail = tail
+        self._cdi_vis_dr = _as_dataref(vis_dataref) if vis_dataref is not None else None
+        self._cdi_vis_predicate = get_convert(vis_predicate) if vis_predicate else None
 
     def set_deviation_bar(
         self,
@@ -1277,6 +1291,8 @@ class VectorCompassRose(_VecBase):
             if self._cdi_convert is not None:
                 raw = float(self._cdi_convert(raw, get_data))
             self._cdi_angle = raw % 360.0
+            if self._cdi_vis_dr is not None and self._cdi_vis_predicate is not None:
+                self._cdi_visible = bool(self._cdi_vis_predicate(float(get_data(self._cdi_vis_dr)), get_data))
         if self._deviation_bar_dr is not None:
             raw = float(get_data(self._deviation_bar_dr))
             if self._deviation_bar_convert is not None:
@@ -1437,7 +1453,7 @@ class VectorCompassRose(_VecBase):
             if p.visible:
                 self._draw_bearing_pointer(p)
 
-        if self._show_cdi:
+        if self._show_cdi and self._cdi_visible:
             self._draw_cdi()
             if self._deviation_bar_dr is not None:
                 self._draw_deviation_bar()
@@ -1978,11 +1994,14 @@ def _compass_rose_factory(
     cdi_cfg = comp.get("course_deviation_indicator")
     if cdi_cfg:
         default_end = float(comp.get("radius", 150.0))
+        cdi_vis_cfg = cdi_cfg.get("visibility")
         rose.set_course_deviation_indicator(
             dataref=cdi_cfg["dataref"],
             convert_fn=cdi_cfg.get("convert_function"),
             head=_parse_cdi_segment(cdi_cfg.get("head", {}), default_end),
             tail=_parse_cdi_segment(cdi_cfg.get("tail", {}), default_end),
+            vis_dataref=cdi_vis_cfg["dataref"] if cdi_vis_cfg else None,
+            vis_predicate=resolve_predicate_name(cdi_vis_cfg) if cdi_vis_cfg else None,
         )
 
         dev_bar_cfg = cdi_cfg.get("deviation_bar")

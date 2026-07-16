@@ -4506,6 +4506,25 @@ class PropertiesForm(QWidget):
         self._cr_cdi_fn.currentTextChanged.connect(self._emit)
         _cr_cdi.row("Convert function", self._cr_cdi_fn)
 
+        self._cr_cdi_vis_chk = QCheckBox()
+        self._cr_cdi_vis_chk.toggled.connect(self._on_cr_cdi_vis_toggled)
+        self._cr_cdi_vis_chk.toggled.connect(self._emit)
+        self._cr_cdi_vis_dr = QLineEdit()
+        self._cr_cdi_vis_dr.editingFinished.connect(self._emit)
+        self._cr_cdi_vis_dr_box = self._dr_field(self._cr_cdi_vis_dr)
+        self._cr_cdi_vis_dr_box.setEnabled(False)
+        _cr_cdi_vis_dr_row = QWidget()
+        _cr_cdi_vis_dr_hl = QHBoxLayout(_cr_cdi_vis_dr_row)
+        _cr_cdi_vis_dr_hl.setContentsMargins(0, 0, 0, 0); _cr_cdi_vis_dr_hl.setSpacing(6)
+        _cr_cdi_vis_dr_hl.addWidget(self._cr_cdi_vis_chk)
+        _cr_cdi_vis_dr_hl.addWidget(self._cr_cdi_vis_dr_box, 1)
+        _cr_cdi.row("Show/hide dataref", _cr_cdi_vis_dr_row)
+        self._cr_cdi_vis_pred = _NoScrollComboBox()
+        self._cr_cdi_vis_pred.addItems(_PREDICATES)
+        self._cr_cdi_vis_pred.setEnabled(False)
+        self._cr_cdi_vis_pred.currentTextChanged.connect(self._emit)
+        _cr_cdi.row("Show/hide predicate", self._cr_cdi_vis_pred)
+
         self._cr_cdi_preview_angle = QDoubleSpinBox()
         self._cr_cdi_preview_angle.setRange(-360.0, 360.0); self._cr_cdi_preview_angle.setDecimals(1)
         self._cr_cdi_preview_angle.setToolTip(
@@ -4734,6 +4753,10 @@ class PropertiesForm(QWidget):
     def _on_cr_map_vis_toggled(self, on: bool) -> None:
         self._cr_map_vis_dr_box.setEnabled(on)
         self._cr_map_vis_pred.setEnabled(on)
+
+    def _on_cr_cdi_vis_toggled(self, on: bool) -> None:
+        self._cr_cdi_vis_dr_box.setEnabled(on)
+        self._cr_cdi_vis_pred.setEnabled(on)
 
     def _on_cr_devbar_filled_toggled(self, filled: bool) -> None:
         self._cr_devbar_width.setEnabled(not filled)
@@ -6009,6 +6032,13 @@ class PropertiesForm(QWidget):
         self._cr_cdi_dr.setText(str(cdi.get("dataref", "")))
         cdi_fn_idx = self._cr_cdi_fn.findText(str(cdi.get("convert_function") or _NONE))
         self._cr_cdi_fn.setCurrentIndex(max(cdi_fn_idx, 0))
+        cdi_vis = cdi.get("visibility")
+        self._cr_cdi_vis_chk.setChecked(cdi_vis is not None)
+        self._cr_cdi_vis_dr_box.setEnabled(cdi_vis is not None)
+        self._cr_cdi_vis_pred.setEnabled(cdi_vis is not None)
+        self._cr_cdi_vis_dr.setText(str((cdi_vis or {}).get("dataref", "")))
+        cdi_vis_pred_idx = self._cr_cdi_vis_pred.findText(str((cdi_vis or {}).get("predicate", "")))
+        self._cr_cdi_vis_pred.setCurrentIndex(max(cdi_vis_pred_idx, 0))
         self._cr_cdi_preview_angle.setValue(float(cdi.get("preview_angle", 0.0)))
         self._cr_cdi_head.load(cdi.get("head"))
         self._cr_cdi_tail.load(cdi.get("tail"))
@@ -6487,6 +6517,13 @@ class PropertiesForm(QWidget):
                 cdi_fn = self._cr_cdi_fn.currentText()
                 if cdi_fn != _NONE:
                     cdi["convert_function"] = cdi_fn
+                if self._cr_cdi_vis_chk.isChecked():
+                    cdi_vis_dr = self._cr_cdi_vis_dr.text().strip()
+                    if cdi_vis_dr:
+                        cdi["visibility"] = {
+                            "dataref": cdi_vis_dr,
+                            "predicate": self._cr_cdi_vis_pred.currentText(),
+                        }
                 if self._cr_cdi_preview_angle.value() != 0.0:
                     cdi["preview_angle"] = self._cr_cdi_preview_angle.value()
                 devbar_dr = self._cr_devbar_dr.text().strip()
@@ -7144,6 +7181,9 @@ class PropertiesForm(QWidget):
         for section in self._cr_bearing_pointers.values():
             section.reset()
         self._cr_cdi_dr.clear(); self._cr_cdi_fn.setCurrentIndex(0)
+        self._cr_cdi_vis_chk.setChecked(False)
+        self._cr_cdi_vis_dr_box.setEnabled(False); self._cr_cdi_vis_pred.setEnabled(False)
+        self._cr_cdi_vis_dr.clear(); self._cr_cdi_vis_pred.setCurrentIndex(0)
         self._cr_cdi_preview_angle.setValue(0.0)
         self._cr_cdi_head.reset(); self._cr_cdi_tail.reset()
         self._cr_devbar_dr.clear(); self._cr_devbar_fn.setCurrentIndex(0)
