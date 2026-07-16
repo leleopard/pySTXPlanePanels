@@ -1778,6 +1778,25 @@ class _MapStyleSection(_SubSection):
         )
         self.row("Points (relative to position)", self._pts)
 
+        self._vis_chk = QCheckBox()
+        self._vis_chk.toggled.connect(self._on_vis_toggled)
+        self._vis_chk.toggled.connect(emit)
+        self._vis_dr = QLineEdit()
+        self._vis_dr.editingFinished.connect(emit)
+        self._vis_dr_box = owner._dr_field(self._vis_dr)
+        self._vis_dr_box.setEnabled(False)
+        _vis_dr_row = QWidget()
+        _vis_dr_hl = QHBoxLayout(_vis_dr_row)
+        _vis_dr_hl.setContentsMargins(0, 0, 0, 0); _vis_dr_hl.setSpacing(6)
+        _vis_dr_hl.addWidget(self._vis_chk)
+        _vis_dr_hl.addWidget(self._vis_dr_box, 1)
+        self.row("Show/hide dataref", _vis_dr_row)
+        self._vis_pred = _NoScrollComboBox()
+        self._vis_pred.addItems(_PREDICATES)
+        self._vis_pred.setEnabled(False)
+        self._vis_pred.currentTextChanged.connect(emit)
+        self.row("Show/hide predicate", self._vis_pred)
+
         self._fill = _FillOutlineRow(self, "Fill", emit, has_width=False)
         self._outline = _FillOutlineRow(self, "Outline", emit, has_width=True)
 
@@ -1856,6 +1875,10 @@ class _MapStyleSection(_SubSection):
         _off_w = QWidget(); _off_w.setLayout(_off_hl)
         self.row("Label offset", _off_w)
 
+    def _on_vis_toggled(self, on: bool) -> None:
+        self._vis_dr_box.setEnabled(on)
+        self._vis_pred.setEnabled(on)
+
     def _on_circle_toggled(self, on: bool) -> None:
         # Grays sub-widgets out without discarding whatever fill/outline
         # choice was already made — re-enabling "Add circle" restores it
@@ -1891,6 +1914,13 @@ class _MapStyleSection(_SubSection):
         cfg = cfg or {}
         if self._show_icao_only:
             self._icao_only_chk.setChecked(bool(cfg.get("icao_only", True)))
+        vis = cfg.get("visibility")
+        self._vis_chk.setChecked(vis is not None)
+        self._vis_dr_box.setEnabled(vis is not None)
+        self._vis_pred.setEnabled(vis is not None)
+        self._vis_dr.setText(str((vis or {}).get("dataref", "")))
+        pred_idx = self._vis_pred.findText(str((vis or {}).get("predicate", "")))
+        self._vis_pred.setCurrentIndex(max(pred_idx, 0))
         self._pts.load([[p[0], p[1]] for p in cfg.get("points", [])])
         self._fill.load(
             bool(cfg.get("filled", True)), cfg.get("color", [255, 255, 255, 255]), None,
@@ -1943,6 +1973,13 @@ class _MapStyleSection(_SubSection):
         data: dict = {}
         if self._show_icao_only and not self._icao_only_chk.isChecked():
             data["icao_only"] = False
+        if self._vis_chk.isChecked():
+            vis_dr = self._vis_dr.text().strip()
+            if vis_dr:
+                data["visibility"] = {
+                    "dataref": vis_dr,
+                    "predicate": self._vis_pred.currentText(),
+                }
         if pts:
             data["points"] = pts
             data["filled"] = self._fill.chk.isChecked()
@@ -1977,6 +2014,9 @@ class _MapStyleSection(_SubSection):
     def reset(self) -> None:
         if self._show_icao_only:
             self._icao_only_chk.setChecked(True)
+        self._vis_chk.setChecked(False)
+        self._vis_dr_box.setEnabled(False); self._vis_pred.setEnabled(False)
+        self._vis_dr.clear(); self._vis_pred.setCurrentIndex(0)
         self._pts.load([])
         self._fill.reset(); self._fill.chk.setChecked(True)
         self._outline.reset()

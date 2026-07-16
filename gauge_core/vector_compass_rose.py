@@ -402,6 +402,14 @@ YAML schema
                                              # matching a real charted EFIS.
                                              # Set false to show everything
                                              # X-Plane knows about.
+          visibility:                        # optional; independently
+                                             # shows/hides this whole
+                                             # feature type — separate from
+                                             # moving_map's own overall
+                                             # visibility, same convention
+                                             # as bearing_pointers
+            dataref: ...
+            predicate: true_if_over_zero
           points: [[-4, 0], [0, 4], [4, 0], [0, -4]]  # relative to the
                                              # feature's own screen position,
                                              # screen-fixed (never rotated) —
@@ -600,7 +608,11 @@ class _MapFeatureStyle:
     other types don't use 4-letter ICAO idents at all) drops candidates
     whose ident isn't a real 4-letter ICAO code, filtering out the huge
     number of genuine but uncharted/private airfields X-Plane's own
-    database carries that would never appear on a real EFIS."""
+    database carries that would never appear on a real EFIS. `vis_dataref`/
+    `vis_predicate` independently show/hide this whole feature type (e.g. a
+    range-selector knob position, same convention as bearing_pointers'
+    per-pointer visibility) — separate from the moving_map's own overall
+    visibility gate."""
 
     def __init__(
         self,
@@ -624,9 +636,14 @@ class _MapFeatureStyle:
         circle_outline_color: tuple[int, int, int, int] = (255, 255, 255, 255),
         circle_outline_width: float = 1.0,
         icao_only: bool = True,
+        vis_dataref: Any | None = None,
+        vis_predicate: Callable | None = None,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
         self.icao_only = bool(icao_only)
+        self.vis_dataref = vis_dataref
+        self.vis_predicate = vis_predicate
+        self.visible = True
         self.filled = bool(filled)
         self.color = color
         self.outline = bool(outline)
@@ -1272,6 +1289,9 @@ class VectorCompassRose(_VecBase):
             self._map_lon = float(get_data(self._map_gps_lon_dr))
             if self._map_vis_dr is not None and self._map_vis_predicate is not None:
                 self._map_visible = bool(self._map_vis_predicate(float(get_data(self._map_vis_dr)), get_data))
+            for style in self._map_styles.values():
+                if style.vis_dataref is not None and style.vis_predicate is not None:
+                    style.visible = bool(style.vis_predicate(float(get_data(style.vis_dataref)), get_data))
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -1614,7 +1634,7 @@ class VectorCompassRose(_VecBase):
         by_type: dict[str, list[tuple[float, float, dict]]] = {}
         for entry in index.nearby(self._map_lat, self._map_lon, range_nm):
             style = self._map_styles.get(entry["type"])
-            if style is None:
+            if style is None or not style.visible:
                 continue
             if (
                 entry["type"] == "airport" and style.icao_only
@@ -2004,6 +2024,7 @@ def _compass_rose_factory(
                 explicit_file=style_cfg.get("label_font_file"),
             )
             circle_cfg = style_cfg.get("circle") or {}
+            style_vis_cfg = style_cfg.get("visibility")
             styles[type_name] = _MapFeatureStyle(
                 points=[tuple(p) for p in style_cfg.get("points", [])],
                 filled=bool(style_cfg.get("filled", True)),
@@ -2025,6 +2046,8 @@ def _compass_rose_factory(
                 circle_outline_color=_as_color(circle_cfg.get("outline_color", [255, 255, 255, 255])),
                 circle_outline_width=float(circle_cfg.get("outline_width", 1.0)),
                 icao_only=bool(style_cfg.get("icao_only", True)),
+                vis_dataref=_as_dataref(style_vis_cfg["dataref"]) if style_vis_cfg else None,
+                vis_predicate=get_convert(resolve_predicate_name(style_vis_cfg)) if style_vis_cfg else None,
             )
         map_vis_cfg = map_cfg.get("visibility")
         rose.set_moving_map(
