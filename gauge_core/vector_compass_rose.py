@@ -457,6 +457,30 @@ YAML schema
           outline: true
           outline_color: [0, 200, 255, 200]
           outline_width: 1.5
+          active:                            # optional; recolors whichever
+                                             # VOR's ident matches a live
+                                             # "tuned station" string
+                                             # dataref, and draws a dashed
+                                             # course radial from that VOR's
+                                             # own position out to the
+                                             # rose's own edge — NOT the
+                                             # rose-centred CDI course line
+            ident_dataref: sim/cockpit2/radios/indicators/nav1_nav_id
+                                             # a plain dataref path (not a
+                                             # (group, index) tuple) — read
+                                             # char-by-char via X-Plane's
+                                             # array-index syntax, same
+                                             # mechanism as Text's
+                                             # char_count mode
+            ident_char_count: 4              # how many characters to read
+            color: [255, 60, 60, 255]        # overrides every color slot
+                                             # on the matched candidate
+                                             # (fill/outline/circle alike)
+            course_dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
+            convert_function: null           # optional
+            dash: [8.0, 4.0]                 # optional [on_px, off_px];
+                                             # omit (or null) for a solid line
+            width: 2.0
         ndb:                                 # same shape as airport:
           points: [[0, -5], [5, 4], [-5, 4]]
           filled: true
@@ -602,6 +626,23 @@ def _circle_outline_points(cx: float, cy: float, radius: float, num_segments: in
     ]
 
 
+def _ray_circle_exit(ox: float, oy: float, dx: float, dy: float,
+                      cx: float, cy: float, r: float) -> tuple[float, float]:
+    """Point where a ray from (ox, oy) in unit direction (dx, dy) exits the
+    circle centred at (cx, cy) with radius r. Used for the active-VOR
+    course line, which starts at the VOR's own screen position (inside the
+    rose) and must stop exactly at the rose's own edge rather than running
+    off to infinity. Assumes the origin is inside (or on) the circle —
+    true here since map features are only plotted within the rose's own
+    radius in the first place — so the forward root always exists."""
+    fx, fy = ox - cx, oy - cy
+    b_half = fx * dx + fy * dy
+    c = fx * fx + fy * fy - r * r
+    disc = max(0.0, b_half * b_half - c)
+    t = -b_half + math.sqrt(disc)
+    return (ox + t * dx, oy + t * dy)
+
+
 class _MapFeatureStyle:
     """Polygon + optional circle + optional label styling for one
     moving_map feature type (airport/vor/ndb/waypoint). Fill and outline
@@ -619,7 +660,12 @@ class _MapFeatureStyle:
     `vis_predicate` independently show/hide this whole feature type (e.g. a
     range-selector knob position, same convention as bearing_pointers'
     per-pointer visibility) — separate from the moving_map's own overall
-    visibility gate."""
+    visibility gate. `active_*` (meaningful for the vor type — the "tuned
+    VOR" concept) recolors whichever candidate's ident matches a live
+    string dataref (e.g. the active nav radio's station ident) and draws a
+    dashed course line from that candidate's own screen position out to
+    the rose's own edge, at an angle from a course dataref — a VOR radial
+    overlay, not the rose-centred CDI course line."""
 
     def __init__(
         self,
@@ -645,6 +691,12 @@ class _MapFeatureStyle:
         icao_only: bool = True,
         vis_dataref: Any | None = None,
         vis_predicate: Callable | None = None,
+        active_ident_datarefs: list[Any] | None = None,
+        active_color: tuple[int, int, int, int] = (255, 0, 0, 255),
+        active_course_dataref: Any | None = None,
+        active_course_convert: Callable | None = None,
+        active_dash: tuple[float, float] | None = None,
+        active_width: float = 2.0,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
         self.icao_only = bool(icao_only)
@@ -669,6 +721,14 @@ class _MapFeatureStyle:
         self.circle_outline = bool(circle_outline)
         self.circle_outline_color = circle_outline_color
         self.circle_outline_width = float(circle_outline_width)
+        self.active_ident_datarefs = list(active_ident_datarefs or [])
+        self.active_color = active_color
+        self.active_course_dataref = active_course_dataref
+        self.active_course_convert = active_course_convert
+        self.active_dash = tuple(active_dash) if active_dash else None
+        self.active_width = float(active_width)
+        self.active_ident = ""     # updated per-frame in update()
+        self.active_course = 0.0  # updated per-frame in update()
         # Own pool, not shared across styles — each style may have its own
         # label_font, which (unlike font_size/color/position) can only be
         # set at arcade.Text construction time, so pool objects can't be
@@ -1243,6 +1303,7 @@ class VectorCompassRose(_VecBase):
             style.label_offset_x *= scale; style.label_offset_y *= scale
             style.circle_radius *= scale
             style.circle_outline_width *= scale
+            style.active_width *= scale
             style.label_pool.clear()  # font size changed; pool objects are stale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
@@ -1308,6 +1369,19 @@ class VectorCompassRose(_VecBase):
             for style in self._map_styles.values():
                 if style.vis_dataref is not None and style.vis_predicate is not None:
                     style.visible = bool(style.vis_predicate(float(get_data(style.vis_dataref)), get_data))
+                if style.active_ident_datarefs:
+                    chars = []
+                    for dr in style.active_ident_datarefs:
+                        code = int(get_data(dr))
+                        if code <= 0:
+                            break  # null terminator / unfilled padding — stop, like a C string
+                        chars.append(chr(code))
+                    style.active_ident = "".join(chars)
+                if style.active_course_dataref is not None:
+                    raw = float(get_data(style.active_course_dataref))
+                    if style.active_course_convert is not None:
+                        raw = float(style.active_course_convert(raw, get_data))
+                    style.active_course = raw % 360.0
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -1676,6 +1750,7 @@ class VectorCompassRose(_VecBase):
         # __del__, so there's no accumulation to worry about.
         shapes = arcade.shape_list.ShapeElementList()
         labels_to_draw: list[arcade.Text] = []
+        active_lines_to_draw: list[tuple] = []
 
         for type_name, style in self._map_styles.items():
             items = by_type.get(type_name, [])
@@ -1689,6 +1764,16 @@ class VectorCompassRose(_VecBase):
                 # heading-up convention the rest of this rose uses.
                 pts = [(cx + px, cy + py) for px, py in style.points]
 
+                # The "active" candidate (e.g. the tuned VOR) recolors
+                # every color slot on this one entry — same shapes, just
+                # highlighted — and gets a dashed course-line radial from
+                # its own position out to the rose's edge.
+                is_active = bool(style.active_ident) and entry.get("ident", "") == style.active_ident
+                color = style.active_color if is_active else style.color
+                outline_color = style.active_color if is_active else style.outline_color
+                circle_color = style.active_color if is_active else style.circle_color
+                circle_outline_color = style.active_color if is_active else style.circle_outline_color
+
                 # Fill and outline are independent — either, both, or
                 # neither can be enabled, for both the circle and the
                 # polygon, each with its own color (and the outline its
@@ -1697,21 +1782,29 @@ class VectorCompassRose(_VecBase):
                     d = style.circle_radius * 2.0
                     if style.circle_filled:
                         shapes.append(arcade.shape_list.create_ellipse_filled(
-                            cx, cy, d, d, style.circle_color,
+                            cx, cy, d, d, circle_color,
                         ))
                     if style.circle_outline:
                         shapes.append(arcade.shape_list.create_line_loop(
                             _circle_outline_points(cx, cy, style.circle_radius),
-                            style.circle_outline_color, style.circle_outline_width,
+                            circle_outline_color, style.circle_outline_width,
                         ))
 
                 if style.points:
                     if style.filled:
-                        shapes.append(arcade.shape_list.create_polygon(pts, style.color))
+                        shapes.append(arcade.shape_list.create_polygon(pts, color))
                     if style.outline:
                         shapes.append(arcade.shape_list.create_line_loop(
-                            pts, style.outline_color, style.outline_width,
+                            pts, outline_color, style.outline_width,
                         ))
+
+                if is_active and style.active_course_dataref is not None:
+                    angle = math.radians(90.0 - style.active_course + self._heading)
+                    dx, dy = math.cos(angle), math.sin(angle)
+                    ex, ey = _ray_circle_exit(cx, cy, dx, dy, self._cx, self._cy, self._radius)
+                    active_lines_to_draw.append(
+                        (cx, cy, ex, ey, style.active_color, style.active_width, style.active_dash)
+                    )
 
                 if style.label:
                     if label_idx >= len(style.label_pool):
@@ -1739,6 +1832,11 @@ class VectorCompassRose(_VecBase):
                     label_idx += 1
 
         shapes.draw()
+        # The active-VOR course line is a dashed line (immediate-mode, like
+        # the CDI's own dashed segments) — at most one per feature type, so
+        # batching it into `shapes` isn't worth the complexity.
+        for x0, y0, x1, y1, line_color, line_width, dash in active_lines_to_draw:
+            self._draw_dashed_line(x0, y0, x1, y1, line_color, line_width, dash)
         # Labels draw after the whole batch, not interleaved per-feature —
         # a label always sits offset to the right of its own symbol rather
         # than overlapping it, so drawing all labels on top of all symbols
@@ -2044,6 +2142,14 @@ def _compass_rose_factory(
             )
             circle_cfg = style_cfg.get("circle") or {}
             style_vis_cfg = style_cfg.get("visibility")
+            active_cfg = style_cfg.get("active") or {}
+            active_ident_dr = active_cfg.get("ident_dataref")
+            active_ident_datarefs = (
+                [f"{active_ident_dr}[{i}]" for i in range(int(active_cfg.get("ident_char_count", 1)))]
+                if active_ident_dr else []
+            )
+            active_course_dr = active_cfg.get("course_dataref")
+            active_course_fn = active_cfg.get("convert_function")
             styles[type_name] = _MapFeatureStyle(
                 points=[tuple(p) for p in style_cfg.get("points", [])],
                 filled=bool(style_cfg.get("filled", True)),
@@ -2067,6 +2173,12 @@ def _compass_rose_factory(
                 icao_only=bool(style_cfg.get("icao_only", True)),
                 vis_dataref=_as_dataref(style_vis_cfg["dataref"]) if style_vis_cfg else None,
                 vis_predicate=get_convert(resolve_predicate_name(style_vis_cfg)) if style_vis_cfg else None,
+                active_ident_datarefs=active_ident_datarefs,
+                active_color=_as_color(active_cfg.get("color", [255, 0, 0, 255])),
+                active_course_dataref=_as_dataref(active_course_dr) if active_course_dr else None,
+                active_course_convert=get_convert(active_course_fn) if active_course_fn else None,
+                active_dash=tuple(active_cfg["dash"]) if active_cfg.get("dash") else None,
+                active_width=float(active_cfg.get("width", 2.0)),
             )
         map_vis_cfg = map_cfg.get("visibility")
         rose.set_moving_map(

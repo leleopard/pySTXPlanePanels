@@ -1748,11 +1748,12 @@ class _MapStyleSection(_SubSection):
     feature type on the map."""
 
     def __init__(self, label: str, owner: "PropertiesForm", parent=None,
-                 show_icao_only_option: bool = False):
+                 show_icao_only_option: bool = False, show_active_option: bool = False):
         super().__init__(label, collapsed=True, parent=parent)
         self._owner = owner
         emit = owner._emit
         self._show_icao_only = show_icao_only_option
+        self._show_active = show_active_option
 
         if show_icao_only_option:
             self._icao_only_chk = QCheckBox("Charted (ICAO 4-letter ident) airports only")
@@ -1875,9 +1876,96 @@ class _MapStyleSection(_SubSection):
         _off_w = QWidget(); _off_w.setLayout(_off_hl)
         self.row("Label offset", _off_w)
 
+        if show_active_option:
+            self._active_chk = QCheckBox("Highlight active VOR + course radial")
+            self._active_chk.setToolTip(
+                "Recolors whichever candidate's ident matches a live \"tuned\n"
+                "station\" string dataref, and draws a dashed course line from\n"
+                "that VOR's own position out to the rose's own edge — a VOR\n"
+                "radial overlay, not the rose-centred CDI course line."
+            )
+            self._active_chk.toggled.connect(self._on_active_toggled)
+            self._active_chk.toggled.connect(emit)
+            self.row_widget(self._active_chk)
+
+            self._active_ident_dr = QLineEdit()
+            self._active_ident_dr.setPlaceholderText("e.g. sim/cockpit2/radios/indicators/nav1_nav_id")
+            self._active_ident_dr.editingFinished.connect(emit)
+            self._active_ident_dr_box = owner._dr_field(self._active_ident_dr)
+            self._active_ident_dr_box.setEnabled(False)
+            self.row("Active ident dataref", self._active_ident_dr_box)
+
+            self._active_ident_count = QSpinBox()
+            self._active_ident_count.setRange(1, 16)
+            self._active_ident_count.setValue(4)
+            self._active_ident_count.setEnabled(False)
+            self._active_ident_count.valueChanged.connect(emit)
+            self.row("Ident character count", self._active_ident_count)
+
+            self._active_color = _ColorButton()
+            self._active_color.set_rgba((255, 60, 60, 255))
+            self._active_color.setEnabled(False)
+            self._active_color.color_changed.connect(emit)
+            self.row("Highlight color", self._active_color)
+
+            self._active_course_dr = QLineEdit()
+            self._active_course_dr.setEnabled(False)
+            self._active_course_dr.editingFinished.connect(emit)
+            self._active_course_dr_box = owner._dr_field(self._active_course_dr)
+            self._active_course_dr_box.setEnabled(False)
+            self.row("Course dataref", self._active_course_dr_box)
+
+            self._active_course_fn = _NoScrollComboBox()
+            self._active_course_fn.addItems(_VALUE_FUNCS)
+            self._active_course_fn.setEnabled(False)
+            self._active_course_fn.currentTextChanged.connect(emit)
+            self.row("Course convert function", self._active_course_fn)
+
+            self._active_width = QDoubleSpinBox()
+            self._active_width.setRange(0.5, 50.0); self._active_width.setDecimals(1)
+            self._active_width.setValue(2.0)
+            self._active_width.setEnabled(False)
+            self._active_width.valueChanged.connect(emit)
+            self.row("Course line width", self._active_width)
+
+            self._active_dash_chk = QCheckBox("Dashed")
+            self._active_dash_chk.setEnabled(False)
+            self._active_dash_chk.toggled.connect(self._on_active_dash_toggled)
+            self._active_dash_chk.toggled.connect(emit)
+            self.row_widget(self._active_dash_chk)
+
+            self._active_dash_on = QDoubleSpinBox()
+            self._active_dash_on.setRange(0.5, 200.0); self._active_dash_on.setDecimals(1)
+            self._active_dash_on.setValue(8.0)
+            self._active_dash_on.setEnabled(False)
+            self._active_dash_on.valueChanged.connect(emit)
+            self.row("Dash on px", self._active_dash_on)
+
+            self._active_dash_off = QDoubleSpinBox()
+            self._active_dash_off.setRange(0.5, 200.0); self._active_dash_off.setDecimals(1)
+            self._active_dash_off.setValue(4.0)
+            self._active_dash_off.setEnabled(False)
+            self._active_dash_off.valueChanged.connect(emit)
+            self.row("Dash off px", self._active_dash_off)
+
     def _on_vis_toggled(self, on: bool) -> None:
         self._vis_dr_box.setEnabled(on)
         self._vis_pred.setEnabled(on)
+
+    def _on_active_toggled(self, on: bool) -> None:
+        self._active_ident_dr_box.setEnabled(on)
+        self._active_ident_count.setEnabled(on)
+        self._active_color.setEnabled(on)
+        self._active_course_dr_box.setEnabled(on)
+        self._active_course_fn.setEnabled(on)
+        self._active_width.setEnabled(on)
+        self._active_dash_chk.setEnabled(on)
+        self._active_dash_on.setEnabled(on and self._active_dash_chk.isChecked())
+        self._active_dash_off.setEnabled(on and self._active_dash_chk.isChecked())
+
+    def _on_active_dash_toggled(self, on: bool) -> None:
+        self._active_dash_on.setEnabled(on)
+        self._active_dash_off.setEnabled(on)
 
     def _on_circle_toggled(self, on: bool) -> None:
         # Grays sub-widgets out without discarding whatever fill/outline
@@ -1965,6 +2053,24 @@ class _MapStyleSection(_SubSection):
         self._label_offset_y.setEnabled(label_on)
         self._label_offset_y.setValue(float(loff[1]))
 
+        if self._show_active:
+            active = cfg.get("active")
+            active_on = active is not None
+            self._active_chk.setChecked(active_on)
+            active = active or {}
+            self._active_ident_dr.setText(str(active.get("ident_dataref", "")))
+            self._active_ident_count.setValue(int(active.get("ident_char_count", 4)))
+            self._active_color.set_rgba(active.get("color", [255, 60, 60, 255]))
+            self._active_course_dr.setText(str(active.get("course_dataref", "")))
+            active_fn_idx = self._active_course_fn.findText(str(active.get("convert_function") or _NONE))
+            self._active_course_fn.setCurrentIndex(max(active_fn_idx, 0))
+            self._active_width.setValue(float(active.get("width", 2.0)))
+            active_dash = active.get("dash")
+            self._active_dash_chk.setChecked(active_dash is not None)
+            self._active_dash_on.setValue(float(active_dash[0]) if active_dash else 8.0)
+            self._active_dash_off.setValue(float(active_dash[1]) if active_dash else 4.0)
+            self._on_active_toggled(active_on)
+
     def get_data(self) -> dict | None:
         pts = self._pts.get_data()
         circle_on = self._circle_chk.isChecked()
@@ -2009,6 +2115,23 @@ class _MapStyleSection(_SubSection):
             loff = (self._label_offset_x.value(), self._label_offset_y.value())
             if loff != (6.0, 0.0):
                 data["label_offset"] = list(loff)
+        if self._show_active and self._active_chk.isChecked():
+            active_ident_dr = self._active_ident_dr.text().strip()
+            active_course_dr = self._active_course_dr.text().strip()
+            if active_ident_dr and active_course_dr:
+                active: dict = {
+                    "ident_dataref": active_ident_dr,
+                    "ident_char_count": self._active_ident_count.value(),
+                    "color": list(self._active_color.get_rgba()),
+                    "course_dataref": active_course_dr,
+                    "width": self._active_width.value(),
+                }
+                active_fn = self._active_course_fn.currentText()
+                if active_fn != _NONE:
+                    active["convert_function"] = active_fn
+                if self._active_dash_chk.isChecked():
+                    active["dash"] = [self._active_dash_on.value(), self._active_dash_off.value()]
+                data["active"] = active
         return data
 
     def reset(self) -> None:
@@ -2031,6 +2154,18 @@ class _MapStyleSection(_SubSection):
         self._label_color.set_rgba(None)
         self._label_offset_x.setValue(6.0)
         self._label_offset_y.setValue(0.0)
+        if self._show_active:
+            self._active_chk.setChecked(False)
+            self._active_ident_dr.clear()
+            self._active_ident_count.setValue(4)
+            self._active_color.set_rgba((255, 60, 60, 255))
+            self._active_course_dr.clear()
+            self._active_course_fn.setCurrentIndex(0)
+            self._active_width.setValue(2.0)
+            self._active_dash_chk.setChecked(False)
+            self._active_dash_on.setValue(8.0)
+            self._active_dash_off.setValue(4.0)
+            self._on_active_toggled(False)
 
 
 class _AutoSizeStack(QStackedWidget):
@@ -4734,7 +4869,7 @@ class PropertiesForm(QWidget):
 
         self._cr_map_airport = _MapStyleSection("Airport", self, show_icao_only_option=True)
         _cr_map.row_widget(self._cr_map_airport)
-        self._cr_map_vor = _MapStyleSection("VOR", self)
+        self._cr_map_vor = _MapStyleSection("VOR", self, show_active_option=True)
         _cr_map.row_widget(self._cr_map_vor)
         self._cr_map_ndb = _MapStyleSection("NDB", self)
         _cr_map.row_widget(self._cr_map_ndb)
