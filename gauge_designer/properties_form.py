@@ -2115,22 +2115,32 @@ class _MapStyleSection(_SubSection):
             if loff != (6.0, 0.0):
                 data["label_offset"] = list(loff)
         if self._show_active and self._active_chk.isChecked():
+            # Saved as soon as the checkbox is checked, even with the
+            # dataref fields still blank — unlike most visibility toggles
+            # elsewhere in this form, this one has two required fields, so
+            # gating the whole block behind both being filled in made it
+            # too easy to lose progress (and made the checkbox itself look
+            # like it "wasn't saving"). The runtime factory already treats
+            # a missing ident_dataref/course_dataref as "not configured"
+            # and simply doesn't highlight/draw anything, so an
+            # incompletely-filled-in block is safe to persist.
+            active: dict = {
+                "ident_char_count": self._active_ident_count.value(),
+                "color": list(self._active_color.get_rgba()),
+                "width": self._active_width.value(),
+            }
             active_ident_dr = self._active_ident_dr.text().strip()
+            if active_ident_dr:
+                active["ident_dataref"] = active_ident_dr
             active_course_dr = self._active_course_dr.text().strip()
-            if active_ident_dr and active_course_dr:
-                active: dict = {
-                    "ident_dataref": active_ident_dr,
-                    "ident_char_count": self._active_ident_count.value(),
-                    "color": list(self._active_color.get_rgba()),
-                    "course_dataref": active_course_dr,
-                    "width": self._active_width.value(),
-                }
-                active_fn = self._active_course_fn.currentText()
-                if active_fn != _NONE:
-                    active["convert_function"] = active_fn
-                if self._active_dash_chk.isChecked():
-                    active["dash"] = [self._active_dash_on.value(), self._active_dash_off.value()]
-                data["active"] = active
+            if active_course_dr:
+                active["course_dataref"] = active_course_dr
+            active_fn = self._active_course_fn.currentText()
+            if active_fn != _NONE:
+                active["convert_function"] = active_fn
+            if self._active_dash_chk.isChecked():
+                active["dash"] = [self._active_dash_on.value(), self._active_dash_off.value()]
+            data["active"] = active
         return data
 
     def reset(self) -> None:

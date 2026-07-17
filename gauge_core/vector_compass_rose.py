@@ -461,9 +461,11 @@ YAML schema
                                              # VOR's ident matches a live
                                              # "tuned station" string
                                              # dataref, and draws a dashed
-                                             # course radial from that VOR's
-                                             # own position out to the
-                                             # rose's own edge — NOT the
+                                             # course radial THROUGH that
+                                             # VOR's own position, capped at
+                                             # the rose's own edge in both
+                                             # directions (course and its
+                                             # reciprocal) — NOT the
                                              # rose-centred CDI course line
             ident_dataref: sim/cockpit2/radios/indicators/nav1_nav_id
                                              # a plain dataref path (not a
@@ -663,9 +665,10 @@ class _MapFeatureStyle:
     visibility gate. `active_*` (meaningful for the vor type — the "tuned
     VOR" concept) recolors whichever candidate's ident matches a live
     string dataref (e.g. the active nav radio's station ident) and draws a
-    dashed course line from that candidate's own screen position out to
-    the rose's own edge, at an angle from a course dataref — a VOR radial
-    overlay, not the rose-centred CDI course line."""
+    dashed course radial through that candidate's own screen position, at
+    an angle from a course dataref, capped at the rose's own edge in both
+    directions (the course and its reciprocal) — a VOR radial overlay, not
+    the rose-centred CDI course line."""
 
     def __init__(
         self,
@@ -1799,11 +1802,16 @@ class VectorCompassRose(_VecBase):
                         ))
 
                 if is_active and style.active_course_dataref is not None:
+                    # A full radial through the VOR — both the course
+                    # direction and its reciprocal — not just a one-way ray
+                    # toward the rose's edge, so both the TO and FROM sides
+                    # of the course are visible.
                     angle = math.radians(90.0 - style.active_course + self._heading)
                     dx, dy = math.cos(angle), math.sin(angle)
-                    ex, ey = _ray_circle_exit(cx, cy, dx, dy, self._cx, self._cy, self._radius)
+                    ex1, ey1 = _ray_circle_exit(cx, cy, dx, dy, self._cx, self._cy, self._radius)
+                    ex2, ey2 = _ray_circle_exit(cx, cy, -dx, -dy, self._cx, self._cy, self._radius)
                     active_lines_to_draw.append(
-                        (cx, cy, ex, ey, style.active_color, style.active_width, style.active_dash)
+                        (ex1, ey1, ex2, ey2, style.active_color, style.active_width, style.active_dash)
                     )
 
                 if style.label:
