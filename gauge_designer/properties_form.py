@@ -58,7 +58,14 @@ class _ColorButton(QPushButton):
     repeatedly just clobbers slot 0 instead of filling the palette left to
     right. `_reslot_custom_colors()` detects that overwrite after the
     dialog closes, restores the clobbered slot, and re-homes the new color
-    into our own tracked next-empty slot instead.
+    into our own tracked next-empty slot instead. This only fixes the
+    *persisted* state (correct again the next time a dialog opens) — the
+    already-open native dialog still visibly shows the clobber for the
+    rest of that one session, which isn't reliably patchable (Windows
+    uses its own native color picker by default, not a Qt-rendered one,
+    so there's no live hook to correct it mid-session without a fragile
+    polling workaround). The button's own tooltip explains this instead
+    of trying to paper over it.
     """
     color_changed = Signal()
     _custom_colors_loaded = False
@@ -69,6 +76,12 @@ class _ColorButton(QPushButton):
         self._rgba = (255, 255, 255, 255)
         self.setFixedHeight(24)
         self.setIconSize(QSize(16, 16))
+        self.setToolTip(
+            "Tip: \"Add to Custom Colors\" in the picker may briefly overwrite\n"
+            "the top-left custom swatch while the dialog is still open — this\n"
+            "is a Windows/Qt quirk, not a bug here. It self-corrects as soon as\n"
+            "you click OK; reopen the picker to see your color in its own slot."
+        )
         self.clicked.connect(self._pick)
         _ColorButton._load_custom_colors()
         self._refresh()
