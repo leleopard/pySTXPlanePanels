@@ -127,7 +127,11 @@ def _pil_font(name: str | None, size: int, *,
     px_size = max(1, int(round(size * 96 / 72)))
     font = None
     if name:
-        needle = name.lower().replace(" ", "")
+        # Must strip the same characters on both sides — a configured name
+        # like "DS-Digital" needs to match a filename like
+        # "DS-Digital-ItalicST.ttf" regardless of whether either side uses
+        # hyphens, underscores, or spaces as the word separator.
+        needle = name.lower().replace(" ", "").replace("-", "").replace("_", "")
         search_dirs = [Path("C:/Windows/Fonts")] + _EXTRA_FONT_DIRS
         candidates: list[tuple[Path, bool, bool]] = []
         seen: set[Path] = set()
@@ -138,7 +142,7 @@ def _pil_font(name: str | None, size: int, *,
                 if f.suffix.lower() not in (".ttf", ".otf", ".ttc") or f in seen:
                     continue
                 seen.add(f)
-                stem = f.stem.lower().replace(" ", "").replace("-", "")
+                stem = f.stem.lower().replace(" ", "").replace("-", "").replace("_", "")
                 if needle not in stem:
                     continue
                 if f.suffix.lower() == ".ttc":
