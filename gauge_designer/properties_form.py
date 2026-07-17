@@ -1909,7 +1909,6 @@ class _MapStyleSection(_SubSection):
             self.row("Highlight color", self._active_color)
 
             self._active_course_dr = QLineEdit()
-            self._active_course_dr.setEnabled(False)
             self._active_course_dr.editingFinished.connect(emit)
             self._active_course_dr_box = owner._dr_field(self._active_course_dr)
             self._active_course_dr_box.setEnabled(False)
