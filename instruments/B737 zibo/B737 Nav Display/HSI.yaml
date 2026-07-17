@@ -137,6 +137,16 @@ components:
     - 255
     filled: false
     width: 2.0
+    line:
+      color:
+      - 242
+      - 161
+      - 239
+      - 255
+      width: 2.0
+      dash:
+      - 10.0
+      - 30.0
   heading_marker:
     radius: 400.0
     points:
@@ -306,6 +316,9 @@ components:
         - 255
         filled: false
         width: 2.0
+    visibility:
+      dataref: laminar/B738/EFIS_control/capt/map_mode_pos
+      predicate: true_if_equals_1
     preview_angle: -20.0
     deviation_bar:
       dataref: sim/cockpit/radios/nav1_hdef_dot
@@ -350,6 +363,9 @@ components:
       dataref: laminar/B738/EFIS_control/capt/map_mode_pos
       predicate: true_if_equals_2
     airport:
+      visibility:
+        dataref: laminar/B738/EFIS/EFIS_airport_on
+        predicate: true_if_equals_1
       circle:
         radius: 10.0
         filled: false
@@ -377,49 +393,52 @@ components:
       - 14.0
       - -14.0
     vor:
+      visibility:
+        dataref: laminar/B738/EFIS/EFIS_vor_on
+        predicate: true_if_equals_1
       points:
-      - - 0.0
-        - 7.0
-      - - -4.9
-        - 5.6
-      - - -8.4
-        - 7.7
-      - - -11.2
-        - 3.5
-      - - -7.0
-        - 1.4
-      - - -4.9
-        - 5.6
-      - - -7.0
-        - 1.4
-      - - -6.3
-        - -3.5
-      - - -2.1
-        - -7.0
-      - - -2.1
-        - -11.2
-      - - 2.1
-        - -11.2
-      - - 2.1
-        - -7.0
-      - - -2.1
-        - -7.0
-      - - 2.1
-        - -7.0
-      - - 6.3
-        - -3.5
-      - - 7.0
-        - 1.4
-      - - 11.2
-        - 3.5
-      - - 8.4
-        - 7.7
-      - - 4.9
-        - 5.6
-      - - 7.0
-        - 1.4
-      - - 4.9
-        - 5.6
+      - - 0
+        - 7
+      - - -5
+        - 6
+      - - -8
+        - 8
+      - - -11
+        - 4
+      - - -7
+        - 1
+      - - -5
+        - 6
+      - - -7
+        - 1
+      - - -6
+        - -4
+      - - -2
+        - -7
+      - - -2
+        - -11
+      - - 2
+        - -11
+      - - 2
+        - -7
+      - - -2
+        - -7
+      - - 2
+        - -7
+      - - 6
+        - -4
+      - - 7
+        - 1
+      - - 11
+        - 4
+      - - 8
+        - 8
+      - - 5
+        - 6
+      - - 7
+        - 1
+      - - 5
+        - 6
       filled: false
       color:
       - 255
@@ -433,7 +452,34 @@ components:
       - 255
       - 255
       outline_width: 2.0
+      label: true
+      label_font_size: 14.0
+      label_color:
+      - 0
+      - 170
+      - 255
+      - 255
+      label_font: ST_Boeing_PFD
+      label_offset:
+      - 14.0
+      - -14.0
+      active:
+        ident_char_count: 4
+        color:
+        - 255
+        - 60
+        - 60
+        - 255
+        width: 2.0
+        ident_dataref: sim/cockpit2/radios/indicators/nav1_dme_id
+        course_dataref: laminar/B738/autopilot/course_pilot
+        dash:
+        - 8.0
+        - 4.0
     waypoint:
+      visibility:
+        dataref: laminar/B738/EFIS/EFIS_fix_on
+        predicate: true_if_equals_1
       points:
       - - 0
         - 5
@@ -454,6 +500,17 @@ components:
       - 255
       - 255
       outline_width: 2.0
+      label: true
+      label_font_size: 14.0
+      label_color:
+      - 0
+      - 170
+      - 255
+      - 255
+      label_font: ST_Boeing_PFD
+      label_offset:
+      - 14.0
+      - -14.0
   viewport:
   - 0
   - 0
@@ -474,6 +531,45 @@ components:
   - 255
   - 255
   anchor_x: center
+- name: vor2_bgd
+  type: FilledRect
+  position:
+  - 552
+  - 30
+  size:
+  - 99
+  - 100
+  color:
+  - 0
+  - 0
+  - 0
+  - 255
+- name: vor2_bgd_copy
+  type: FilledRect
+  position:
+  - 55
+  - 49
+  size:
+  - 120
+  - 107
+  color:
+  - 0
+  - 0
+  - 0
+  - 255
+- name: EFIS points bg
+  type: FilledRect
+  position:
+  - 21
+  - 160
+  size:
+  - 67
+  - 121
+  color:
+  - 0
+  - 0
+  - 0
+  - 255
 - name: heading_linebox
   type: Line
   points:
@@ -709,4 +805,68 @@ components:
   anchor_x: center
   visibility:
     dataref: laminar/B738/nd/capt/efis_disagree
+    predicate: true_if_equals_1
+- name: ARPRT EFIS txt
+  type: Text
+  position:
+  - 10
+  - 200
+  text: ARPT
+  font_name: ST_Boeing_PFD
+  font_size: 14.0
+  color:
+  - 0
+  - 170
+  - 255
+  - 255
+  visibility:
+    dataref: laminar/B738/EFIS/EFIS_airport_on
+    predicate: true_if_equals_1
+- name: WPT EFIS txt
+  type: Text
+  position:
+  - 10
+  - 182
+  text: WPT
+  font_name: ST_Boeing_PFD
+  font_size: 14.0
+  color:
+  - 0
+  - 170
+  - 255
+  - 255
+  visibility:
+    dataref: laminar/B738/EFIS/EFIS_fix_on
+    predicate: true_if_equals_1
+- name: STA EFIS txt
+  type: Text
+  position:
+  - 10
+  - 164
+  text: STA
+  font_name: ST_Boeing_PFD
+  font_size: 14.0
+  color:
+  - 0
+  - 170
+  - 255
+  - 255
+  visibility:
+    dataref: laminar/B738/EFIS/EFIS_vor_on
+    predicate: true_if_equals_1
+- name: WXA EFIS txt
+  type: Text
+  position:
+  - 10
+  - 147
+  text: WX-A
+  font_name: ST_Boeing_PFD
+  font_size: 14.0
+  color:
+  - 0
+  - 170
+  - 255
+  - 255
+  visibility:
+    dataref: laminar/B738/EFIS/EFIS_wx_on
     predicate: true_if_equals_1
