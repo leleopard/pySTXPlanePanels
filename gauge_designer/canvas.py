@@ -1104,6 +1104,14 @@ class InstrumentCanvas(QWidget):
             # representative angle so position/orientation are visible.
             bug_heading = 20.0
             bug_radius = float(bug_cfg.get("radius", comp.get("radius", r)))
+            bug_line_cfg = bug_cfg.get("line")
+            if bug_line_cfg:
+                # Reuses the CDI segment drawer — start=0 (rose centre),
+                # end=bug_radius, same shape as a CDI head/tail line.
+                self._draw_compassrose_cdi_segment(
+                    point_at, draw, bug_heading,
+                    {**bug_line_cfg, "start": 0.0, "end": bug_radius}, bug_radius,
+                )
             bcx, bcy = point_at(bug_heading, bug_radius)
             # Rotate the bug's local points the same way point_at() derives
             # position (heading=0 for the static preview, so the runtime's

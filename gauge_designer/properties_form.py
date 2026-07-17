@@ -4494,6 +4494,47 @@ class PropertiesForm(QWidget):
         self._cr_bug_outline_width.valueChanged.connect(self._emit)
         _cr_bug.row("Outline width ", self._cr_bug_outline_width)
 
+        self._cr_bug_line_chk = QCheckBox("Add heading line (centre to bug)")
+        self._cr_bug_line_chk.setToolTip(
+            "Draws a radial spoke from the rose centre out to the bug's own\n"
+            "position, underneath the bug symbol."
+        )
+        self._cr_bug_line_chk.toggled.connect(self._on_cr_bug_line_toggled)
+        self._cr_bug_line_chk.toggled.connect(self._emit)
+        _cr_bug.row_widget(self._cr_bug_line_chk)
+
+        self._cr_bug_line_color = _ColorButton()
+        self._cr_bug_line_color.setEnabled(False)
+        self._cr_bug_line_color.color_changed.connect(self._emit)
+        _cr_bug.row("Line color", self._cr_bug_line_color)
+
+        self._cr_bug_line_width = QDoubleSpinBox()
+        self._cr_bug_line_width.setRange(0.5, 50.0); self._cr_bug_line_width.setDecimals(1)
+        self._cr_bug_line_width.setValue(2.0)
+        self._cr_bug_line_width.setEnabled(False)
+        self._cr_bug_line_width.valueChanged.connect(self._emit)
+        _cr_bug.row("Line width", self._cr_bug_line_width)
+
+        self._cr_bug_line_dash_chk = QCheckBox("Dashed")
+        self._cr_bug_line_dash_chk.setEnabled(False)
+        self._cr_bug_line_dash_chk.toggled.connect(self._on_cr_bug_line_dash_toggled)
+        self._cr_bug_line_dash_chk.toggled.connect(self._emit)
+        _cr_bug.row_widget(self._cr_bug_line_dash_chk)
+
+        self._cr_bug_line_dash_on = QDoubleSpinBox()
+        self._cr_bug_line_dash_on.setRange(0.5, 200.0); self._cr_bug_line_dash_on.setDecimals(1)
+        self._cr_bug_line_dash_on.setValue(8.0)
+        self._cr_bug_line_dash_on.setEnabled(False)
+        self._cr_bug_line_dash_on.valueChanged.connect(self._emit)
+        _cr_bug.row("Dash on px", self._cr_bug_line_dash_on)
+
+        self._cr_bug_line_dash_off = QDoubleSpinBox()
+        self._cr_bug_line_dash_off.setRange(0.5, 200.0); self._cr_bug_line_dash_off.setDecimals(1)
+        self._cr_bug_line_dash_off.setValue(4.0)
+        self._cr_bug_line_dash_off.setEnabled(False)
+        self._cr_bug_line_dash_off.valueChanged.connect(self._emit)
+        _cr_bug.row("Dash off px", self._cr_bug_line_dash_off)
+
         self._cr_sec.row_widget(_cr_bug)
 
         # ── Heading Marker ───────────────────────────────────────────────────
@@ -4974,6 +5015,17 @@ class PropertiesForm(QWidget):
     def _on_cr_bug_outline_toggled(self, on: bool) -> None:
         self._cr_bug_outline_color.setEnabled(on)
         self._cr_bug_outline_width.setEnabled(on)
+
+    def _on_cr_bug_line_toggled(self, on: bool) -> None:
+        self._cr_bug_line_color.setEnabled(on)
+        self._cr_bug_line_width.setEnabled(on)
+        self._cr_bug_line_dash_chk.setEnabled(on)
+        self._cr_bug_line_dash_on.setEnabled(on and self._cr_bug_line_dash_chk.isChecked())
+        self._cr_bug_line_dash_off.setEnabled(on and self._cr_bug_line_dash_chk.isChecked())
+
+    def _on_cr_bug_line_dash_toggled(self, on: bool) -> None:
+        self._cr_bug_line_dash_on.setEnabled(on)
+        self._cr_bug_line_dash_off.setEnabled(on)
 
     def _on_cr_line_toggled(self, on: bool) -> None:
         self._cr_line_color.setEnabled(on)
@@ -6121,6 +6173,21 @@ class PropertiesForm(QWidget):
         self._cr_bug_outline_width.setEnabled(has_bug_outline)
         self._cr_bug_form.setRowVisible(self._cr_bug_outline_width, bug_filled)
         self._cr_bug_outline_width.setValue(float(cr_bug.get("outline_width", 1.0)))
+        bug_line = cr_bug.get("line")
+        bug_line_on = bug_line is not None
+        self._cr_bug_line_chk.blockSignals(True)
+        self._cr_bug_line_chk.setChecked(bug_line_on)
+        self._cr_bug_line_chk.blockSignals(False)
+        bug_line = bug_line or {}
+        self._cr_bug_line_color.set_rgba(bug_line.get("color", [255, 255, 255, 255]))
+        self._cr_bug_line_width.setValue(float(bug_line.get("width", 2.0)))
+        bug_line_dash = bug_line.get("dash")
+        self._cr_bug_line_dash_chk.blockSignals(True)
+        self._cr_bug_line_dash_chk.setChecked(bug_line_dash is not None)
+        self._cr_bug_line_dash_chk.blockSignals(False)
+        self._cr_bug_line_dash_on.setValue(float(bug_line_dash[0]) if bug_line_dash else 8.0)
+        self._cr_bug_line_dash_off.setValue(float(bug_line_dash[1]) if bug_line_dash else 4.0)
+        self._on_cr_bug_line_toggled(bug_line_on)
         cr_marker = comp.get("heading_marker") or {}
         self._cr_marker_radius.setValue(float(cr_marker.get("radius", comp.get("radius", 150.0))))
         self._cr_marker_pts.load([[p[0], p[1]] for p in cr_marker.get("points", [])])
@@ -6613,6 +6680,14 @@ class PropertiesForm(QWidget):
                 elif self._cr_bug_outline_chk.isChecked():
                     bug["outline_color"] = list(self._cr_bug_outline_color.get_rgba())
                     bug["outline_width"] = self._cr_bug_outline_width.value()
+                if self._cr_bug_line_chk.isChecked():
+                    bug_line: dict = {
+                        "color": list(self._cr_bug_line_color.get_rgba()),
+                        "width": self._cr_bug_line_width.value(),
+                    }
+                    if self._cr_bug_line_dash_chk.isChecked():
+                        bug_line["dash"] = [self._cr_bug_line_dash_on.value(), self._cr_bug_line_dash_off.value()]
+                    bug["line"] = bug_line
                 data["heading_bug"] = bug
             cr_marker_pts = self._cr_marker_pts.get_data()
             if cr_marker_pts:
@@ -7311,6 +7386,11 @@ class PropertiesForm(QWidget):
         self._cr_bug_filled.setChecked(True); self._cr_bug_width.setValue(2.0)
         self._cr_bug_outline_chk.setChecked(False)
         self._cr_bug_outline_color.set_rgba(None); self._cr_bug_outline_width.setValue(1.0)
+        self._cr_bug_line_chk.setChecked(False)
+        self._cr_bug_line_color.set_rgba(None); self._cr_bug_line_width.setValue(2.0)
+        self._cr_bug_line_dash_chk.setChecked(False)
+        self._cr_bug_line_dash_on.setValue(8.0); self._cr_bug_line_dash_off.setValue(4.0)
+        self._on_cr_bug_line_toggled(False)
         self._cr_marker_radius.setValue(150.0); self._cr_marker_pts.load([])
         self._cr_marker_color.set_rgba(None)
         self._cr_marker_filled.setChecked(True); self._cr_marker_width.setValue(2.0)

@@ -104,6 +104,14 @@ YAML schema
         width: 2.0                         # stroke width when filled: false
         outline_color: null                # optional outline drawn on top when filled: true
         outline_width: 1.0
+        line:                               # optional: a radial spoke from
+                                             # the rose centre out to the
+                                             # bug's own position, drawn
+                                             # underneath the bug symbol
+          color: [255, 255, 255, 255]
+          width: 2.0
+          dash: [8.0, 4.0]                 # optional [on_px, off_px];
+                                             # omit (or null) for a solid line
 
       range_rings:                           # optional: evenly-spaced concentric circles
                                              # inside the rose, e.g. radar/HSI range rings
@@ -857,6 +865,13 @@ class VectorCompassRose(_VecBase):
         self._bug_heading = 0.0
         self._bug_dr: Any | None = None
         self._bug_convert: Callable | None = None
+        # Optional line from the rose centre out to the bug's own position
+        # (like a radial spoke pointing at the bug), enabled by passing
+        # line_color to set_heading_bug().
+        self._bug_line_shown = False
+        self._bug_line_color: tuple[int, int, int, int] = (255, 255, 255, 255)
+        self._bug_line_width = 2.0
+        self._bug_line_dash: tuple[float, float] | None = None
 
         # Range rings (optional; enabled by calling set_range_rings()) —
         # evenly-spaced concentric circles inside the rose, e.g. radar range
@@ -1029,6 +1044,9 @@ class VectorCompassRose(_VecBase):
         outline_width: float,
         dataref: Any,
         convert_fn: str | None = None,
+        line_color: tuple[int, int, int, int] | None = None,
+        line_width: float = 2.0,
+        line_dash: tuple[float, float] | None = None,
     ) -> None:
         self._show_bug = True
         self._bug_radius = float(radius)
@@ -1041,6 +1059,11 @@ class VectorCompassRose(_VecBase):
         self._bug_dr = _as_dataref(dataref)
         if convert_fn:
             self._bug_convert = get_convert(convert_fn)
+        self._bug_line_shown = line_color is not None
+        if line_color is not None:
+            self._bug_line_color = line_color
+        self._bug_line_width = float(line_width)
+        self._bug_line_dash = tuple(line_dash) if line_dash else None
 
     def set_heading_marker(
         self,
@@ -1265,6 +1288,9 @@ class VectorCompassRose(_VecBase):
         self._bug_points = [(x * scale, y * scale) for x, y in self._bug_points]
         self._bug_width *= scale
         self._bug_outline_width *= scale
+        self._bug_line_width *= scale
+        if self._bug_line_dash is not None:
+            self._bug_line_dash = (self._bug_line_dash[0] * scale, self._bug_line_dash[1] * scale)
         self._marker_radius *= scale
         self._marker_points = [(x * scale, y * scale) for x, y in self._marker_points]
         self._marker_width *= scale
@@ -1625,6 +1651,13 @@ class VectorCompassRose(_VecBase):
 
     def _draw_heading_bug(self) -> None:
         cx, cy = self._point_at(self._bug_heading, self._bug_radius)
+        if self._bug_line_shown:
+            # Drawn first, underneath the bug symbol — a radial spoke from
+            # the rose centre out to the bug's own position.
+            self._draw_dashed_line(
+                self._cx, self._cy, cx, cy,
+                self._bug_line_color, self._bug_line_width, self._bug_line_dash,
+            )
         # Radial orientation, like the ticks: point_at()'s outward direction
         # at this heading is (90 - bug_heading + heading) degrees from +x:
         # rotating the bug's local +y (its unrotated "outward") to line up
@@ -1991,6 +2024,8 @@ def _compass_rose_factory(
     bug_cfg = comp.get("heading_bug")
     if bug_cfg:
         oc = bug_cfg.get("outline_color")
+        line_cfg = bug_cfg.get("line") or {}
+        line_color = line_cfg.get("color")
         rose.set_heading_bug(
             radius=float(bug_cfg.get("radius", comp.get("radius", 150.0))),
             points=[tuple(p) for p in bug_cfg["points"]],
@@ -2001,6 +2036,9 @@ def _compass_rose_factory(
             outline_width=float(bug_cfg.get("outline_width", 1.0)),
             dataref=bug_cfg["dataref"],
             convert_fn=bug_cfg.get("convert_function"),
+            line_color=_as_color(line_color) if line_color is not None else None,
+            line_width=float(line_cfg.get("width", 2.0)),
+            line_dash=tuple(line_cfg["dash"]) if line_cfg.get("dash") else None,
         )
 
     rings_cfg = comp.get("range_rings")
