@@ -5,7 +5,8 @@ key; otherwise it's treated as a single instrument and wrapped in a
 synthetic Panel of one. From that point the runtime is uniform.
 
 Overlays:
-- FPS counter, shown in the window title (matches the original engine).
+- FPS counter, shown in the window title (matches the original engine),
+  plus an optional on-screen readout top-left toggled by pressing F.
 - "Not receiving X-Plane data" text, shown when running in UDP mode and
   pyxpudpserver reports no live X-Plane peer.
 """
@@ -114,6 +115,14 @@ class PanelWindow(arcade.Window):
             color=(255, 165, 0, 230),
             font_size=14,
         )
+        self._fps_overlay_shown = False
+        self._fps_overlay_text = arcade.Text(
+            text="FPS: --",
+            x=6,
+            y=h - 18,
+            color=(0, 255, 0, 220),
+            font_size=12,
+        )
         self._test_overlay = arcade.Text(
             text="",
             x=6,
@@ -191,6 +200,9 @@ class PanelWindow(arcade.Window):
             )
             self._test_overlay.draw()
 
+        if self._fps_overlay_shown:
+            self._fps_overlay_text.draw()
+
     def _on_draw_ssaa(self) -> None:
         """Render scene into the SSAA FBO chain then blit down to screen."""
         from pyglet.math import Mat4
@@ -238,6 +250,7 @@ class PanelWindow(arcade.Window):
         if elapsed >= 0.5:
             fps = self._frame_count / elapsed
             self.set_caption(f"{self.panel.name} — FPS: {fps:.1f}")
+            self._fps_overlay_text.text = f"FPS: {fps:.1f}"
             self._frame_count = 0
             self._last_fps_time = now
 
@@ -258,6 +271,8 @@ class PanelWindow(arcade.Window):
             self.test_value += 100.0
         elif key == arcade.key.PAGEDOWN:
             self.test_value -= 100.0
+        elif key == arcade.key.F:
+            self._fps_overlay_shown = not self._fps_overlay_shown
 
     # -- Gesture dispatcher -----------------------------------------------
 
