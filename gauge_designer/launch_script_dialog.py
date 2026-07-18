@@ -51,6 +51,23 @@ def _run_line(fmt: str, py_cmd: str, panel_rel: str) -> str:
     return f'{py_cmd} -m gauge_core.runner "{panel_rel}" &\n'
 
 
+def _desktop_entry_content(name: str, sh_path: Path, project_root: Path) -> str:
+    """A .desktop launcher (XDG Desktop Entry) whose Exec runs the
+    generated .sh script — plain .sh files are not reliably double-
+    clickable in Linux file managers (GNOME/Nautilus in particular
+    defaults to opening executable text files in an editor, or asking,
+    rather than running them), even with the executable bit set. A
+    .desktop entry is what file managers actually treat as a launcher."""
+    return (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        f"Name={name}\n"
+        f'Exec=bash "{sh_path}"\n'
+        f'Path={project_root}\n'
+        "Terminal=false\n"
+    )
+
+
 def _generate_script(fmt: str, project_root: Path, panel_rels: list[str], py_cmd: str) -> str:
     root = str(project_root)
     run_lines = "".join(_run_line(fmt, py_cmd, p) for p in panel_rels)
@@ -124,6 +141,15 @@ class LaunchScriptDialog(QDialog):
         self._port_warning.setStyleSheet("color: #b8860b; font-size: 11px;")
         self._port_warning.setWordWrap(True)
         layout.addWidget(self._port_warning)
+
+        self._sh_note = QLabel(
+            "A companion .desktop launcher will also be created, so the script "
+            "can be started by double-clicking in a Linux file manager "
+            "(plain .sh files usually aren't run on double-click by default)."
+        )
+        self._sh_note.setStyleSheet("color: #888; font-size: 11px;")
+        self._sh_note.setWordWrap(True)
+        layout.addWidget(self._sh_note)
 
         # Save location
         loc_row = QHBoxLayout()
@@ -249,6 +275,7 @@ class LaunchScriptDialog(QDialog):
         self._preview.setPlainText(content)
         self._out_label.setText(f"Output: {self._out_path()}")
         self._port_warning.setText(self._check_port_collisions(panels))
+        self._sh_note.setVisible(self._fmt() == "sh")
         self._btns.button(QDialogButtonBox.Ok).setEnabled(bool(panels))
 
     def _browse(self):
@@ -262,17 +289,31 @@ class LaunchScriptDialog(QDialog):
         out = self._out_path()
         fmt = self._fmt()
         content = self._preview.toPlainText()
+        extra_msg = ""
         try:
             newline = "\n" if fmt == "sh" else None
             with open(out, "w", encoding="utf-8", newline=newline) as f:
                 f.write(content)
             if fmt == "sh":
                 out.chmod(out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+                desktop_out = out.with_suffix(".desktop")
+                desktop_name = self._name_edit.text().strip() or "launch"
+                desktop_content = _desktop_entry_content(desktop_name, out, self._project_root)
+                with open(desktop_out, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(desktop_content)
+                desktop_out.chmod(desktop_out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                extra_msg = (
+                    f"\n\nA double-click launcher was also created:\n{desktop_out}\n\n"
+                    "On first use, most Linux file managers require you to right-click "
+                    "it and choose \"Allow Launching\" (or similar) once — a standard "
+                    "trust step for new local launchers."
+                )
         except Exception as exc:
             QMessageBox.critical(self, "Error", str(exc))
             return
         self.accept()
         QMessageBox.information(
             self.parent(), "Script Created",
-            f"Launch script saved to:\n{out}",
+            f"Launch script saved to:\n{out}{extra_msg}",
         )
