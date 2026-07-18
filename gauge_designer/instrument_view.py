@@ -17,6 +17,7 @@ from gauge_designer.ui_utils import QSpinBox
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
 from gauge_designer.canvas import InstrumentCanvas
+from gauge_designer.preview import _request_graceful_stop
 from gauge_designer.properties_form import PropertiesForm
 from gauge_designer.ui_utils import header_label, make_svg_icon
 
@@ -1081,14 +1082,14 @@ class InstrumentView(QWidget):
             self._harness_win.close()
             self._harness_win = None
         if self._test_proc is not None:
-            self._test_proc.terminate()
+            _request_graceful_stop(self._test_proc)
             self._test_proc = None
         self.test_running.emit(False)
 
     def _on_harness_closed(self):
         self._harness_win = None
         if self._test_proc is not None:
-            self._test_proc.terminate()
+            _request_graceful_stop(self._test_proc)
             self._test_proc = None
         self.test_running.emit(False)
 
@@ -1106,7 +1107,7 @@ class InstrumentView(QWidget):
     def stop_live(self):
         self._live_timer.stop()
         if self._live_proc is not None:
-            self._live_proc.terminate()
+            _request_graceful_stop(self._live_proc)
             self._live_proc = None
         self.live_running.emit(False)
 

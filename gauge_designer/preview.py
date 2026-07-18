@@ -9,6 +9,33 @@ import yaml
 from PySide6.QtCore import QObject, QTimer, Signal
 
 
+def _request_graceful_stop(proc: subprocess.Popen) -> None:
+    """Ask a running gauge_core.runner subprocess to close its window
+    instead of killing it outright.
+
+    Popen.terminate() calls TerminateProcess() on Windows — an abrupt kill
+    that gives the child zero chance to run any cleanup at all, including
+    PanelWindow.on_close()'s UDP shutdown (which itself unsubscribes every
+    dataref from X-Plane). Confirmed empirically: a test child process's
+    own `finally:` block never ran under terminate()/CTRL_BREAK_EVENT, but
+    `taskkill /PID <pid>` (no /F) posts a WM_CLOSE to the process's window,
+    which pyglet/Arcade delivers as the normal on_close event — same path
+    as the user clicking the window's own close button, exit code 0.
+    POSIX SIGTERM (terminate()'s signal there) is the standard graceful
+    shutdown signal, so no special handling is needed off Windows.
+    """
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid)],
+                capture_output=True, timeout=5,
+            )
+            return
+        except Exception:
+            pass  # fall through to a hard kill if taskkill itself failed
+    proc.terminate()
+
+
 class PreviewBar(QObject):
     """Manages the Arcade subprocess for panel mock-preview and live X-Plane runs.
 
@@ -131,7 +158,7 @@ class PreviewBar(QObject):
     def stop_live(self):
         self._live_timer.stop()
         if self._live_proc is not None:
-            self._live_proc.terminate()
+            _request_graceful_stop(self._live_proc)
             self._live_proc = None
         if self._live_tmp_path:
             try:
