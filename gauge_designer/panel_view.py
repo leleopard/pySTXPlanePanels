@@ -285,6 +285,30 @@ class PanelView(QWidget):
         self._populate_screen_combo()
         size_bar.addWidget(self._screen_combo)
 
+        size_bar.addSpacing(8)
+        self._win_pos_label = QLabel("Window position X / Y:")
+        size_bar.addWidget(self._win_pos_label)
+        self._win_pos_x = QSpinBox()
+        self._win_pos_x.setRange(-9999, 9999)
+        self._win_pos_x.setFixedWidth(70)
+        self._win_pos_y = QSpinBox()
+        self._win_pos_y.setRange(-9999, 9999)
+        self._win_pos_y.setFixedWidth(70)
+        win_pos_tip = (
+            "Top-left of the window, offset from the top-left of the selected\n"
+            "screen above (OS desktop pixels, Y-down). Only used in windowed\n"
+            "mode — ignored when Fullscreen is checked. Leave both at 0 for\n"
+            "the OS's own default window placement."
+        )
+        self._win_pos_x.setToolTip(win_pos_tip)
+        self._win_pos_y.setToolTip(win_pos_tip)
+        self._win_pos_x.valueChanged.connect(self._on_window_opts_changed)
+        self._win_pos_y.valueChanged.connect(self._on_window_opts_changed)
+        size_bar.addWidget(self._win_pos_x)
+        size_bar.addWidget(self._win_pos_y)
+
+        self._fullscreen_chk.toggled.connect(self._update_win_pos_enabled)
+
         size_bar.addStretch()
         ea.addLayout(size_bar)
 
@@ -630,14 +654,22 @@ class PanelView(QWidget):
         win = panel_data.get("window") or {}
         self._fullscreen_chk.blockSignals(True)
         self._screen_combo.blockSignals(True)
+        self._win_pos_x.blockSignals(True)
+        self._win_pos_y.blockSignals(True)
         self._populate_screen_combo()
         self._fullscreen_chk.setChecked(bool(win.get("fullscreen", False)))
         scr = int(win.get("screen", 0))
         self._screen_combo.setCurrentIndex(
             min(scr, self._screen_combo.count() - 1) if self._screen_combo.count() > 0 else 0
         )
+        win_pos = win.get("position") or [0, 0]
+        self._win_pos_x.setValue(int(win_pos[0]))
+        self._win_pos_y.setValue(int(win_pos[1]))
         self._fullscreen_chk.blockSignals(False)
         self._screen_combo.blockSignals(False)
+        self._win_pos_x.blockSignals(False)
+        self._win_pos_y.blockSignals(False)
+        self._update_win_pos_enabled()
 
         self._loading = False
         self._inst_form.set_yaml_dir(self._yaml_dir)
@@ -682,6 +714,13 @@ class PanelView(QWidget):
         self._screen_combo.blockSignals(True)
         self._screen_combo.setCurrentIndex(0)
         self._screen_combo.blockSignals(False)
+        self._win_pos_x.blockSignals(True)
+        self._win_pos_y.blockSignals(True)
+        self._win_pos_x.setValue(0)
+        self._win_pos_y.setValue(0)
+        self._win_pos_x.blockSignals(False)
+        self._win_pos_y.blockSignals(False)
+        self._update_win_pos_enabled()
         self._tree.clear()
         self._inst_form.clear()
         self._loading = False
@@ -711,13 +750,17 @@ class PanelView(QWidget):
         """Return window launch options dict, or None if all defaults."""
         fullscreen = self._fullscreen_chk.isChecked()
         screen_idx = self._screen_combo.currentIndex()
-        if not fullscreen and screen_idx == 0:
+        win_x, win_y = self._win_pos_x.value(), self._win_pos_y.value()
+        has_win_pos = not fullscreen and (win_x != 0 or win_y != 0)
+        if not fullscreen and screen_idx == 0 and not has_win_pos:
             return None
         opts: dict = {}
         if fullscreen:
             opts["fullscreen"] = True
         if screen_idx > 0:
             opts["screen"] = screen_idx
+        if has_win_pos:
+            opts["position"] = [win_x, win_y]
         return opts
 
     def _populate_screen_combo(self):
@@ -728,6 +771,12 @@ class PanelView(QWidget):
             label = f"{i}: {scr.name()}  {geo.width()}×{geo.height()}"
             self._screen_combo.addItem(label)
         self._screen_combo.blockSignals(False)
+
+    def _update_win_pos_enabled(self):
+        enabled = not self._fullscreen_chk.isChecked()
+        self._win_pos_label.setEnabled(enabled)
+        self._win_pos_x.setEnabled(enabled)
+        self._win_pos_y.setEnabled(enabled)
 
     def _on_window_opts_changed(self):
         if not self._loading:

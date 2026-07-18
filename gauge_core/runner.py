@@ -85,6 +85,17 @@ class PanelWindow(arcade.Window):
             screen=target_screen,
         )
 
+        # Windowed-mode placement: window.position in the panel YAML is an
+        # offset from the target screen's own top-left, in OS desktop pixels
+        # (Y-down) — pyglet's set_location() takes absolute virtual-desktop
+        # coordinates, so the screen's own x/y has to be added back in
+        # (screens left of/above the primary monitor have negative x/y).
+        if not panel.fullscreen and panel.window_position is not None:
+            sx = target_screen.x if target_screen is not None else 0
+            sy = target_screen.y if target_screen is not None else 0
+            px, py = panel.window_position
+            self.set_location(sx + px, sy + py)
+
         if panel.background_color is not None:
             self.background_color = panel.background_color
         else:

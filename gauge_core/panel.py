@@ -56,6 +56,18 @@ Panel-level layout transform (optional, top-level keys, sibling of `instruments`
                               # the user reposition where the cluster shows
                               # up in the panel without moving instruments
                               # individually
+
+Window placement (optional, top-level `window:` key):
+    window:
+      fullscreen: true        # default false
+      screen: 1                # monitor index (as enumerated by the OS), 0-based
+      position: [x, y]         # windowed mode only, ignored when fullscreen.
+                                # Top-left of the window, offset from the
+                                # top-left of `screen` above, in OS desktop
+                                # pixels (Y-down) — NOT the panel's own
+                                # Y-up coordinate system used everywhere
+                                # else in this schema. Omit for the OS's
+                                # own default window placement.
 """
 
 from __future__ import annotations
@@ -80,6 +92,7 @@ class Panel:
     udp_listen_port: int | None = None  # overrides config.yaml when set
     fullscreen: bool = False
     screen_index: int = 0
+    window_position: tuple[int, int] | None = None  # windowed-mode only; None = OS default
     hit_padding_multiplier: float = 1.5
     layout_scale: float = 1.0
     layout_offset: tuple[float, float] = (0.0, 0.0)
@@ -122,6 +135,7 @@ def load_panel(yaml_path: str | Path) -> Panel:
 
     udp_cfg = data.get("udp", {}) or {}
     win_cfg = data.get("window", {}) or {}
+    win_pos = win_cfg.get("position")
     panel = Panel(
         name=data["name"],
         size=tuple(data["size"]),
@@ -129,6 +143,7 @@ def load_panel(yaml_path: str | Path) -> Panel:
         udp_listen_port=udp_cfg.get("listen_port"),
         fullscreen=bool(win_cfg.get("fullscreen", False)),
         screen_index=int(win_cfg.get("screen", 0)),
+        window_position=(int(win_pos[0]), int(win_pos[1])) if win_pos else None,
         hit_padding_multiplier=float(data.get("hit_padding_multiplier", 1.5)),
     )
 
