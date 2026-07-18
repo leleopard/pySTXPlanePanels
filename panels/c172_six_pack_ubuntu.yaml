@@ -82,6 +82,7 @@ instruments:
   scale: 0.8
 window:
   fullscreen: true
+  screen: 2
 layout_scale: 1.17
 layout_offset:
 - 2.0
