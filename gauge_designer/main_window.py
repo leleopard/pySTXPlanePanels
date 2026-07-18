@@ -468,7 +468,9 @@ class MainWindow(QMainWindow):
         if not self._panel_path:
             return
         from gauge_designer.launch_script_dialog import LaunchScriptDialog
-        dlg = LaunchScriptDialog(self._panel_path, self._project_root(), parent=self)
+        dlg = LaunchScriptDialog(
+            self._panel_path, self._project_root(), self._panel_view._panels_root, parent=self,
+        )
         dlg.exec()
 
     def _save_all(self):
