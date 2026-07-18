@@ -30,4 +30,4 @@ instruments:
   - 50
   - 110
 window:
-  screen: 1
+  fullscreen: true
