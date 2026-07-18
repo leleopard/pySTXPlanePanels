@@ -23,29 +23,31 @@ components:
   position:
   - 9
   - 22
-  text: ''
-  font_file: assets/fonts/DS-Digital-ItalicST.ttf
-  font_name: DS-Digital
-  font_size: 32
-  text_format: '{:07.3f}'
-  convert_function: divideby100
   dataref: sim/cockpit/radios/com1_freq_hz[0]
-- name: com_standby_freq
-  type: Text
-  text: ''
-  font_file: assets/fonts/DS-Digital-ItalicST.ttf
+  convert_function: divideby100
+  text_format: '{:07.3f}'
   font_name: DS-Digital
-  font_size: 32
+  font_size: 32.0
   color:
   - 211
   - 62
   - 33
+  - 255
+- name: com_standby_freq
+  type: Text
   position:
   - 145
   - 22
-  text_format: '{:07.3f}'
-  convert_function: divideby100
   dataref: sim/cockpit/radios/com1_stdby_freq_hz[0]
+  convert_function: divideby100
+  text_format: '{:07.3f}'
+  font_name: DS-Digital
+  font_size: 32.0
+  color:
+  - 211
+  - 62
+  - 33
+  - 255
 - name: nav_active_freq
   type: Text
   text: ''
