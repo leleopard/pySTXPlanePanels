@@ -71,6 +71,7 @@ class PanelWindow(arcade.Window):
         udp_alive: Callable[[], bool] | None = None,
         on_shutdown: Callable[[], None] | None = None,
         ssaa: int = 4,
+        aa_mode: str = "software",
     ) -> None:
         w, h = panel.size
 
@@ -82,11 +83,21 @@ class PanelWindow(arcade.Window):
             if screens else None
         )
 
-        # Always non-MSAA: hardware MSAA is unreliable for python.exe without
-        # driver overrides.  AA is provided by the SSAA FBO chain instead.
+        # "hardware" mode asks the GPU driver for native MSAA directly.
+        # "software" (default) always renders through the SSAA FBO chain
+        # below instead — hardware MSAA is known to be silently dropped by
+        # some drivers (confirmed on this project's own dev machine: an
+        # NVIDIA GPU on Windows honors samples=N for most apps, but its
+        # per-application driver profiles are keyed by executable name and
+        # never recognize a generic python.exe host, so the request is
+        # ignored with no error, no warning, nothing). GL_SAMPLES is
+        # queried right after window creation to detect this per-machine
+        # and fall back to software automatically — see below.
+        use_hw = aa_mode == "hardware" and ssaa >= 2
         super().__init__(
             w, h, panel.name,
-            antialiasing=False,
+            antialiasing=use_hw,
+            samples=ssaa if use_hw else 4,
             fullscreen=panel.fullscreen,
             screen=target_screen,
         )
@@ -153,20 +164,50 @@ class PanelWindow(arcade.Window):
         bc = self.background_color
         self._bg_float = (bc.r / 255.0, bc.g / 255.0, bc.b / 255.0, bc.a / 255.0)
         self._ssaa_chain: list[tuple] = []   # [(fbo, w, h), …] largest first
-        if ssaa >= 2:
-            ctx = self.ctx
-            max_tex = ctx.info.MAX_TEXTURE_SIZE
-            # Clamp ssaa so the FBO texture fits within the driver's texture limit.
-            # Pi 5 (GLES) caps MAX_TEXTURE_SIZE at 4096; a 1540×920 panel at ssaa=4
-            # would need 6160×3680 which exceeds that.
-            factor = ssaa
-            while factor >= 2 and (w * factor > max_tex or h * factor > max_tex):
-                factor //= 2
-            while factor >= 2:
-                tex = ctx.texture((w * factor, h * factor), components=4)
-                fbo = ctx.framebuffer(color_attachments=[tex])
-                self._ssaa_chain.append((fbo, w * factor, h * factor))
-                factor //= 2
+
+        need_software_chain = ssaa >= 2
+        if use_hw:
+            actual_samples = self._query_gl_samples()
+            need_software_chain = actual_samples < ssaa
+            if need_software_chain:
+                print(
+                    f"[gauge_core] Hardware MSAA requested (samples={ssaa}) but this "
+                    f"GPU/driver only provided samples={actual_samples} - falling "
+                    f"back to software SSAA at the same level. See the designer's "
+                    f"Antialiasing settings for details.",
+                    file=sys.stderr,
+                )
+
+        if need_software_chain:
+            self._build_ssaa_chain(w, h, ssaa)
+
+    def _query_gl_samples(self) -> int:
+        """Actual MSAA sample count the driver gave the default framebuffer.
+
+        0 means the hardware antialiasing request was silently ignored —
+        the only reliable way to detect this short of inspecting rendered
+        pixels, since the driver reports success either way.
+        """
+        import ctypes
+        from pyglet.gl import GL_SAMPLES, glGetIntegerv
+        samples = ctypes.c_int(0)
+        glGetIntegerv(GL_SAMPLES, samples)
+        return samples.value
+
+    def _build_ssaa_chain(self, w: int, h: int, ssaa: int) -> None:
+        ctx = self.ctx
+        max_tex = ctx.info.MAX_TEXTURE_SIZE
+        # Clamp ssaa so the FBO texture fits within the driver's texture limit.
+        # Pi 5 (GLES) caps MAX_TEXTURE_SIZE at 4096; a 1540×920 panel at ssaa=4
+        # would need 6160×3680 which exceeds that.
+        factor = ssaa
+        while factor >= 2 and (w * factor > max_tex or h * factor > max_tex):
+            factor //= 2
+        while factor >= 2:
+            tex = ctx.texture((w * factor, h * factor), components=4)
+            fbo = ctx.framebuffer(color_attachments=[tex])
+            self._ssaa_chain.append((fbo, w * factor, h * factor))
+            factor //= 2
 
     def on_close(self) -> None:
         if self._on_shutdown is not None:
@@ -455,6 +496,13 @@ def main(argv: list[str] | None = None) -> int:
         "launch method (designer preview, generated launch scripts, direct "
         "CLI) picks up the same value without needing this flag.",
     )
+    p.add_argument(
+        "--aa-mode", default=None, choices=["software", "hardware"],
+        help="'software' (SSAA, always reliable) or 'hardware' (native GPU "
+        "MSAA, auto-falls-back to software if the driver silently ignores "
+        "it). Defaults to config.yaml's aa_mode setting (itself defaulting "
+        "to 'software') when omitted.",
+    )
     args = p.parse_args(argv)
 
     # Merge: config file supplies base values; CLI args override.
@@ -466,6 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     xp_port = udp_cfg.get("xplane_port", 49000)
     xp_name = udp_cfg.get("xplane_name") or socket.gethostname()
     ssaa = args.ssaa if args.ssaa is not None else int(cfg.get("ssaa", 4))
+    aa_mode = args.aa_mode if args.aa_mode is not None else str(cfg.get("aa_mode", "software"))
 
     if args.listen:
         listen_host, listen_port = _parse_addr(args.listen)
@@ -495,6 +544,7 @@ def main(argv: list[str] | None = None) -> int:
             send_cmd=_noop_send_cmd,
             is_test_mode=True,
             ssaa=ssaa,
+            aa_mode=aa_mode,
         )
         data_source.window = window
     elif args.mock:
@@ -506,6 +556,7 @@ def main(argv: list[str] | None = None) -> int:
             send_cmd=_noop_send_cmd,
             is_test_mode=True,
             ssaa=ssaa,
+            aa_mode=aa_mode,
         )
     else:
         udp = UDPDataSource(
@@ -521,6 +572,7 @@ def main(argv: list[str] | None = None) -> int:
             udp_alive=udp.alive,
             on_shutdown=udp.quit,
             ssaa=ssaa,
+            aa_mode=aa_mode,
         )
     
     try:
