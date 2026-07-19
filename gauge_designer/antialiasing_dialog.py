@@ -1,9 +1,19 @@
-"""Antialiasing quality dialog — configures the SSAA level for the panel runtime."""
+"""Antialiasing quality dialog — configures the SSAA level for the panel runtime.
 
+Stored in config.yaml (top-level `ssaa:` key, sibling of `udp:`) rather than
+QSettings, so the setting is shared with every launch method that reads
+that same file — gauge_core.runner loads it directly regardless of how it
+was started (designer preview, a generated launch script, or a bare
+`python -m gauge_core.runner`), not just designer-launched subprocesses.
+"""
+
+from pathlib import Path
+
+import yaml
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QRadioButton, QDialogButtonBox, QGroupBox, QLabel,
+    QMessageBox,
 )
-from PySide6.QtCore import QSettings
 
 # (level, label, description)
 _LEVELS = [
@@ -14,9 +24,30 @@ _LEVELS = [
 ]
 
 
+def _load_ssaa(config_path: Path) -> int:
+    if config_path.exists():
+        with open(config_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return int(data.get("ssaa", 4))
+    return 4
+
+
+def _save_ssaa(config_path: Path, level: int) -> None:
+    existing: dict = {}
+    if config_path.exists():
+        with open(config_path, encoding="utf-8") as f:
+            existing = yaml.safe_load(f) or {}
+    existing["ssaa"] = level
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.dump(existing, f, default_flow_style=False,
+                  allow_unicode=True, sort_keys=False)
+
+
 class AntialiasingDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, project_root: str, parent=None):
         super().__init__(parent)
+        self._config_path = Path(project_root) / "config.yaml"
+
         self.setWindowTitle("Antialiasing")
         self.setModal(True)
         self.setMinimumWidth(420)
@@ -31,12 +62,14 @@ class AntialiasingDialog(QDialog):
             "The scene is rendered at N× resolution and downsampled in 2:1 passes "
             "via GL_LINEAR, giving N² samples per output pixel without any driver "
             "configuration.\n\n"
-            "Changes take effect on the next launch."
+            "Applies to every launch method (designer preview, generated launch "
+            "scripts, running the runtime directly) — changes take effect on the "
+            "next launch."
         )
         note.setWordWrap(True)
         gl.addWidget(note)
 
-        current = QSettings().value("preferences/ssaa", 4, type=int)
+        current = _load_ssaa(self._config_path)
         self._rbs: dict[int, QRadioButton] = {}
         for level, label, desc in _LEVELS:
             rb = QRadioButton(f"{label}   —   {desc}")
@@ -46,6 +79,11 @@ class AntialiasingDialog(QDialog):
 
         layout.addWidget(group)
 
+        path_lbl = QLabel(f"Saved to: {self._config_path}")
+        path_lbl.setStyleSheet("color: #888; font-size: 11px;")
+        path_lbl.setWordWrap(True)
+        layout.addWidget(path_lbl)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._save_and_accept)
         buttons.rejected.connect(self.reject)
@@ -54,6 +92,10 @@ class AntialiasingDialog(QDialog):
     def _save_and_accept(self):
         for level, rb in self._rbs.items():
             if rb.isChecked():
-                QSettings().setValue("preferences/ssaa", level)
+                try:
+                    _save_ssaa(self._config_path, level)
+                except Exception as exc:
+                    QMessageBox.critical(self, "Save Error", str(exc))
+                    return
                 break
         self.accept()

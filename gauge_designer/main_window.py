@@ -249,7 +249,8 @@ class MainWindow(QMainWindow):
 
     def _open_antialiasing(self):
         from gauge_designer.antialiasing_dialog import AntialiasingDialog
-        AntialiasingDialog(self).exec()
+        root = self._project_root()
+        AntialiasingDialog(root, parent=self).exec()
 
     def _open_xplane_settings(self):
         from gauge_designer.xplane_settings_dialog import XPlaneSettingsDialog

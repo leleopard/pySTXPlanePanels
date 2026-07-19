@@ -104,9 +104,8 @@ class PreviewBar(QObject):
                 except Exception:
                     pass  # fall back to the saved file
 
-        from gauge_designer.ui_utils import get_ssaa_args
         self._proc = subprocess.Popen(
-            [sys.executable, "-m", "gauge_core.runner", launch_path, "--mock"] + get_ssaa_args(),
+            [sys.executable, "-m", "gauge_core.runner", launch_path, "--mock"],
         )
 
         try:
@@ -148,9 +147,8 @@ class PreviewBar(QObject):
                 except Exception:
                     pass
 
-        from gauge_designer.ui_utils import get_ssaa_args
         self._live_proc = subprocess.Popen(
-            [sys.executable, "-m", "gauge_core.runner", launch_path] + get_ssaa_args(),
+            [sys.executable, "-m", "gauge_core.runner", launch_path],
         )
         self.live_running_changed.emit(True)
         self._live_timer.start()

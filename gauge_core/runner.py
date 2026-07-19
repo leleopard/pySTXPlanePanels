@@ -27,13 +27,19 @@ _DEFAULT_CONFIG = "config.yaml"
 
 
 def _load_config(config_path: str | None) -> dict:
-    """Load UDP settings from a config YAML. Returns {} if file not found."""
+    """Load the full config YAML (udp settings, ssaa, ...). {} if file not found.
+
+    Resolved relative to the current working directory when config_path is
+    unset — every launch path (designer preview, generated launch scripts,
+    a bare `python -m gauge_core.runner`) already `cd`s to the project root
+    first, or is run from it, so this is a single shared config regardless
+    of how the panel was started.
+    """
     path = Path(config_path) if config_path else Path(_DEFAULT_CONFIG)
     if not path.exists():
         return {}
     with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("udp", {})
+        return yaml.safe_load(f) or {}
 
 from gauge_core.loader import load_instrument
 from gauge_core.mock_source import DEFAULT_MOCK_PORT, MockDataSource
@@ -442,18 +448,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--xp", default=None, help="host:port of X-Plane")
     p.add_argument("--xp-name", default=None, help="Computer name X-Plane expects")
     p.add_argument(
-        "--ssaa", type=int, default=4, choices=[0, 2, 4, 8],
-        help="Supersampling AA factor: 0=off, 2=4spp, 4=16spp (default), 8=64spp",
+        "--ssaa", type=int, default=None, choices=[0, 2, 4, 8],
+        help="Supersampling AA factor: 0=off, 2=4spp, 4=16spp, 8=64spp. "
+        "Defaults to config.yaml's ssaa setting (itself defaulting to 4) "
+        "when omitted — set via the designer's Antialiasing dialog so every "
+        "launch method (designer preview, generated launch scripts, direct "
+        "CLI) picks up the same value without needing this flag.",
     )
     args = p.parse_args(argv)
 
     # Merge: config file supplies base values; CLI args override.
     cfg = _load_config(args.config)
-    listen_host = cfg.get("listen_host", "127.0.0.1")
-    listen_port = cfg.get("listen_port", 49008)
-    xp_host = cfg.get("xplane_host", "127.0.0.1")
-    xp_port = cfg.get("xplane_port", 49000)
-    xp_name = cfg.get("xplane_name") or socket.gethostname()
+    udp_cfg = cfg.get("udp", {})
+    listen_host = udp_cfg.get("listen_host", "127.0.0.1")
+    listen_port = udp_cfg.get("listen_port", 49008)
+    xp_host = udp_cfg.get("xplane_host", "127.0.0.1")
+    xp_port = udp_cfg.get("xplane_port", 49000)
+    xp_name = udp_cfg.get("xplane_name") or socket.gethostname()
+    ssaa = args.ssaa if args.ssaa is not None else int(cfg.get("ssaa", 4))
 
     if args.listen:
         listen_host, listen_port = _parse_addr(args.listen)
@@ -482,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
             get_data=data_source,
             send_cmd=_noop_send_cmd,
             is_test_mode=True,
-            ssaa=args.ssaa,
+            ssaa=ssaa,
         )
         data_source.window = window
     elif args.mock:
@@ -493,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
             get_data=mock,
             send_cmd=_noop_send_cmd,
             is_test_mode=True,
-            ssaa=args.ssaa,
+            ssaa=ssaa,
         )
     else:
         udp = UDPDataSource(
@@ -508,7 +520,7 @@ def main(argv: list[str] | None = None) -> int:
             is_test_mode=False,
             udp_alive=udp.alive,
             on_shutdown=udp.quit,
-            ssaa=args.ssaa,
+            ssaa=ssaa,
         )
     
     try:

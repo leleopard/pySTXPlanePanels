@@ -50,12 +50,6 @@ def get_python_cmd() -> str:
     return QSettings().value("preferences/pythonCommand", default)
 
 
-def get_ssaa_args() -> list[str]:
-    """Return the runner.py --ssaa CLI arg for the current SSAA preference."""
-    ssaa = QSettings().value("preferences/ssaa", 4, type=int)
-    return ["--ssaa", str(ssaa)]
-
-
 def is_y_down() -> bool:
     """Return True when the user has chosen the top-left / y-down convention."""
     return QSettings().value("preferences/coordSystem", "y_up") == "y_down"
