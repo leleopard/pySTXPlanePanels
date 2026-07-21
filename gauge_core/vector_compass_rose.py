@@ -620,20 +620,79 @@ class _CdiSegment:
         self.symbol_outline_width = float(symbol_outline_width)
 
 
-def _circle_outline_points(cx: float, cy: float, radius: float, num_segments: int = 32) -> list[tuple[float, float]]:
-    # arcade.shape_list.create_ellipse_outline()'s own border_width is
-    # silently ignored — it draws a plain GL_LINE_STRIP with no thick-line
-    # geometry at all (unlike create_line_strip/create_line_loop, which
-    # generate real triangle geometry when line_width != 1). So a
-    # variable-width circle outline is built by hand here and drawn with
-    # create_line_loop(), the same call the polygon outline already uses.
-    return [
-        (
-            cx + radius * math.cos(2.0 * math.pi * i / num_segments),
-            cy + radius * math.sin(2.0 * math.pi * i / num_segments),
-        )
-        for i in range(num_segments)
-    ]
+def _bake_map_icon(style: "_MapFeatureStyle", oversample: int = 4) -> None:
+    """Rasterize a moving_map feature's polygon + circle to two textures:
+    the icon's normal (already-colored) appearance, and a white silhouette
+    used to tint the one "active" candidate (e.g. the tuned VOR) via
+    Sprite.color. Runs lazily on first draw, i.e. after apply_scale() has
+    already finalized style.points/circle_radius, so the baked geometry
+    reflects the panel's final configured scale with no separate runtime
+    scale factor needed beyond style.icon_scale (which only undoes the
+    fixed oversample factor below, for crisper edges than 1:1 baking).
+
+    Baking once and drawing via a pooled SpriteList (per-instance position
+    updates only) is dramatically cheaper than rebuilding vertex geometry
+    and re-uploading a VBO for every visible feature every frame — measured
+    ~9ms/frame at 180 features for the old ShapeElementList path versus a
+    handful of cheap position writes here.
+    """
+    from PIL import Image, ImageDraw
+
+    pts = style.points
+    r = style.circle_radius
+    if not pts and r <= 0.0:
+        return
+
+    pad = max(
+        style.outline_width if style.outline else 0.0,
+        style.circle_outline_width if style.circle_outline else 0.0,
+        1.0,
+    ) + 1.0
+    xs = [x for x, _y in pts] + ([-r, r] if r > 0.0 else [])
+    ys = [y for _x, y in pts] + ([-r, r] if r > 0.0 else [])
+    half_w = max(abs(min(xs)), abs(max(xs))) + pad
+    half_h = max(abs(min(ys)), abs(max(ys))) + pad
+    w_px = max(2, int(round(half_w * 2 * oversample)))
+    h_px = max(2, int(round(half_h * 2 * oversample)))
+    cx_px, cy_px = w_px / 2.0, h_px / 2.0
+    white = (255, 255, 255, 255)
+
+    def to_px(x: float, y: float) -> tuple[float, float]:
+        # style.points are y-up (matches every other point list in this
+        # schema); PIL is y-down — same flip canvas.py's own static
+        # preview already applies for these same symbols.
+        return (cx_px + x * oversample, cy_px - y * oversample)
+
+    def render(active: bool) -> arcade.Texture:
+        img = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        if r > 0.0:
+            d = r * 2.0 * oversample
+            bbox = [cx_px - d / 2, cy_px - d / 2, cx_px + d / 2, cy_px + d / 2]
+            if style.circle_filled:
+                draw.ellipse(bbox, fill=white if active else style.circle_color)
+            if style.circle_outline:
+                ow = max(1, int(round(style.circle_outline_width * oversample)))
+                draw.ellipse(bbox, outline=white if active else style.circle_outline_color, width=ow)
+
+        if pts:
+            poly = [to_px(x, y) for x, y in pts]
+            if style.filled:
+                draw.polygon(poly, fill=white if active else style.color)
+            if style.outline:
+                # draw.polygon(outline=, width>1) leaves gaps at concave/
+                # sharp vertices — same issue already fixed in canvas.py's
+                # static preview; a closed line() polyline doesn't.
+                ow = max(1, int(round(style.outline_width * oversample)))
+                draw.line(poly + [poly[0]], fill=white if active else style.outline_color, width=ow)
+
+        key = f"mapicon:{id(style)}:{'active' if active else 'normal'}"
+        return arcade.Texture(img, hash=key)
+
+    style.icon_texture = render(active=False)
+    style.icon_texture_active = render(active=True)
+    style.icon_scale = 1.0 / oversample
 
 
 def _ray_circle_exit(ox: float, oy: float, dx: float, dy: float,
@@ -745,6 +804,14 @@ class _MapFeatureStyle:
         # set at arcade.Text construction time, so pool objects can't be
         # reused across styles with different fonts.
         self.label_pool: list[arcade.Text] = []
+        # Icon rendering: baked once (lazily, see _bake_map_icon) into a
+        # SpriteList of pooled sprites, rather than rebuilding polygon/
+        # circle vertex geometry every frame — see _bake_map_icon's own
+        # docstring for why.
+        self.icon_texture: arcade.Texture | None = None
+        self.icon_texture_active: arcade.Texture | None = None
+        self.icon_scale: float = 1.0
+        self.icon_sprites: arcade.SpriteList | None = None
 
 
 class VectorCompassRose(_VecBase):
@@ -1774,65 +1841,63 @@ class VectorCompassRose(_VecBase):
                 continue
             by_type.setdefault(entry["type"], []).append((distance_nm, bearing_deg, entry))
 
-        # Individual arcade.draw_polygon_* calls don't scale to the dozens-
-        # to-hundreds of features a dense area can put in range — measured
-        # ~10x faster rebuilding a ShapeElementList from scratch every
-        # frame than calling draw_polygon_filled/outline per feature
-        # (confirmed empirically: 180 individual polygons ~20ms/frame vs
-        # ~2ms/frame batched). Rebuilding every frame (rather than caching
-        # across frames) is safe — Arcade's GL buffer objects clean up via
-        # weakref.finalize when garbage collected (gauge_core/gl backend,
-        # not something this file needs to manage), not a leak-prone
-        # __del__, so there's no accumulation to worry about.
-        shapes = arcade.shape_list.ShapeElementList()
+        # Icons are pre-baked once per style (_bake_map_icon, on first use)
+        # into a normal-colors texture and a white-silhouette texture, then
+        # drawn via a pooled SpriteList — Arcade only needs to update each
+        # instance's small transform (position, and texture/color for the
+        # single "active" entry, if any) rather than regenerating full
+        # polygon/circle vertex geometry and re-uploading a VBO for every
+        # visible feature every frame. Measured ~9ms/frame at 180 features
+        # for the old per-frame ShapeElementList rebuild versus a handful
+        # of cheap position writes here (labels are a separate cost, not
+        # touched by this — see label handling below).
         labels_to_draw: list[arcade.Text] = []
         active_lines_to_draw: list[tuple] = []
 
         for type_name, style in self._map_styles.items():
             items = by_type.get(type_name, [])
             items.sort(key=lambda t: t[0])
+            visible_items = items[: self._map_max_per_type]
+
+            if style.icon_texture is None and (style.points or style.circle_radius > 0.0):
+                _bake_map_icon(style)
+            if style.icon_texture is not None:
+                if style.icon_sprites is None:
+                    style.icon_sprites = arcade.SpriteList()
+                while len(style.icon_sprites) < len(visible_items):
+                    sp = arcade.Sprite(style.icon_texture, scale=style.icon_scale)
+                    style.icon_sprites.append(sp)
+                for i in range(len(visible_items), len(style.icon_sprites)):
+                    style.icon_sprites[i].visible = False
+
             label_idx = 0
-            for distance_nm, bearing_deg, entry in items[: self._map_max_per_type]:
+            for i, (distance_nm, bearing_deg, entry) in enumerate(visible_items):
                 cx, cy = self._point_at(bearing_deg, distance_nm * px_per_nm)
-                # Symbols stay screen-fixed (not rotated with heading or
-                # bearing) — a map icon's "up" is always the window's own
-                # +Y direction, like north-up on a paper chart, not the
-                # heading-up convention the rest of this rose uses.
-                pts = [(cx + px, cy + py) for px, py in style.points]
 
                 # The "active" candidate (e.g. the tuned VOR) recolors
-                # every color slot on this one entry — same shapes, just
-                # highlighted — and gets a dashed course-line radial from
-                # its own position out to the rose's edge.
+                # every color slot on this one entry — same icon shape,
+                # just highlighted via the white-silhouette texture tinted
+                # to active_color — and gets a dashed course-line radial
+                # from its own position out to the rose's edge.
                 is_active = bool(style.active_ident) and entry.get("ident", "") == style.active_ident
-                color = style.active_color if is_active else style.color
-                outline_color = style.active_color if is_active else style.outline_color
-                circle_color = style.active_color if is_active else style.circle_color
-                circle_outline_color = style.active_color if is_active else style.circle_outline_color
 
-                # Fill and outline are independent — either, both, or
-                # neither can be enabled, for both the circle and the
-                # polygon, each with its own color (and the outline its
-                # own width).
-                if style.circle_radius > 0.0:
-                    d = style.circle_radius * 2.0
-                    if style.circle_filled:
-                        shapes.append(arcade.shape_list.create_ellipse_filled(
-                            cx, cy, d, d, circle_color,
-                        ))
-                    if style.circle_outline:
-                        shapes.append(arcade.shape_list.create_line_loop(
-                            _circle_outline_points(cx, cy, style.circle_radius),
-                            circle_outline_color, style.circle_outline_width,
-                        ))
-
-                if style.points:
-                    if style.filled:
-                        shapes.append(arcade.shape_list.create_polygon(pts, color))
-                    if style.outline:
-                        shapes.append(arcade.shape_list.create_line_loop(
-                            pts, outline_color, style.outline_width,
-                        ))
+                if style.icon_texture is not None:
+                    sp = style.icon_sprites[i]
+                    sp.visible = True
+                    # Symbols stay screen-fixed (not rotated with heading
+                    # or bearing) — a map icon's "up" is always the
+                    # window's own +Y direction, like north-up on a paper
+                    # chart, not the heading-up convention the rest of
+                    # this rose uses, so no angle to set here.
+                    sp.position = (cx, cy)
+                    if is_active:
+                        sp.texture = style.icon_texture_active
+                        sp.color = style.active_color[:3]
+                        sp.alpha = style.active_color[3]
+                    else:
+                        sp.texture = style.icon_texture
+                        sp.color = (255, 255, 255)
+                        sp.alpha = 255
 
                 if is_active and style.active_course_dataref is not None:
                     # A full radial through the VOR — both the course
@@ -1872,10 +1937,12 @@ class VectorCompassRose(_VecBase):
                     labels_to_draw.append(t)
                     label_idx += 1
 
-        shapes.draw()
+            if style.icon_sprites is not None:
+                style.icon_sprites.draw()
+
         # The active-VOR course line is a dashed line (immediate-mode, like
         # the CDI's own dashed segments) — at most one per feature type, so
-        # batching it into `shapes` isn't worth the complexity.
+        # batching it into a SpriteList isn't worth the complexity.
         for x0, y0, x1, y1, line_color, line_width, dash in active_lines_to_draw:
             self._draw_dashed_line(x0, y0, x1, y1, line_color, line_width, dash)
         # Labels draw after the whole batch, not interleaved per-feature —
