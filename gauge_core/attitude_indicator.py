@@ -119,6 +119,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import arcade
+import pyglet
 
 from gauge_core.lookup import lookup_piecewise
 from gauge_core.registry import get_convert, register_component, resolve_predicate_name
@@ -322,12 +323,36 @@ class AttitudeIndicator(_VecBase):
         # Reusable Text objects — grown lazily on first draw, never recreated.
         self._lbl_pool_r: list[arcade.Text] = []   # right side, anchor_x="left"
         self._lbl_pool_l: list[arcade.Text] = []   # left  side, anchor_x="right"
+        # Shared by every pooled ladder label — same reasoning as
+        # VectorCompassRose's own _heading_label_batch/_map_label_batch:
+        # each arcade.Text.draw() with no shared batch draws its own
+        # private one-label batch, which measured ~180x more expensive
+        # than one shared batch drawn once for a comparable label count.
+        self._ladder_label_batch = pyglet.graphics.Batch()
+        # Baked once (lazily) in local (pitch=0, bank=0) coordinates and
+        # positioned/rotated each frame via Sprite.position/.angle, instead
+        # of recomputing every ladder line's endpoints in Python and issuing
+        # one draw_line() call per line every frame (measured ~6ms/frame on
+        # their own). angle = self._bank directly (not e.g. -bank or
+        # bank+180) and the bake uses NO y-negation when converting to PIL
+        # pixel space — both empirically calibrated against _rot()'s own
+        # ground truth via the real PanelWindow pipeline; this is a
+        # different convention than VectorCompassRose's tick sprite (which
+        # rotates via the compass _point_at() convention, angle=heading+180,
+        # bake WITH y-negation) because _rot() has different handedness.
+        self._ladder_sprites: arcade.SpriteList | None = None
         self._pitch: float = 0.0
         self._bank:  float = 0.0
         self._pitch_dr:   Any | None      = None
         self._pitch_conv: Callable | None = None
         self._bank_dr:    Any | None      = None
         self._bank_conv:  Callable | None = None
+        # Static (rebuilt only when stale — never rebuilt every frame): both
+        # depend only on viewport/arc geometry that's fixed after
+        # apply_scale(), never on pitch/bank/slip, so there's nothing to
+        # recompute per frame at all once built once, lazily, on first draw.
+        self._corner_sprites: arcade.SpriteList | None = None
+        self._arc_bg_shape: arcade.ShapeElementList | None = None
         self._init_visibility()
 
     # ── dataref wiring ──────────────────────────────────────────────────────
@@ -408,9 +433,21 @@ class AttitudeIndicator(_VecBase):
         self._wing_pts = [(x * scale, y * scale) for x, y in self._wing_pts]
         self._wing_outline_w *= scale
         self._font_size  = max(6, int(self._font_size * scale))
+        # Built lazily on first draw, which always happens after every
+        # apply_scale()/apply_offset() call in the normal load path — but
+        # if that ever changes, stale pre-scale geometry must not survive.
+        self._corner_sprites = None
+        self._arc_bg_shape = None
+        self._ladder_sprites = None
 
     def apply_offset(self, dx: float, dy: float) -> None:
         self._vx += dx;  self._vy += dy
+        self._corner_sprites = None
+        self._arc_bg_shape = None
+        # _ladder_sprites is NOT invalidated here: its baked geometry is in
+        # local (pitch=0, bank=0) coordinates, never in absolute vx/vy
+        # terms — the per-frame Sprite.position call already re-derives the
+        # correct screen position from the current cx/cy each draw.
 
     # ── per-frame update ────────────────────────────────────────────────────
 
@@ -489,7 +526,9 @@ class AttitudeIndicator(_VecBase):
         if self._show_fd_h or self._show_fd_v:
             self._draw_flight_director(cx, cy)
         if self._show_arc_bg:
-            self._draw_arc_background(cx, arc_cy, arc_r)
+            if self._arc_bg_shape is None:
+                self._build_arc_bg_shape(cx, arc_cy, arc_r)
+            self._arc_bg_shape.draw()
         if self._show_arc_line or self._show_arc_ticks:
             self._draw_bank_arc(cx, arc_cy, arc_r)
         if self._show_slip:
@@ -498,7 +537,9 @@ class AttitudeIndicator(_VecBase):
         if self._show_reference:
             self._draw_reference_bug(cx, cy)     # centre bug renders above FD bars
         if self._corner_radius > 0:
-            self._draw_corner_cuts(vx, vy, vw, vh)
+            if self._corner_sprites is None:
+                self._build_corner_sprite(vx, vy, vw, vh)
+            self._corner_sprites.draw()
 
         ctx.scissor = None  # restore — no scissor for other components
 
@@ -527,6 +568,49 @@ class AttitudeIndicator(_VecBase):
         x2, y2 = _rot( big, pitch_y, cos_b, sin_b, cx, cy)
         arcade.draw_line(x1, y1, x2, y2, self._hor_color, self._hor_width)
 
+    def _build_ladder_line_sprite(self, vw: float) -> None:
+        # Local (pitch=0, bank=0) coordinates — positioned/rotated each
+        # frame via Sprite.position/.angle instead of recomputing every
+        # line's endpoints and issuing one draw_line() call per line every
+        # frame. See _ladder_sprites' own comment for the calibrated
+        # bake/rotation convention (no y-negation, angle = self._bank).
+        from PIL import Image, ImageDraw
+
+        half_vw = vw / 2.0
+        hw_4 = half_vw * self._ladder_hw_4
+        hw_2 = half_vw * self._ladder_hw_2
+        hw_1 = half_vw * self._ladder_hw_1
+        max_hw = max(hw_4, hw_2, hw_1)
+
+        n_steps = round(_LADDER_RANGE / self._ladder_step)
+        max_y = n_steps * self._ladder_step * self._ppu
+        pad = max(self._hor_width, self._ldr_width, 1.0) + 2.0
+        w_px = max(2, int(round((max_hw + pad) * 2.0)))
+        h_px = max(2, int(round((max_y + pad) * 2.0)))
+        img = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        cx_px, cy_px = w_px / 2.0, h_px / 2.0
+
+        for i in range(-n_steps, n_steps + 1):
+            if i == 0:
+                continue  # horizon is drawn separately
+            p = i * self._ladder_step
+            local_y = p * self._ppu
+            abs_i = abs(i)
+            if abs_i % 4 == 0:
+                hw, lw = hw_4, self._hor_width
+            elif abs_i % 2 == 0:
+                hw, lw = hw_2, self._ldr_width
+            else:
+                hw, lw = hw_1, self._ldr_width
+            p0 = (cx_px - hw, cy_px + local_y)
+            p1 = (cx_px + hw, cy_px + local_y)
+            draw.line([p0, p1], fill=self._ldr_color, width=max(1, int(round(lw))))
+
+        tex = arcade.Texture(img, hash=f"ai_ladder:{id(self)}")
+        self._ladder_sprites = arcade.SpriteList()
+        self._ladder_sprites.append(arcade.Sprite(tex))
+
     def _draw_ladder(
         self, cx, cy, pitch_y, cos_b, sin_b, vw,
         *, lines: bool = True, labels: bool = True,
@@ -535,6 +619,14 @@ class AttitudeIndicator(_VecBase):
         hw_4 = half_vw * self._ladder_hw_4
         hw_2 = half_vw * self._ladder_hw_2
         hw_1 = half_vw * self._ladder_hw_1
+
+        if lines:
+            if self._ladder_sprites is None:
+                self._build_ladder_line_sprite(vw)
+            sp = self._ladder_sprites[0]
+            sp.position = _rot(0.0, pitch_y, cos_b, sin_b, cx, cy)
+            sp.angle = self._bank
+            self._ladder_sprites.draw()
 
         n_steps = round(_LADDER_RANGE / self._ladder_step)
         lbl_idx = 0
@@ -545,53 +637,62 @@ class AttitudeIndicator(_VecBase):
             y_ai  = pitch_y + p * self._ppu
             abs_i = abs(i)
             if abs_i % 4 == 0:
-                hw, lw, labeled = hw_4, self._hor_width, True
+                hw, labeled = hw_4, True
             elif abs_i % 2 == 0:
-                hw, lw, labeled = hw_2, self._ldr_width, False
+                hw, labeled = hw_2, False
             else:
-                hw, lw, labeled = hw_1, self._ldr_width, False
-
-            if lines:
-                x1, y1 = _rot(-hw, y_ai, cos_b, sin_b, cx, cy)
-                x2, y2 = _rot( hw, y_ai, cos_b, sin_b, cx, cy)
-                arcade.draw_line(x1, y1, x2, y2, self._ldr_color, lw)
+                hw, labeled = hw_1, False
 
             if labeled:
                 if labels:
-                    label_text = str(abs(round(p)))
                     gap   = 6
                     lx_r, ly_r = _rot( hw + gap, y_ai, cos_b, sin_b, cx, cy)
                     lx_l, ly_l = _rot(-(hw + gap), y_ai, cos_b, sin_b, cx, cy)
                     rot  = -self._bank  # arcade Text.rotation is CW positive; bank is CCW positive
 
                     if lbl_idx >= len(self._lbl_pool_r):
+                        # A given pool slot always represents the same pitch
+                        # value p (i doesn't change frame to frame, only
+                        # self._pitch/self._bank do), so label_text is
+                        # correct forever once set here — see
+                        # VectorCompassRose's identical heading-label fix
+                        # for the measured cost of reassigning text/font
+                        # every frame anyway (~8ms for 36 labels there vs
+                        # ~0.09ms updating only x/y/rotation).
+                        label_text = str(abs(round(p)))
                         fkw: dict = {"bold": self._ladder_bold, "italic": self._ladder_italic}
                         if self._ladder_font:
                             fkw["font_name"] = self._ladder_font
                         self._lbl_pool_r.append(arcade.Text(
-                            "", 0.0, 0.0, color=self._ldr_color,
+                            label_text, 0.0, 0.0, color=self._ldr_color,
                             font_size=self._font_size, anchor_x="left", anchor_y="center",
+                            batch=self._ladder_label_batch,
                             **fkw,
                         ))
                         self._lbl_pool_l.append(arcade.Text(
-                            "", 0.0, 0.0, color=self._ldr_color,
+                            label_text, 0.0, 0.0, color=self._ldr_color,
                             font_size=self._font_size, anchor_x="right", anchor_y="center",
+                            batch=self._ladder_label_batch,
                             **fkw,
                         ))
 
                     tr = self._lbl_pool_r[lbl_idx]
-                    tr.text = label_text
                     tr.x = lx_r;  tr.y = ly_r;  tr.rotation = rot
-                    tr.draw()
 
                     tl = self._lbl_pool_l[lbl_idx]
-                    tl.text = label_text
                     tl.x = lx_l;  tl.y = ly_l;  tl.rotation = rot
-                    tl.draw()
 
                 lbl_idx += 1
 
-    def _draw_arc_background(self, cx: float, arc_cy: float, arc_r: float) -> None:
+        if labels:
+            self._ladder_label_batch.draw()
+
+    def _build_arc_bg_shape(self, cx: float, arc_cy: float, arc_r: float) -> None:
+        # This shape depends only on viewport/arc geometry (all fixed after
+        # apply_scale()) — never on pitch/bank/slip — so it's built once and
+        # cached, instead of rebuilding a 67-vertex polygon's throwaway VBO
+        # every single frame (measured ~6.9ms/frame on its own for just this
+        # one draw_polygon_filled() call).
         bg_color = self._arc_bg_color if self._arc_bg_color is not None else self._sky_color
         # Fill the region between the arc contour and the top of the viewport
         # (the "cap" above the arc, not the interior pie sector).
@@ -610,7 +711,9 @@ class AttitudeIndicator(_VecBase):
             pts.append((cx + r_bg * math.cos(theta),
                         arc_cy + r_bg * math.sin(theta)))
         pts.append((vx_right, vy_top))
-        arcade.draw_polygon_filled(pts, bg_color)
+        shapes = arcade.shape_list.ShapeElementList()
+        shapes.append(arcade.shape_list.create_polygon(pts, bg_color))
+        self._arc_bg_shape = shapes
 
     def _draw_bank_arc(self, cx, arc_cy, arc_r) -> None:
         if self._show_arc_line:
@@ -727,33 +830,31 @@ class AttitudeIndicator(_VecBase):
             arcade.draw_line(bar_x, cy - half, bar_x, cy + half,
                              self._fd_v_color, self._fd_v_w)
 
-    def _draw_corner_cuts(self, vx: float, vy: float, vw: float, vh: float) -> None:
-        """Overdraw the 4 corner regions outside the rounded rectangle with corner_bg_color.
+    def _build_corner_sprite(self, vx: float, vy: float, vw: float, vh: float) -> None:
+        """Bake the 4 corner-cut regions to one texture, once — this shape
+        depends only on viewport geometry and corner_radius (fixed after
+        apply_scale()), never on pitch/bank/slip, so there's nothing to
+        recompute per frame. Previously 128 individual draw_triangle_filled()
+        calls (4 corners x 32 segments) every frame, measured ~12.4ms/frame
+        on its own — by far the single biggest cost in this component.
+        PIL's rounded_rectangle() cut out of a solid corner_bg_color square
+        reproduces the same rounded-corner mask directly, with no
+        earclip/winding concerns at all (unlike a single concave polygon
+        covering all 4 corners, which is why the original code used a
+        triangle fan in the first place)."""
+        from PIL import Image, ImageDraw
 
-        Each corner is drawn as a fan of individual triangles (corner → arc[i] → arc[i+1])
-        rather than a single polygon call, which avoids Arcade's earclip winding issues.
-        """
         r = min(self._corner_radius, vw * 0.5, vh * 0.5)
-        n = 32
-        # (corner_x, corner_y, arc_cx, arc_cy, a_start_deg, a_end_deg)
-        corners = [
-            (vx,      vy + vh, vx + r,      vy + vh - r,  90.0, 180.0),  # top-left
-            (vx + vw, vy + vh, vx + vw - r, vy + vh - r,   0.0,  90.0),  # top-right
-            (vx,      vy,      vx + r,      vy + r,        180.0, 270.0),  # bottom-left
-            (vx + vw, vy,      vx + vw - r, vy + r,        270.0, 360.0),  # bottom-right
-        ]
-        c = self._corner_bg_color
-        for corner_x, corner_y, cx, cy, a0, a1 in corners:
-            prev_x = cx + r * math.cos(math.radians(a0))
-            prev_y = cy + r * math.sin(math.radians(a0))
-            for i in range(1, n + 1):
-                theta = math.radians(a0 + (a1 - a0) * i / n)
-                next_x = cx + r * math.cos(theta)
-                next_y = cy + r * math.sin(theta)
-                arcade.draw_triangle_filled(corner_x, corner_y,
-                                            prev_x, prev_y,
-                                            next_x, next_y, c)
-                prev_x, prev_y = next_x, next_y
+        w_px = max(2, int(round(vw)))
+        h_px = max(2, int(round(vh)))
+        img = Image.new("RGBA", (w_px, h_px), self._corner_bg_color)
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([0, 0, w_px - 1, h_px - 1], radius=int(round(r)), fill=(0, 0, 0, 0))
+        tex = arcade.Texture(img, hash=f"ai_corners:{id(self)}")
+        self._corner_sprites = arcade.SpriteList()
+        sp = arcade.Sprite(tex)
+        sp.position = (vx + vw / 2.0, vy + vh / 2.0)
+        self._corner_sprites.append(sp)
 
     def _draw_reference_wings(self, cx, cy) -> None:
         """Wing bars — drawn below FD bars.  Legacy stubs only if neither polygon is configured."""
