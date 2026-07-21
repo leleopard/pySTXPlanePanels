@@ -568,12 +568,18 @@ class AttitudeIndicator(_VecBase):
         x2, y2 = _rot( big, pitch_y, cos_b, sin_b, cx, cy)
         arcade.draw_line(x1, y1, x2, y2, self._hor_color, self._hor_width)
 
-    def _build_ladder_line_sprite(self, vw: float) -> None:
+    def _build_ladder_line_sprite(self, vw: float, oversample: int = 4) -> None:
         # Local (pitch=0, bank=0) coordinates — positioned/rotated each
         # frame via Sprite.position/.angle instead of recomputing every
         # line's endpoints and issuing one draw_line() call per line every
         # frame. See _ladder_sprites' own comment for the calibrated
         # bake/rotation convention (no y-negation, angle = self._bank).
+        #
+        # Baked at `oversample`x resolution then displayed at Sprite scale
+        # 1/oversample: PIL's line drawing has no antialiasing at all, so a
+        # native-resolution bake looked visibly jagged despite the
+        # runtime's own SSAA chain — same fix as VectorCompassRose's tick/
+        # ring sprites, see their own comments for why.
         from PIL import Image, ImageDraw
 
         half_vw = vw / 2.0
@@ -587,9 +593,13 @@ class AttitudeIndicator(_VecBase):
         pad = max(self._hor_width, self._ldr_width, 1.0) + 2.0
         w_px = max(2, int(round((max_hw + pad) * 2.0)))
         h_px = max(2, int(round((max_y + pad) * 2.0)))
-        img = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
+        max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
+        while oversample >= 2 and max(w_px, h_px) * oversample > max_tex:
+            oversample //= 2
+        ow_px, oh_px = w_px * oversample, h_px * oversample
+        img = Image.new("RGBA", (ow_px, oh_px), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        cx_px, cy_px = w_px / 2.0, h_px / 2.0
+        cx_px, cy_px = ow_px / 2.0, oh_px / 2.0
 
         for i in range(-n_steps, n_steps + 1):
             if i == 0:
@@ -603,13 +613,13 @@ class AttitudeIndicator(_VecBase):
                 hw, lw = hw_2, self._ldr_width
             else:
                 hw, lw = hw_1, self._ldr_width
-            p0 = (cx_px - hw, cy_px + local_y)
-            p1 = (cx_px + hw, cy_px + local_y)
-            draw.line([p0, p1], fill=self._ldr_color, width=max(1, int(round(lw))))
+            p0 = (cx_px - hw * oversample, cy_px + local_y * oversample)
+            p1 = (cx_px + hw * oversample, cy_px + local_y * oversample)
+            draw.line([p0, p1], fill=self._ldr_color, width=max(1, int(round(lw * oversample))))
 
         tex = arcade.Texture(img, hash=f"ai_ladder:{id(self)}")
         self._ladder_sprites = arcade.SpriteList()
-        self._ladder_sprites.append(arcade.Sprite(tex))
+        self._ladder_sprites.append(arcade.Sprite(tex, scale=1.0 / oversample))
 
     def _draw_ladder(
         self, cx, cy, pitch_y, cos_b, sin_b, vw,
@@ -830,7 +840,7 @@ class AttitudeIndicator(_VecBase):
             arcade.draw_line(bar_x, cy - half, bar_x, cy + half,
                              self._fd_v_color, self._fd_v_w)
 
-    def _build_corner_sprite(self, vx: float, vy: float, vw: float, vh: float) -> None:
+    def _build_corner_sprite(self, vx: float, vy: float, vw: float, vh: float, oversample: int = 4) -> None:
         """Bake the 4 corner-cut regions to one texture, once — this shape
         depends only on viewport geometry and corner_radius (fixed after
         apply_scale()), never on pitch/bank/slip, so there's nothing to
@@ -841,18 +851,30 @@ class AttitudeIndicator(_VecBase):
         reproduces the same rounded-corner mask directly, with no
         earclip/winding concerns at all (unlike a single concave polygon
         covering all 4 corners, which is why the original code used a
-        triangle fan in the first place)."""
+        triangle fan in the first place).
+
+        Baked at `oversample`x resolution then displayed at Sprite scale
+        1/oversample — PIL's rounded_rectangle() has no antialiasing, so a
+        native-resolution bake showed a visibly stair-stepped corner curve
+        despite the runtime's own SSAA chain (same fix as the tick/ring/
+        ladder sprites elsewhere in this session's work)."""
         from PIL import Image, ImageDraw
 
         r = min(self._corner_radius, vw * 0.5, vh * 0.5)
         w_px = max(2, int(round(vw)))
         h_px = max(2, int(round(vh)))
-        img = Image.new("RGBA", (w_px, h_px), self._corner_bg_color)
+        max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
+        while oversample >= 2 and max(w_px, h_px) * oversample > max_tex:
+            oversample //= 2
+        ow_px, oh_px = w_px * oversample, h_px * oversample
+        img = Image.new("RGBA", (ow_px, oh_px), self._corner_bg_color)
         draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([0, 0, w_px - 1, h_px - 1], radius=int(round(r)), fill=(0, 0, 0, 0))
+        draw.rounded_rectangle(
+            [0, 0, ow_px - 1, oh_px - 1], radius=int(round(r * oversample)), fill=(0, 0, 0, 0),
+        )
         tex = arcade.Texture(img, hash=f"ai_corners:{id(self)}")
         self._corner_sprites = arcade.SpriteList()
-        sp = arcade.Sprite(tex)
+        sp = arcade.Sprite(tex, scale=1.0 / oversample)
         sp.position = (vx + vw / 2.0, vy + vh / 2.0)
         self._corner_sprites.append(sp)
 

@@ -1586,7 +1586,7 @@ class VectorCompassRose(_VecBase):
         ))
         self._bg_shape = shapes
 
-    def _build_ring_sprites(self) -> None:
+    def _build_ring_sprites(self, oversample: int = 4) -> None:
         # Baked once to a PIL texture and drawn as a single static Sprite
         # (position (cx, cy), angle 0 — the outline circle/rings never
         # rotate) rather than via ShapeElementList's create_line-family
@@ -1597,6 +1597,14 @@ class VectorCompassRose(_VecBase):
         # everywhere else in this file for consistency, then converted to
         # PIL's y-down pixel space the same way _bake_map_icon() already
         # does for moving_map icons.
+        #
+        # Baked at `oversample`x resolution then displayed at Sprite scale
+        # 1/oversample (same technique _bake_map_icon() already uses) —
+        # PIL's own line/arc drawing has no antialiasing at all, so baking
+        # at native 1:1 resolution (the first version of this fix) produced
+        # visibly jagged rings/ticks despite the runtime's own SSAA chain,
+        # since supersampling only smooths detail that was actually present
+        # in the source at a finer resolution than the final downsample.
         from PIL import Image, ImageDraw
 
         pad = max(
@@ -1606,13 +1614,17 @@ class VectorCompassRose(_VecBase):
         ) + 2.0
         half = self._radius + pad
         size_px = max(2, int(round(half * 2.0)))
-        img = Image.new("RGBA", (size_px, size_px), (0, 0, 0, 0))
+        max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
+        while oversample >= 2 and size_px * oversample > max_tex:
+            oversample //= 2
+        os_px = size_px * oversample
+        img = Image.new("RGBA", (os_px, os_px), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        cx_px = cy_px = size_px / 2.0
+        cx_px = cy_px = os_px / 2.0
 
         def polyline(points: list[tuple[float, float]], color, width: float) -> None:
-            pts_px = [(cx_px + x, cy_px - y) for x, y in points]
-            draw.line(pts_px, fill=color, width=max(1, int(round(width))))
+            pts_px = [(cx_px + x * oversample, cy_px - y * oversample) for x, y in points]
+            draw.line(pts_px, fill=color, width=max(1, int(round(width * oversample))))
 
         if self._show_line:
             polyline(
@@ -1641,7 +1653,7 @@ class VectorCompassRose(_VecBase):
 
         tex = arcade.Texture(img, hash=f"rose_ring:{id(self)}")
         self._ring_sprites = arcade.SpriteList()
-        self._ring_sprites.append(arcade.Sprite(tex))
+        self._ring_sprites.append(arcade.Sprite(tex, scale=1.0 / oversample))
 
     def _build_tick_sprites(self) -> None:
         # Baked once to a PIL texture (local, heading=0 reference) and
@@ -1658,14 +1670,25 @@ class VectorCompassRose(_VecBase):
         # flip the image the way a naive "local Y-up coordinates" bake
         # would assume, so the extra 180 corrects for that without
         # needing to special-case the bake itself.
+        #
+        # Baked at `oversample`x resolution then displayed at Sprite scale
+        # 1/oversample — see _build_ring_sprites()'s own comment for why
+        # (PIL's line drawing has no antialiasing at all, so a native-
+        # resolution bake looked visibly jagged despite the runtime's own
+        # SSAA chain).
         from PIL import Image, ImageDraw
 
+        oversample = 4
         max_len = max(self._tick5_length, self._tick10_length)
         half = self._radius + max_len + 2.0
         size_px = max(2, int(round(half * 2.0)))
-        img = Image.new("RGBA", (size_px, size_px), (0, 0, 0, 0))
+        max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
+        while oversample >= 2 and size_px * oversample > max_tex:
+            oversample //= 2
+        os_px = size_px * oversample
+        img = Image.new("RGBA", (os_px, os_px), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        cx_px = cy_px = size_px / 2.0
+        cx_px = cy_px = os_px / 2.0
 
         for h in range(0, 360, 5):
             is_major = (h % 10) == 0
@@ -1680,13 +1703,13 @@ class VectorCompassRose(_VecBase):
             local_angle = math.radians(90.0 - h)
             x0, y0 = r0 * math.cos(local_angle), r0 * math.sin(local_angle)
             x1, y1 = r1 * math.cos(local_angle), r1 * math.sin(local_angle)
-            p0 = (cx_px + x0, cy_px - y0)
-            p1 = (cx_px + x1, cy_px - y1)
-            draw.line([p0, p1], fill=color, width=max(1, int(round(width))))
+            p0 = (cx_px + x0 * oversample, cy_px - y0 * oversample)
+            p1 = (cx_px + x1 * oversample, cy_px - y1 * oversample)
+            draw.line([p0, p1], fill=color, width=max(1, int(round(width * oversample))))
 
         tex = arcade.Texture(img, hash=f"rose_ticks:{id(self)}")
         self._tick_sprites = arcade.SpriteList()
-        self._tick_sprites.append(arcade.Sprite(tex))
+        self._tick_sprites.append(arcade.Sprite(tex, scale=1.0 / oversample))
 
     def _draw_all(self) -> None:
         if self._background_color is not None:
