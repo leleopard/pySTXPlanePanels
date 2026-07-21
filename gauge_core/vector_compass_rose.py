@@ -713,6 +713,26 @@ def _ray_circle_exit(ox: float, oy: float, dx: float, dy: float,
     return (ox + t * dx, oy + t * dy)
 
 
+def _arc_points(
+    cx: float, cy: float, radius: float, start_deg: float, end_deg: float, num_segments: int,
+) -> list[tuple[float, float]]:
+    """Points along a circle/arc from start_deg to end_deg (standard math
+    convention: 0 = +x axis, counter-clockwise — matches arcade's own
+    draw_arc_outline internally, confirmed by reading its source), for
+    building a static outline once via create_line_strip/create_line_loop
+    instead of calling draw_circle_outline/draw_arc_outline (which rebuild
+    their own throwaway VBO) every frame."""
+    n = max(2, int(num_segments))
+    span = end_deg - start_deg
+    return [
+        (
+            cx + radius * math.cos(math.radians(start_deg + span * i / n)),
+            cy + radius * math.sin(math.radians(start_deg + span * i / n)),
+        )
+        for i in range(n + 1)
+    ]
+
+
 class _MapFeatureStyle:
     """Polygon + optional circle + optional label styling for one
     moving_map feature type (airport/vor/ndb/waypoint). Fill and outline
@@ -894,6 +914,33 @@ class VectorCompassRose(_VecBase):
             float(label_emphasize_font_size) if label_emphasize_font_size else self._label_font_size
         )
         self._label_pool: list[arcade.Text] = []
+        # Shared by every pooled heading label (mirrors moving_map's own
+        # _map_label_batch — see that field's comment for why one shared
+        # pyglet Batch, drawn once, is dramatically cheaper than each
+        # label calling Text.draw() individually). Kept separate from
+        # _map_label_batch (different lifetime/content) rather than reused.
+        self._heading_label_batch = pyglet.graphics.Batch()
+        # Static (rebuilt only when stale — never rebuilt every frame):
+        # the background disc (ShapeElementList — create_ellipse_filled
+        # works correctly), and the outline circle + range rings + tick
+        # marks (baked once to a PIL texture and drawn as a Sprite,
+        # NOT via ShapeElementList's create_line/create_line_strip/
+        # create_line_loop — confirmed by direct pixel-read testing,
+        # including through the real PanelWindow render pipeline, that
+        # those render nothing or land at the wrong position in this
+        # Arcade version; create_polygon/create_ellipse_filled and plain
+        # Sprite drawing are unaffected). The circle/rings never rotate
+        # (baked once, drawn at Sprite.position = (cx, cy), angle 0); the
+        # ticks DO rotate with heading, so they're baked once as a single
+        # texture and rotated via Sprite.angle each frame instead of
+        # recomputing 72 line endpoints in Python — angle = heading + 180
+        # (not just heading), an offset empirically calibrated against
+        # _point_at()'s own ground truth across multiple headings, since
+        # Arcade's PIL-to-texture loading doesn't flip vertically the way
+        # a naive reading of "Y-up local coords" would assume.
+        self._bg_shape: arcade.ShapeElementList | None = None
+        self._ring_sprites: arcade.SpriteList | None = None
+        self._tick_sprites: arcade.SpriteList | None = None
 
         # Optional scissor clip [x, y_bottom, w, h] in panel coords; None means
         # draw the full rose unclipped (the pre-existing behaviour).
@@ -1351,6 +1398,13 @@ class VectorCompassRose(_VecBase):
         self._label_font_size *= scale
         self._label_emphasize_font_size *= scale
         self._label_pool.clear()  # font size changed; pool objects are stale
+        # Static geometry caches are all built lazily on first draw, which
+        # always happens after every apply_scale() call in the normal
+        # load path — but if that ever changes, stale pre-scale geometry
+        # must not survive, same principle as _label_pool.clear() above.
+        self._bg_shape = None
+        self._ring_sprites = None
+        self._tick_sprites = None
         self._ring_width *= scale
         self._range_label_offset_x *= scale; self._range_label_offset_y *= scale
         self._range_label_font_size *= scale
@@ -1524,41 +1578,94 @@ class VectorCompassRose(_VecBase):
         if self._show_center_marker and not self._center_marker_clip:
             self._draw_center_marker()
 
-    def _draw_all(self) -> None:
-        if self._background_color is not None:
-            arcade.draw_circle_filled(
-                self._cx, self._cy, self._radius, self._background_color,
-                num_segments=self._segments,
-            )
+    def _build_bg_shape(self) -> None:
+        shapes = arcade.shape_list.ShapeElementList()
+        shapes.append(arcade.shape_list.create_ellipse_filled(
+            self._cx, self._cy, self._radius * 2.0, self._radius * 2.0,
+            self._background_color, num_segments=self._segments,
+        ))
+        self._bg_shape = shapes
 
-        if self._map_shown and self._map_visible:
-            self._draw_moving_map()
+    def _build_ring_sprites(self) -> None:
+        # Baked once to a PIL texture and drawn as a single static Sprite
+        # (position (cx, cy), angle 0 — the outline circle/rings never
+        # rotate) rather than via ShapeElementList's create_line-family
+        # calls, which were confirmed (by direct pixel-read testing,
+        # including through the real PanelWindow pipeline) to render
+        # nothing or land at the wrong screen position in this Arcade
+        # version. Points are generated with the same _arc_points() used
+        # everywhere else in this file for consistency, then converted to
+        # PIL's y-down pixel space the same way _bake_map_icon() already
+        # does for moving_map icons.
+        from PIL import Image, ImageDraw
+
+        pad = max(
+            self._line_width if self._show_line else 0.0,
+            self._ring_width if self._ring_count else 0.0,
+            1.0,
+        ) + 2.0
+        half = self._radius + pad
+        size_px = max(2, int(round(half * 2.0)))
+        img = Image.new("RGBA", (size_px, size_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        cx_px = cy_px = size_px / 2.0
+
+        def polyline(points: list[tuple[float, float]], color, width: float) -> None:
+            pts_px = [(cx_px + x, cy_px - y) for x, y in points]
+            draw.line(pts_px, fill=color, width=max(1, int(round(width))))
 
         if self._show_line:
-            arcade.draw_circle_outline(
-                self._cx, self._cy, self._radius, self._line_color,
-                self._line_width, num_segments=self._segments,
+            polyline(
+                _arc_points(0.0, 0.0, self._radius, 0.0, 360.0, self._segments),
+                self._line_color, self._line_width,
             )
-
         if self._ring_count:
             spacing = self._radius / self._ring_count
             for k in range(1, self._ring_count + 1):
                 r = k * spacing
                 if self._ring_half == "top":
-                    arcade.draw_arc_outline(
-                        self._cx, self._cy, r * 2, r * 2, self._ring_color,
-                        0, 180, self._ring_width, num_segments=self._segments,
+                    polyline(
+                        _arc_points(0.0, 0.0, r, 0.0, 180.0, self._segments),
+                        self._ring_color, self._ring_width,
                     )
                 elif self._ring_half == "bottom":
-                    arcade.draw_arc_outline(
-                        self._cx, self._cy, r * 2, r * 2, self._ring_color,
-                        180, 360, self._ring_width, num_segments=self._segments,
+                    polyline(
+                        _arc_points(0.0, 0.0, r, 180.0, 360.0, self._segments),
+                        self._ring_color, self._ring_width,
                     )
                 else:
-                    arcade.draw_circle_outline(
-                        self._cx, self._cy, r, self._ring_color,
-                        self._ring_width, num_segments=self._segments,
+                    polyline(
+                        _arc_points(0.0, 0.0, r, 0.0, 360.0, self._segments),
+                        self._ring_color, self._ring_width,
                     )
+
+        tex = arcade.Texture(img, hash=f"rose_ring:{id(self)}")
+        self._ring_sprites = arcade.SpriteList()
+        self._ring_sprites.append(arcade.Sprite(tex))
+
+    def _build_tick_sprites(self) -> None:
+        # Baked once to a PIL texture (local, heading=0 reference) and
+        # rotated via Sprite.angle each frame instead of recomputing 72
+        # line endpoints in Python and issuing 72 individual draw_line()
+        # calls (measured ~6ms/frame on their own) — same reasoning as
+        # _build_ring_sprites() for why this is a Sprite, not a
+        # ShapeElementList of create_line() shapes.
+        #
+        # angle = self._heading + 180.0 (not just self._heading) at draw
+        # time: empirically calibrated against _point_at()'s own ground
+        # truth across multiple headings (0/37/90/180/270 all matched
+        # exactly) — Arcade's PIL-to-texture loading doesn't vertically
+        # flip the image the way a naive "local Y-up coordinates" bake
+        # would assume, so the extra 180 corrects for that without
+        # needing to special-case the bake itself.
+        from PIL import Image, ImageDraw
+
+        max_len = max(self._tick5_length, self._tick10_length)
+        half = self._radius + max_len + 2.0
+        size_px = max(2, int(round(half * 2.0)))
+        img = Image.new("RGBA", (size_px, size_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        cx_px = cy_px = size_px / 2.0
 
         for h in range(0, 360, 5):
             is_major = (h % 10) == 0
@@ -1570,9 +1677,38 @@ class VectorCompassRose(_VecBase):
                 (self._radius - length, self._radius) if position == "inside"
                 else (self._radius, self._radius + length)
             )
-            x0, y0 = self._point_at(h, r0)
-            x1, y1 = self._point_at(h, r1)
-            arcade.draw_line(x0, y0, x1, y1, color, width)
+            local_angle = math.radians(90.0 - h)
+            x0, y0 = r0 * math.cos(local_angle), r0 * math.sin(local_angle)
+            x1, y1 = r1 * math.cos(local_angle), r1 * math.sin(local_angle)
+            p0 = (cx_px + x0, cy_px - y0)
+            p1 = (cx_px + x1, cy_px - y1)
+            draw.line([p0, p1], fill=color, width=max(1, int(round(width))))
+
+        tex = arcade.Texture(img, hash=f"rose_ticks:{id(self)}")
+        self._tick_sprites = arcade.SpriteList()
+        self._tick_sprites.append(arcade.Sprite(tex))
+
+    def _draw_all(self) -> None:
+        if self._background_color is not None:
+            if self._bg_shape is None:
+                self._build_bg_shape()
+            self._bg_shape.draw()
+
+        if self._map_shown and self._map_visible:
+            self._draw_moving_map()
+
+        if self._show_line or self._ring_count:
+            if self._ring_sprites is None:
+                self._build_ring_sprites()
+            self._ring_sprites[0].position = (self._cx, self._cy)
+            self._ring_sprites.draw()
+
+        if self._tick_sprites is None:
+            self._build_tick_sprites()
+        tick_sprite = self._tick_sprites[0]
+        tick_sprite.position = (self._cx, self._cy)
+        tick_sprite.angle = self._heading + 180.0
+        self._tick_sprites.draw()
 
         r_label = (
             self._radius - self._label_offset if self._label_position == "inside"
@@ -1585,21 +1721,29 @@ class VectorCompassRose(_VecBase):
                 kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
                 if self._label_font:
                     kw["font_name"] = self._label_font
+                # A given pool slot always represents the same heading
+                # value (h doesn't change frame to frame, only self._heading
+                # does), so text/font_size are correct forever once set
+                # here — measured reassigning them every frame anyway (the
+                # previous code did) cost ~8ms of this method's ~17.7ms
+                # heading-label total for only 36 labels; only updating
+                # x/y/rotation below costs ~0.09ms for the same 36.
+                text_val = self._label_format.format(h / 10.0)
+                font_size_val = (
+                    self._label_emphasize_font_size
+                    if self._label_emphasize_interval and h % self._label_emphasize_interval == 0
+                    else self._label_font_size
+                )
                 self._label_pool.append(arcade.Text(
-                    "", 0, 0,
+                    text_val, 0, 0,
                     color=self._label_color,
-                    font_size=self._label_font_size,
+                    font_size=font_size_val,
                     anchor_x="center",
                     anchor_y=self._label_anchor_y,
+                    batch=self._heading_label_batch,
                     **kw,
                 ))
             t = self._label_pool[idx]
-            t.text = self._label_format.format(h / 10.0)
-            t.font_size = (
-                self._label_emphasize_font_size
-                if self._label_emphasize_interval and h % self._label_emphasize_interval == 0
-                else self._label_font_size
-            )
             t.x, t.y = x, y
             # Radial orientation: baseline tangent to the circle (perpendicular
             # to the radius), with "up" pointing outward along the radius.
@@ -1611,8 +1755,8 @@ class VectorCompassRose(_VecBase):
             # comparing against the designer's PIL preview, which needed no
             # such flip), so the sign is reversed here to compensate.
             t.rotation = h - self._heading
-            t.draw()
             idx += 1
+        self._heading_label_batch.draw()
 
         if self._show_track:
             self._draw_track()
