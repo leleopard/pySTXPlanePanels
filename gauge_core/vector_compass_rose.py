@@ -521,6 +521,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import arcade
+import pyglet
 
 from gauge_core import geo, navdata
 from gauge_core.font_utils import resolve_font_for_arcade
@@ -1070,6 +1071,15 @@ class VectorCompassRose(_VecBase):
         self._map_vis_dr: Any | None = None
         self._map_vis_predicate: Callable | None = None
         self._map_visible = True
+        # Shared across every style's label_pool — pyglet's own docs warn
+        # that calling Text.draw() per-label with no shared batch means
+        # each one draws its own private one-label batch (measured
+        # ~20.7ms/frame for 180 individually-drawn labels versus ~0.1ms/
+        # frame for the same 180 labels sharing one batch, drawn via a
+        # single batch.draw() call) — pooled labels not needed this frame
+        # are hidden via Text.visible = False (confirmed this excludes
+        # them from the batch's draw cost) rather than removed.
+        self._map_label_batch = pyglet.graphics.Batch()
 
         self._init_visibility()
 
@@ -1849,9 +1859,9 @@ class VectorCompassRose(_VecBase):
         # polygon/circle vertex geometry and re-uploading a VBO for every
         # visible feature every frame. Measured ~9ms/frame at 180 features
         # for the old per-frame ShapeElementList rebuild versus a handful
-        # of cheap position writes here (labels are a separate cost, not
-        # touched by this — see label handling below).
-        labels_to_draw: list[arcade.Text] = []
+        # of cheap position writes here. Labels share one pyglet Batch
+        # (self._map_label_batch, see its own comment) rather than each
+        # calling Text.draw() individually, for the same reason.
         active_lines_to_draw: list[tuple] = []
 
         for type_name, style in self._map_styles.items():
@@ -1922,9 +1932,11 @@ class VectorCompassRose(_VecBase):
                             color=style.label_color,
                             font_size=style.label_font_size,
                             anchor_x="left", anchor_y="center",
+                            batch=self._map_label_batch,
                             **kw,
                         ))
                     t = style.label_pool[label_idx]
+                    t.visible = True
                     t.text = str(entry.get("ident", ""))
                     # color/font_size are constant per-style (already set at
                     # construction above) — deliberately NOT reassigned here
@@ -1934,8 +1946,16 @@ class VectorCompassRose(_VecBase):
                     # showed font_size alone accounting for roughly half of
                     # this method's total cost when reassigned needlessly.
                     t.x, t.y = cx + style.label_offset_x, cy + style.label_offset_y
-                    labels_to_draw.append(t)
                     label_idx += 1
+
+            # Pooled labels beyond this frame's count stay in the batch
+            # (removing/recreating them would defeat the point of pooling)
+            # but must be hidden — Text.visible = False confirmed to
+            # exclude a label from the batch's draw cost, unlike the old
+            # per-label draw() calls where simply not calling draw() was
+            # enough.
+            for i in range(label_idx, len(style.label_pool)):
+                style.label_pool[i].visible = False
 
             if style.icon_sprites is not None:
                 style.icon_sprites.draw()
@@ -1945,13 +1965,12 @@ class VectorCompassRose(_VecBase):
         # batching it into a SpriteList isn't worth the complexity.
         for x0, y0, x1, y1, line_color, line_width, dash in active_lines_to_draw:
             self._draw_dashed_line(x0, y0, x1, y1, line_color, line_width, dash)
-        # Labels draw after the whole batch, not interleaved per-feature —
-        # a label always sits offset to the right of its own symbol rather
+        # All styles' labels share one batch, drawn once here (after every
+        # style's icons above) rather than interleaved per-feature — a
+        # label always sits offset to the right of its own symbol rather
         # than overlapping it, so drawing all labels on top of all symbols
-        # (instead of each label only above its own symbol) is visually
-        # equivalent here.
-        for t in labels_to_draw:
-            t.draw()
+        # is visually equivalent to drawing each on top of just its own.
+        self._map_label_batch.draw()
 
     def _draw_deviation_markers(self) -> None:
         # 4 fixed marks (2 each side) on the same perpendicular-to-course
