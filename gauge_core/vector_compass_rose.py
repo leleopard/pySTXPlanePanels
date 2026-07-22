@@ -1663,21 +1663,22 @@ class VectorCompassRose(_VecBase):
         # _build_ring_sprites() for why this is a Sprite, not a
         # ShapeElementList of create_line() shapes.
         #
-        # angle = self._heading directly at draw time, and the bake below
-        # uses NO y-negation when converting to PIL pixel space. An earlier
-        # version used y-negation (matching _bake_map_icon(), which never
-        # rotates) plus angle = heading + 180, calibrated only against a
-        # single test point sitting exactly on the local Y-axis (h=0) — a
-        # blind spot, since a point with local x=0 is invariant under an
-        # x-axis mirror and can't reveal one. That combination is actually
-        # a *reflection* composed with a rotation, not a pure rotation (the
-        # same root cause AttitudeIndicator's pitch-ladder sprite needed
-        # "no y-negation" for) — it happened to reproduce _point_at()'s
-        # position correctly at that one axis point, but mirrored every
-        # other tick left-right, making the whole rose appear to rotate in
-        # the opposite direction as heading changed. Re-derived and
-        # verified against 5 different h values (0/45/90/135/225) at 3
-        # headings each (15 combinations, all exact) this time.
+        # angle = -self._heading at draw time, and the bake below DOES
+        # negate y when converting local (x, y) to PIL pixel space (PIL is
+        # y-down, world/_point_at() is y-up — same convention as
+        # _bake_map_icon()). arcade.Sprite.angle rotates CLOCKWISE for
+        # positive values (confirmed from Arcade's own source/docstring,
+        # not assumed) while _point_at()'s heading convention is
+        # counter-clockwise-positive standard math, hence the negation on
+        # the angle passed to the sprite. Two earlier versions got this
+        # wrong in different ways (both "verified" against on-axis test
+        # points only, which can't distinguish a reflection or an angle-
+        # sign error from a correct rotation) — this version was derived
+        # algebraically for the general case (arbitrary h and heading) and
+        # confirmed empirically by rendering the real HSI instrument
+        # off-screen at heading=182 and reading back marker pixel
+        # centroids for h=0 and an off-axis h, matching _point_at()
+        # exactly within antialiasing/centroid tolerance.
         #
         # Baked at `oversample`x resolution then displayed at Sprite scale
         # 1/oversample — see _build_ring_sprites()'s own comment for why
@@ -1711,8 +1712,8 @@ class VectorCompassRose(_VecBase):
             local_angle = math.radians(90.0 - h)
             x0, y0 = r0 * math.cos(local_angle), r0 * math.sin(local_angle)
             x1, y1 = r1 * math.cos(local_angle), r1 * math.sin(local_angle)
-            p0 = (cx_px + x0 * oversample, cy_px + y0 * oversample)
-            p1 = (cx_px + x1 * oversample, cy_px + y1 * oversample)
+            p0 = (cx_px + x0 * oversample, cy_px - y0 * oversample)
+            p1 = (cx_px + x1 * oversample, cy_px - y1 * oversample)
             draw.line([p0, p1], fill=color, width=max(1, int(round(width * oversample))))
 
         tex = arcade.Texture(img, hash=f"rose_ticks:{id(self)}")
@@ -1738,7 +1739,7 @@ class VectorCompassRose(_VecBase):
             self._build_tick_sprites()
         tick_sprite = self._tick_sprites[0]
         tick_sprite.position = (self._cx, self._cy)
-        tick_sprite.angle = self._heading
+        tick_sprite.angle = -self._heading
         self._tick_sprites.draw()
 
         r_label = (
