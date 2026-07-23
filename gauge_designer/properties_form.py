@@ -1581,6 +1581,42 @@ class _CdiLineSection(_SubSection):
 
         self.row_widget(self._symbol)
 
+        # ── Label (course-readout text, e.g. "124") at this segment's end ──
+        self._label = _SubSection("Label", collapsed=True)
+        self._label.row_widget(_sep_label(
+            "Optional course-readout text (e.g. \"124\") near this segment's\n"
+            "own end, rotated to stay aligned with the course line. Text is\n"
+            "always this segment's own bearing, zero-padded to 3 digits —\n"
+            "shares the rose's own label font/bold/italic."
+        ))
+
+        self._label_chk = QCheckBox("Add label")
+        self._label_chk.toggled.connect(self._on_label_toggled)
+        self._label_chk.toggled.connect(emit)
+        self._label.row_widget(self._label_chk)
+
+        self._label_offset = QDoubleSpinBox()
+        self._label_offset.setRange(-4096.0, 4096.0); self._label_offset.setDecimals(1)
+        self._label_offset.setValue(200.0)
+        self._label_offset.setEnabled(False)
+        self._label_offset.setToolTip("Distance from the rose centre where the label sits.")
+        self._label_offset.valueChanged.connect(emit)
+        self._label.row("Offset px (from centre)", self._label_offset)
+
+        self._label_font_size = QDoubleSpinBox()
+        self._label_font_size.setRange(4.0, 96.0); self._label_font_size.setDecimals(1)
+        self._label_font_size.setValue(14.0)
+        self._label_font_size.setEnabled(False)
+        self._label_font_size.valueChanged.connect(emit)
+        self._label.row("Font size", self._label_font_size)
+
+        self._label_color = _ColorButton()
+        self._label_color.setEnabled(False)
+        self._label_color.color_changed.connect(emit)
+        self._label.row("Color", self._label_color)
+
+        self.row_widget(self._label)
+
     def _on_dash_toggled(self, on: bool) -> None:
         self._dash_on.setEnabled(on)
         self._dash_off.setEnabled(on)
@@ -1610,6 +1646,11 @@ class _CdiLineSection(_SubSection):
         enabled = on and self._symbol_chk.isChecked()
         self._symbol_outline_color.setEnabled(enabled)
         self._symbol_outline_width.setEnabled(enabled)
+
+    def _on_label_toggled(self, on: bool) -> None:
+        self._label_offset.setEnabled(on)
+        self._label_font_size.setEnabled(on)
+        self._label_color.setEnabled(on)
 
     def load(self, cfg: dict | None) -> None:
         cfg = cfg or {}
@@ -1653,6 +1694,16 @@ class _CdiLineSection(_SubSection):
         self._symbol_outline_width.setEnabled(symbol_on and symbol_has_outline)
         self._symbol_form.setRowVisible(self._symbol_outline_width, symbol_filled)
         self._symbol_outline_width.setValue(float(symbol.get("outline_width", 1.0)))
+        label = cfg.get("label")
+        label_on = label is not None
+        self._label_chk.blockSignals(True)
+        self._label_chk.setChecked(label_on)
+        self._label_chk.blockSignals(False)
+        self._on_label_toggled(label_on)
+        label = label or {}
+        self._label_offset.setValue(float(label.get("offset", 200.0)))
+        self._label_font_size.setValue(float(label.get("font_size", 14.0)))
+        self._label_color.set_rgba(label.get("color", [255, 255, 255, 255]))
 
     def get_data(self) -> dict:
         data = {
@@ -1679,6 +1730,12 @@ class _CdiLineSection(_SubSection):
                     symbol["outline_color"] = list(self._symbol_outline_color.get_rgba())
                     symbol["outline_width"] = self._symbol_outline_width.value()
                 data["symbol"] = symbol
+        if self._label_chk.isChecked():
+            data["label"] = {
+                "offset": self._label_offset.value(),
+                "font_size": self._label_font_size.value(),
+                "color": list(self._label_color.get_rgba()),
+            }
         return data
 
     def reset(self) -> None:
@@ -1692,6 +1749,9 @@ class _CdiLineSection(_SubSection):
         self._symbol_filled.setChecked(True); self._symbol_width.setValue(2.0)
         self._symbol_outline_chk.setChecked(False)
         self._symbol_outline_color.set_rgba(None); self._symbol_outline_width.setValue(1.0)
+        self._label_chk.setChecked(False)
+        self._label_offset.setValue(200.0); self._label_font_size.setValue(14.0)
+        self._label_color.set_rgba(None)
 
 
 class _FillOutlineRow:

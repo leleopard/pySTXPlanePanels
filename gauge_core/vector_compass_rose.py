@@ -278,6 +278,22 @@ YAML schema
             width: 2.0                      # stroke width when filled: false
             outline_color: null             # optional outline when filled: true
             outline_width: 1.0
+          label:                            # optional: course-readout text
+                                             # (e.g. "124") near this
+                                             # segment's own end, rotated to
+                                             # stay aligned with the course
+                                             # line as it rotates — the
+                                             # classic course-number readout
+                                             # either side of the VOR on a
+                                             # real ND. Shares the rose's own
+                                             # label_font/label_bold/
+                                             # label_italic; text is always
+                                             # this segment's own bearing
+                                             # (head: course, tail: course+
+                                             # 180) zero-padded to 3 digits.
+            offset: 200                      # px from the rose centre
+            font_size: 14
+            color: [255, 255, 255, 255]
         tail:                                # segment diametrically opposite
                                              # (course + 180°)
           start: 20
@@ -286,6 +302,7 @@ YAML schema
           width: 2.0
           dash: null
           symbol: null                      # optional, same shape as head's
+          label: null                       # optional, same shape as head's
 
         deviation_bar:                       # optional: a polygon that
                                              # translates from the rose
@@ -606,6 +623,9 @@ class _CdiSegment:
         symbol_width: float = 2.0,
         symbol_outline_color: tuple[int, int, int, int] | None = None,
         symbol_outline_width: float = 1.0,
+        label_offset: float | None = None,
+        label_color: tuple[int, int, int, int] = (255, 255, 255, 255),
+        label_font_size: float = 14.0,
     ) -> None:
         self.start = float(start)
         self.end = float(end)
@@ -619,6 +639,13 @@ class _CdiSegment:
         self.symbol_width = float(symbol_width)
         self.symbol_outline_color = symbol_outline_color
         self.symbol_outline_width = float(symbol_outline_width)
+        # Course-readout text (e.g. "124") near this segment's own end,
+        # rotated to stay aligned with the course line as it rotates —
+        # label_offset is None when no label is configured for this segment.
+        self.label_offset = float(label_offset) if label_offset is not None else None
+        self.label_color = label_color
+        self.label_font_size = float(label_font_size)
+        self.label_text_obj: Any | None = None  # lazily-created arcade.Text
 
 
 def _bake_map_icon(style: "_MapFeatureStyle", oversample: int = 4) -> None:
@@ -1449,6 +1476,10 @@ class VectorCompassRose(_VecBase):
             seg.symbol_points = [(x * scale, y * scale) for x, y in seg.symbol_points]
             seg.symbol_width *= scale
             seg.symbol_outline_width *= scale
+            if seg.label_offset is not None:
+                seg.label_offset *= scale
+            seg.label_font_size *= scale
+            seg.label_text_obj = None  # font size changed; stale, rebuilt lazily
         self._deviation_bar_scale *= scale
         self._deviation_bar_points = [(x * scale, y * scale) for x, y in self._deviation_bar_points]
         self._deviation_bar_width *= scale
@@ -1970,6 +2001,34 @@ class VectorCompassRose(_VecBase):
                 seg.symbol_filled, seg.symbol_width, seg.symbol_outline_color,
                 seg.symbol_outline_width,
             )
+        if seg.label_offset is not None:
+            self._draw_cdi_label(seg, bearing_deg)
+
+    def _draw_cdi_label(self, seg: _CdiSegment, bearing_deg: float) -> None:
+        # Course readout (e.g. "124") positioned along the segment's own
+        # radial line and rotated to stay aligned with it as the rose
+        # rotates — same rotation convention already validated for the
+        # heading labels (t.rotation = <world math angle value> -
+        # self._heading), just substituting this segment's own bearing for
+        # the heading label's h.
+        if seg.label_text_obj is None:
+            kw: dict = dict(bold=self._label_bold, italic=self._label_italic)
+            if self._label_font:
+                kw["font_name"] = self._label_font
+            seg.label_text_obj = arcade.Text(
+                "", 0, 0,
+                color=seg.label_color,
+                font_size=seg.label_font_size,
+                anchor_x="center",
+                anchor_y="center",
+                **kw,
+            )
+        x, y = self._point_at(bearing_deg, seg.label_offset)
+        t = seg.label_text_obj
+        t.text = f"{int(round(bearing_deg)) % 360:03d}"
+        t.x, t.y = x, y
+        t.rotation = bearing_deg - self._heading
+        t.draw()
 
     def _draw_deviation_bar(self) -> None:
         # Translates from the rose centre along the perpendicular to the CDI
@@ -2208,6 +2267,14 @@ def _parse_cdi_segment(seg_cfg: dict[str, Any], default_end: float) -> _CdiSegme
             symbol_outline_color=_as_color(soc) if soc is not None else None,
             symbol_outline_width=float(symbol_cfg.get("outline_width", 1.0)),
         )
+    label_cfg = seg_cfg.get("label")
+    label_kwargs: dict[str, Any] = {}
+    if label_cfg:
+        label_kwargs = dict(
+            label_offset=float(label_cfg.get("offset", 0.0)),
+            label_color=_as_color(label_cfg.get("color", [255, 255, 255, 255])),
+            label_font_size=float(label_cfg.get("font_size", 14.0)),
+        )
     return _CdiSegment(
         start=float(seg_cfg.get("start", 0.0)),
         end=float(seg_cfg.get("end", default_end)),
@@ -2215,6 +2282,7 @@ def _parse_cdi_segment(seg_cfg: dict[str, Any], default_end: float) -> _CdiSegme
         width=float(seg_cfg.get("width", 2.0)),
         dash=tuple(seg_cfg["dash"]) if seg_cfg.get("dash") else None,
         **symbol_kwargs,
+        **label_kwargs,
     )
 
 

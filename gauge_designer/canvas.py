@@ -1213,8 +1213,10 @@ class InstrumentCanvas(QWidget):
             # the user has set one explicitly — designer-only, no effect on
             # the running panel.
             cdi_angle = float(cdi_cfg.get("preview_angle", 0.0))
-            self._draw_compassrose_cdi_segment(point_at, draw, cdi_angle, cdi_cfg.get("head") or {}, r)
-            self._draw_compassrose_cdi_segment(point_at, draw, cdi_angle + 180.0, cdi_cfg.get("tail") or {}, r)
+            self._draw_compassrose_cdi_segment(
+                point_at, draw, cdi_angle, cdi_cfg.get("head") or {}, r, composite, comp)
+            self._draw_compassrose_cdi_segment(
+                point_at, draw, cdi_angle + 180.0, cdi_cfg.get("tail") or {}, r, composite, comp)
 
             devbar_cfg = cdi_cfg.get("deviation_bar")
             if devbar_cfg and devbar_cfg.get("points"):
@@ -1284,6 +1286,7 @@ class InstrumentCanvas(QWidget):
     def _draw_compassrose_cdi_segment(
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float,
         seg_cfg: dict, default_radius: float,
+        composite: "Image.Image | None" = None, comp: dict | None = None,
     ) -> None:
         start = float(seg_cfg.get("start", 0.0))
         end = float(seg_cfg.get("end", default_radius))
@@ -1319,6 +1322,24 @@ class InstrumentCanvas(QWidget):
                 bool(symbol_cfg.get("filled", True)), symbol_cfg.get("width", 1.0),
                 symbol_cfg.get("outline_color"), symbol_cfg.get("outline_width", 1.0),
             )
+        label_cfg = seg_cfg.get("label")
+        if label_cfg and composite is not None and comp is not None:
+            # Course readout (e.g. "124"), rotated to stay aligned with the
+            # course line. Static preview is at heading=0, so runtime's
+            # `bearing_deg - heading` reduces to just `bearing_deg` — negated
+            # for _paste_rotated_text the same way the heading labels above
+            # negate `h_deg` (PIL's rotate() is CCW-positive, Arcade's own
+            # rotation is CW-positive; see that call site's own comment).
+            font_size = max(8, int(float(label_cfg.get("font_size", 14.0))))
+            font = _pil_font(
+                comp.get("label_font"), font_size,
+                bold=bool(comp.get("label_bold", False)),
+                italic=bool(comp.get("label_italic", False)),
+            )
+            color = _rgba(label_cfg.get("color", [255, 255, 255, 255]))
+            lx, ly = point_at(bearing_deg, float(label_cfg.get("offset", 200.0)))
+            text = f"{int(round(bearing_deg)) % 360:03d}"
+            self._paste_rotated_text(composite, text, font, color, lx, ly, -bearing_deg)
 
     def _draw_compassrose_map_placeholders(self, map_cfg: dict, point_at, draw: ImageDraw.ImageDraw) -> None:
         # One representative position per configured type, spread around
