@@ -1602,6 +1602,16 @@ class _CdiLineSection(_SubSection):
         self._label_offset.valueChanged.connect(emit)
         self._label.row("Offset px (from centre)", self._label_offset)
 
+        self._label_perp_offset = QDoubleSpinBox()
+        self._label_perp_offset.setRange(-4096.0, 4096.0); self._label_perp_offset.setDecimals(1)
+        self._label_perp_offset.setEnabled(False)
+        self._label_perp_offset.setToolTip(
+            "Sideways nudge, perpendicular to the course line (not along it) —\n"
+            "moves the label off to one side instead of sitting on the line."
+        )
+        self._label_perp_offset.valueChanged.connect(emit)
+        self._label.row("Offset px (perpendicular to line)", self._label_perp_offset)
+
         self._label_rotation_offset = QDoubleSpinBox()
         self._label_rotation_offset.setRange(-360.0, 360.0); self._label_rotation_offset.setDecimals(1)
         self._label_rotation_offset.setEnabled(False)
@@ -1686,6 +1696,7 @@ class _CdiLineSection(_SubSection):
 
     def _on_label_toggled(self, on: bool) -> None:
         self._label_offset.setEnabled(on)
+        self._label_perp_offset.setEnabled(on)
         self._label_rotation_offset.setEnabled(on)
         self._label_font_size.setEnabled(on)
         self._label_font.setEnabled(on)
@@ -1742,6 +1753,7 @@ class _CdiLineSection(_SubSection):
         self._on_label_toggled(label_on)
         label = label or {}
         self._label_offset.setValue(float(label.get("offset", 200.0)))
+        self._label_perp_offset.setValue(float(label.get("perp_offset", 0.0)))
         self._label_rotation_offset.setValue(float(label.get("rotation_offset", 0.0)))
         self._label_font_size.setValue(float(label.get("font_size", 14.0)))
         self._label_font.setText(str(label.get("font", "")))
@@ -1778,6 +1790,8 @@ class _CdiLineSection(_SubSection):
                 "font_size": self._label_font_size.value(),
                 "color": list(self._label_color.get_rgba()),
             }
+            if self._label_perp_offset.value() != 0.0:
+                label_data["perp_offset"] = self._label_perp_offset.value()
             if self._label_rotation_offset.value() != 0.0:
                 label_data["rotation_offset"] = self._label_rotation_offset.value()
             font = self._label_font.text().strip()
@@ -1799,6 +1813,7 @@ class _CdiLineSection(_SubSection):
         self._symbol_outline_color.set_rgba(None); self._symbol_outline_width.setValue(1.0)
         self._label_chk.setChecked(False)
         self._label_offset.setValue(200.0); self._label_font_size.setValue(14.0)
+        self._label_perp_offset.setValue(0.0)
         self._label_rotation_offset.setValue(0.0); self._label_font.clear()
         self._label_color.set_rgba(None)
 
@@ -2102,6 +2117,16 @@ class _MapStyleSection(_SubSection):
             self._active_label_tail_offset.valueChanged.connect(emit)
             self.row("Label offset px (reciprocal side)", self._active_label_tail_offset)
 
+            self._active_label_perp_offset = QDoubleSpinBox()
+            self._active_label_perp_offset.setRange(-4096.0, 4096.0); self._active_label_perp_offset.setDecimals(1)
+            self._active_label_perp_offset.setEnabled(False)
+            self._active_label_perp_offset.setToolTip(
+                "Sideways nudge, perpendicular to the radial (not along it) —\n"
+                "same direction for both labels since they now share one orientation."
+            )
+            self._active_label_perp_offset.valueChanged.connect(emit)
+            self.row("Label offset px (perpendicular)", self._active_label_perp_offset)
+
             self._active_label_rotation_offset = QDoubleSpinBox()
             self._active_label_rotation_offset.setRange(-360.0, 360.0)
             self._active_label_rotation_offset.setDecimals(1)
@@ -2173,6 +2198,7 @@ class _MapStyleSection(_SubSection):
     def _on_active_label_toggled(self, on: bool) -> None:
         self._active_label_head_offset.setEnabled(on)
         self._active_label_tail_offset.setEnabled(on)
+        self._active_label_perp_offset.setEnabled(on)
         self._active_label_rotation_offset.setEnabled(on)
         self._active_label_font_size.setEnabled(on)
         self._active_label_font.setEnabled(on)
@@ -2293,6 +2319,7 @@ class _MapStyleSection(_SubSection):
             head_off = float(active_label.get("head_offset", 40.0))
             self._active_label_head_offset.setValue(head_off)
             self._active_label_tail_offset.setValue(float(active_label.get("tail_offset", head_off)))
+            self._active_label_perp_offset.setValue(float(active_label.get("perp_offset", 0.0)))
             self._active_label_rotation_offset.setValue(float(active_label.get("rotation_offset", 0.0)))
             self._active_label_font_size.setValue(float(active_label.get("font_size", 14.0)))
             self._active_label_font.setText(str(active_label.get("font", "")))
@@ -2376,6 +2403,8 @@ class _MapStyleSection(_SubSection):
                     "font_size": self._active_label_font_size.value(),
                     "color": list(self._active_label_color.get_rgba()),
                 }
+                if self._active_label_perp_offset.value() != 0.0:
+                    active_label_data["perp_offset"] = self._active_label_perp_offset.value()
                 if self._active_label_rotation_offset.value() != 0.0:
                     active_label_data["rotation_offset"] = self._active_label_rotation_offset.value()
                 active_label_font = self._active_label_font.text().strip()
@@ -2419,6 +2448,7 @@ class _MapStyleSection(_SubSection):
             self._active_label_chk.setChecked(False)
             self._active_label_head_offset.setValue(40.0)
             self._active_label_tail_offset.setValue(40.0)
+            self._active_label_perp_offset.setValue(0.0)
             self._active_label_rotation_offset.setValue(0.0)
             self._active_label_font_size.setValue(14.0)
             self._active_label_font.clear()

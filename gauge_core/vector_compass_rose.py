@@ -288,8 +288,25 @@ YAML schema
                                              # real ND. Text is always this
                                              # segment's own bearing (head:
                                              # course, tail: course+180)
-                                             # zero-padded to 3 digits.
-            offset: 200                      # px from the rose centre
+                                             # zero-padded to 3 digits. Both
+                                             # head's and tail's labels
+                                             # always share the HEAD's own
+                                             # orientation (course side),
+                                             # so they read the same way
+                                             # round rather than being
+                                             # 180° apart — only position
+                                             # and text stay per-segment.
+            offset: 200                      # px from the rose centre,
+                                             # along the line
+            perp_offset: 0                    # optional; px sideways,
+                                             # perpendicular to the line —
+                                             # nudges the label off to one
+                                             # side instead of sitting on
+                                             # top of the line; positive
+                                             # nudges both head's and
+                                             # tail's labels to the same
+                                             # visual side (they share one
+                                             # orientation)
             font_size: 14
             color: [255, 255, 255, 255]
             rotation_offset: 0                # optional; degrees added on
@@ -526,13 +543,22 @@ YAML schema
                                              # head/tail labels, just offset
                                              # from the VOR's own screen
                                              # position instead of the rose
-                                             # centre.
+                                             # centre. Both labels always
+                                             # share the course-side
+                                             # orientation, so they read
+                                             # the same way round rather
+                                             # than being 180° apart.
               head_offset: 40.0                # px from the VOR's own
                                              # position, along the course
                                              # direction
               tail_offset: 40.0                # px along the reciprocal
                                              # direction; omit to reuse
                                              # head_offset's own value
+              perp_offset: 0                    # optional; px sideways,
+                                             # perpendicular to the radial —
+                                             # nudges both labels to the
+                                             # same visual side instead of
+                                             # sitting on top of the line
               font_size: 14
               color: [255, 0, 0, 255]
               rotation_offset: 0                # optional; degrees added on
@@ -666,6 +692,7 @@ class _CdiSegment:
         label_font: str | None = None,
         label_bold: bool = False,
         label_italic: bool = False,
+        label_perp_offset: float = 0.0,
     ) -> None:
         self.start = float(start)
         self.end = float(end)
@@ -692,6 +719,13 @@ class _CdiSegment:
         self.label_font = label_font
         self.label_bold = bool(label_bold)
         self.label_italic = bool(label_italic)
+        # Sideways nudge, perpendicular to the course line (not along it),
+        # so the label can sit just beside the dashed line instead of
+        # directly on top of it — positive rotates the along-line direction
+        # +90°, same direction for both head and tail since both now share
+        # one orientation (see label_rotation_offset/the head/tail-shared-
+        # orientation note in _draw_cdi()).
+        self.label_perp_offset = float(label_perp_offset)
         self.label_text_obj: Any | None = None  # lazily-created arcade.Text
 
 
@@ -870,6 +904,7 @@ class _MapFeatureStyle:
         active_label_font: str | None = None,
         active_label_bold: bool = False,
         active_label_italic: bool = False,
+        active_label_perp_offset: float = 0.0,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
         self.icao_only = bool(icao_only)
@@ -925,6 +960,11 @@ class _MapFeatureStyle:
         self.active_label_font = active_label_font
         self.active_label_bold = bool(active_label_bold)
         self.active_label_italic = bool(active_label_italic)
+        # Sideways nudge, perpendicular to the radial (not along it) — same
+        # direction for both head/tail since both now share one orientation
+        # (the course bearing), so a positive offset nudges both labels to
+        # the same visual side of the radial.
+        self.active_label_perp_offset = float(active_label_perp_offset)
         self.active_label_head_obj: Any | None = None  # lazily-created arcade.Text
         self.active_label_tail_obj: Any | None = None
         # Own pool, not shared across styles — each style may have its own
@@ -1579,6 +1619,7 @@ class VectorCompassRose(_VecBase):
                 style.active_label_head_offset *= scale
             if style.active_label_tail_offset is not None:
                 style.active_label_tail_offset *= scale
+            style.active_label_perp_offset *= scale
             style.active_label_font_size *= scale
             style.active_label_head_obj = None  # font size changed; stale, rebuilt lazily
             style.active_label_tail_obj = None
@@ -2068,13 +2109,18 @@ class VectorCompassRose(_VecBase):
         # the course angle and tail diametrically opposite — same
         # positioning model as track (point_at() handles the rose's own
         # rotation plus this angle), each with its own start/end/style,
-        # optional dashing, and optional polygon symbol.
+        # optional dashing, and optional polygon symbol. The label's own
+        # orientation always uses the head/course bearing for BOTH segments
+        # (not each segment's own bearing_deg) so the two course-readout
+        # labels read the same way round rather than being 180° apart —
+        # only their position (along their own segment) and text (their
+        # own bearing/reciprocal) stay per-segment.
         if self._cdi_head is not None:
-            self._draw_cdi_segment(self._cdi_head, self._cdi_angle)
+            self._draw_cdi_segment(self._cdi_head, self._cdi_angle, self._cdi_angle)
         if self._cdi_tail is not None:
-            self._draw_cdi_segment(self._cdi_tail, self._cdi_angle + 180.0)
+            self._draw_cdi_segment(self._cdi_tail, self._cdi_angle + 180.0, self._cdi_angle)
 
-    def _draw_cdi_segment(self, seg: _CdiSegment, bearing_deg: float) -> None:
+    def _draw_cdi_segment(self, seg: _CdiSegment, bearing_deg: float, label_orient_deg: float) -> None:
         x0, y0 = self._point_at(bearing_deg, seg.start)
         x1, y1 = self._point_at(bearing_deg, seg.end)
         self._draw_dashed_line(x0, y0, x1, y1, seg.color, seg.width, seg.dash)
@@ -2089,16 +2135,16 @@ class VectorCompassRose(_VecBase):
                 seg.symbol_outline_width,
             )
         if seg.label_offset is not None:
-            self._draw_cdi_label(seg, bearing_deg)
+            self._draw_cdi_label(seg, bearing_deg, label_orient_deg)
 
-    def _draw_cdi_label(self, seg: _CdiSegment, bearing_deg: float) -> None:
+    def _draw_cdi_label(self, seg: _CdiSegment, bearing_deg: float, orient_deg: float) -> None:
         # Course readout (e.g. "124") positioned along the segment's own
-        # radial line and rotated to stay aligned with it as the rose
-        # rotates — same rotation convention already validated for the
-        # heading labels (t.rotation = <world math angle value> -
-        # self._heading), just substituting this segment's own bearing for
-        # the heading label's h, plus an optional configurable
-        # label_rotation_offset for nudging/flipping the reading direction.
+        # radial line (bearing_deg — own position, own text) but rotated
+        # (and perpendicularly nudged) using orient_deg — the shared head/
+        # course bearing, so both segments' labels read the same way round.
+        # Rotation convention already validated for the heading labels
+        # (t.rotation = <world math angle value> - self._heading), plus an
+        # optional configurable label_rotation_offset for nudging/flipping.
         if seg.label_text_obj is None:
             kw: dict = dict(bold=seg.label_bold, italic=seg.label_italic)
             if seg.label_font:
@@ -2112,21 +2158,34 @@ class VectorCompassRose(_VecBase):
                 **kw,
             )
         x, y = self._point_at(bearing_deg, seg.label_offset)
+        if seg.label_perp_offset:
+            # Perpendicular to the (shared, orient_deg-based) line
+            # direction — +90° from it — so a positive offset nudges both
+            # labels to the same visual side of the line, not opposite
+            # sides, since they now share one orientation.
+            perp_angle = math.radians(90.0 - orient_deg + self._heading) + math.pi / 2.0
+            x += seg.label_perp_offset * math.cos(perp_angle)
+            y += seg.label_perp_offset * math.sin(perp_angle)
         t = seg.label_text_obj
         t.text = f"{int(round(bearing_deg)) % 360:03d}"
         t.x, t.y = x, y
-        t.rotation = bearing_deg - self._heading + seg.label_rotation_offset
+        t.rotation = orient_deg - self._heading + seg.label_rotation_offset
         t.draw()
 
     def _draw_active_vor_label(
-        self, style: "_MapFeatureStyle", x: float, y: float, bearing_deg: float, is_head: bool,
+        self, style: "_MapFeatureStyle", x: float, y: float,
+        text_bearing_deg: float, orient_bearing_deg: float, is_head: bool = True,
     ) -> None:
         # Course readout (e.g. "124"/"304") near the active VOR's own
         # position along its radial — same text/rotation convention as
         # _draw_cdi_label, just positioned relative to the VOR's own
-        # screen position (already computed by the caller) rather than
-        # self._point_at() from the rose centre, since this radial passes
-        # *through* an off-centre point. Uses this label's own font
+        # screen position (already computed by the caller, including any
+        # perpendicular nudge) rather than self._point_at() from the rose
+        # centre, since this radial passes *through* an off-centre point.
+        # text_bearing_deg (own bearing/reciprocal) drives the readout
+        # text; orient_bearing_deg (always the course, shared by both
+        # calls) drives rotation, so head/tail labels read the same way
+        # round rather than being 180° apart. Uses this label's own font
         # override when configured, else falls back to the moving_map
         # style's own ident-label font (matching the ident label right
         # next to it) — resolved once in the factory, see active_label_font.
@@ -2144,9 +2203,9 @@ class VectorCompassRose(_VecBase):
                 **kw,
             ))
         t = getattr(style, attr)
-        t.text = f"{int(round(bearing_deg)) % 360:03d}"
+        t.text = f"{int(round(text_bearing_deg)) % 360:03d}"
         t.x, t.y = x, y
-        t.rotation = bearing_deg - self._heading + style.active_label_rotation_offset
+        t.rotation = orient_bearing_deg - self._heading + style.active_label_rotation_offset
         t.draw()
 
     def _draw_deviation_bar(self) -> None:
@@ -2276,15 +2335,22 @@ class VectorCompassRose(_VecBase):
                         (ex1, ey1, ex2, ey2, style.active_color, style.active_width, style.active_dash)
                     )
                     if style.active_label_head_offset is not None:
+                        # Perpendicular to the (shared) course direction —
+                        # +90° from it — so a positive offset nudges both
+                        # labels to the same visual side of the radial.
+                        perp_dx, perp_dy = -dy, dx
+                        pdx = perp_dx * style.active_label_perp_offset
+                        pdy = perp_dy * style.active_label_perp_offset
                         self._draw_active_vor_label(
-                            style, cx + dx * style.active_label_head_offset,
-                            cy + dy * style.active_label_head_offset,
-                            style.active_course, is_head=True,
+                            style, cx + dx * style.active_label_head_offset + pdx,
+                            cy + dy * style.active_label_head_offset + pdy,
+                            style.active_course, style.active_course,
                         )
                         self._draw_active_vor_label(
-                            style, cx - dx * style.active_label_tail_offset,
-                            cy - dy * style.active_label_tail_offset,
-                            style.active_course + 180.0, is_head=False,
+                            style, cx - dx * style.active_label_tail_offset + pdx,
+                            cy - dy * style.active_label_tail_offset + pdy,
+                            style.active_course + 180.0, style.active_course,
+                            is_head=False,
                         )
 
                 if style.label:
@@ -2427,6 +2493,7 @@ def _parse_cdi_segment(
             label_font=label_font,
             label_bold=label_bold,
             label_italic=label_italic,
+            label_perp_offset=float(label_cfg.get("perp_offset", 0.0)),
         )
     return _CdiSegment(
         start=float(seg_cfg.get("start", 0.0)),
@@ -2737,6 +2804,7 @@ def _compass_rose_factory(
                 active_label_font=active_label_font,
                 active_label_bold=active_label_bold,
                 active_label_italic=active_label_italic,
+                active_label_perp_offset=float((active_label_cfg or {}).get("perp_offset", 0.0)),
             )
         map_vis_cfg = map_cfg.get("visibility")
         rose.set_moving_map(

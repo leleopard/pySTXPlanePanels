@@ -1214,9 +1214,9 @@ class InstrumentCanvas(QWidget):
             # the running panel.
             cdi_angle = float(cdi_cfg.get("preview_angle", 0.0))
             self._draw_compassrose_cdi_segment(
-                point_at, draw, cdi_angle, cdi_cfg.get("head") or {}, r, composite, comp)
+                point_at, draw, cdi_angle, cdi_cfg.get("head") or {}, r, composite, comp, cdi_angle)
             self._draw_compassrose_cdi_segment(
-                point_at, draw, cdi_angle + 180.0, cdi_cfg.get("tail") or {}, r, composite, comp)
+                point_at, draw, cdi_angle + 180.0, cdi_cfg.get("tail") or {}, r, composite, comp, cdi_angle)
 
             devbar_cfg = cdi_cfg.get("deviation_bar")
             if devbar_cfg and devbar_cfg.get("points"):
@@ -1287,6 +1287,7 @@ class InstrumentCanvas(QWidget):
         self, point_at, draw: ImageDraw.ImageDraw, bearing_deg: float,
         seg_cfg: dict, default_radius: float,
         composite: "Image.Image | None" = None, comp: dict | None = None,
+        label_orient_deg: float | None = None,
     ) -> None:
         start = float(seg_cfg.get("start", 0.0))
         end = float(seg_cfg.get("end", default_radius))
@@ -1324,12 +1325,16 @@ class InstrumentCanvas(QWidget):
             )
         label_cfg = seg_cfg.get("label")
         if label_cfg and composite is not None and comp is not None:
-            # Course readout (e.g. "124"), rotated to stay aligned with the
-            # course line. Static preview is at heading=0, so runtime's
-            # `bearing_deg - heading` reduces to just `bearing_deg` — negated
-            # for _paste_rotated_text the same way the heading labels above
-            # negate `h_deg` (PIL's rotate() is CCW-positive, Arcade's own
-            # rotation is CW-positive; see that call site's own comment).
+            # Course readout (e.g. "124"), rotated using label_orient_deg
+            # (the shared head/course bearing, same for both head and tail
+            # calls) rather than this segment's own bearing_deg, so both
+            # labels read the same way round. Static preview is at
+            # heading=0, so runtime's `orient - heading` reduces to just
+            # orient_deg — negated for _paste_rotated_text the same way the
+            # heading labels above negate `h_deg` (PIL's rotate() is
+            # CCW-positive, Arcade's own rotation is CW-positive; see that
+            # call site's own comment).
+            orient_deg = label_orient_deg if label_orient_deg is not None else bearing_deg
             font_size = max(8, int(float(label_cfg.get("font_size", 14.0))))
             # font/bold/italic fall back to the rose's own heading-label
             # font when this label doesn't configure its own — matches the
@@ -1342,9 +1347,14 @@ class InstrumentCanvas(QWidget):
             )
             color = _rgba(label_cfg.get("color", [255, 255, 255, 255]))
             lx, ly = point_at(bearing_deg, float(label_cfg.get("offset", 200.0)))
+            perp_offset = float(label_cfg.get("perp_offset", 0.0))
+            if perp_offset:
+                perp_angle = math.radians(90.0 - orient_deg) + math.pi / 2.0
+                lx += perp_offset * math.cos(perp_angle)
+                ly -= perp_offset * math.sin(perp_angle)  # PIL y-down vs. Arcade y-up
             text = f"{int(round(bearing_deg)) % 360:03d}"
             rotation_offset = float(label_cfg.get("rotation_offset", 0.0))
-            self._paste_rotated_text(composite, text, font, color, lx, ly, -bearing_deg - rotation_offset)
+            self._paste_rotated_text(composite, text, font, color, lx, ly, -orient_deg - rotation_offset)
 
     def _draw_compassrose_map_placeholders(self, map_cfg: dict, point_at, draw: ImageDraw.ImageDraw) -> None:
         # One representative position per configured type, spread around
