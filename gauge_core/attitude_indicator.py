@@ -333,13 +333,16 @@ class AttitudeIndicator(_VecBase):
         # positioned/rotated each frame via Sprite.position/.angle, instead
         # of recomputing every ladder line's endpoints in Python and issuing
         # one draw_line() call per line every frame (measured ~6ms/frame on
-        # their own). angle = self._bank directly (not e.g. -bank or
-        # bank+180) and the bake uses NO y-negation when converting to PIL
-        # pixel space — both empirically calibrated against _rot()'s own
-        # ground truth via the real PanelWindow pipeline; this is a
-        # different convention than VectorCompassRose's tick sprite (which
-        # rotates via the compass _point_at() convention, angle=heading+180,
-        # bake WITH y-negation) because _rot() has different handedness.
+        # their own). angle = -self._bank (negated) and the bake DOES
+        # negate y when converting to PIL pixel space (matches _rot()'s
+        # y-up world convention). An earlier version used angle=self._bank
+        # directly with no y-negation — that "matched" on-axis spot checks
+        # against _rot() but was actually wrong for the general case: it
+        # never accounted for arcade.Sprite.angle rotating CLOCKWISE for
+        # positive values (confirmed from Arcade's own source docstring),
+        # while _rot() (like _point_at() on VectorCompassRose) uses
+        # standard counter-clockwise-positive math — the same root cause
+        # and same fix shape as VectorCompassRose's tick sprite bug.
         self._ladder_sprites: arcade.SpriteList | None = None
         self._pitch: float = 0.0
         self._bank:  float = 0.0
@@ -613,8 +616,8 @@ class AttitudeIndicator(_VecBase):
                 hw, lw = hw_2, self._ldr_width
             else:
                 hw, lw = hw_1, self._ldr_width
-            p0 = (cx_px - hw * oversample, cy_px + local_y * oversample)
-            p1 = (cx_px + hw * oversample, cy_px + local_y * oversample)
+            p0 = (cx_px - hw * oversample, cy_px - local_y * oversample)
+            p1 = (cx_px + hw * oversample, cy_px - local_y * oversample)
             draw.line([p0, p1], fill=self._ldr_color, width=max(1, int(round(lw * oversample))))
 
         tex = arcade.Texture(img, hash=f"ai_ladder:{id(self)}")
@@ -635,7 +638,7 @@ class AttitudeIndicator(_VecBase):
                 self._build_ladder_line_sprite(vw)
             sp = self._ladder_sprites[0]
             sp.position = _rot(0.0, pitch_y, cos_b, sin_b, cx, cy)
-            sp.angle = self._bank
+            sp.angle = -self._bank
             self._ladder_sprites.draw()
 
         n_steps = round(_LADDER_RANGE / self._ladder_step)
