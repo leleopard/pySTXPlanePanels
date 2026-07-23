@@ -460,6 +460,29 @@ YAML schema
                                              # matching a real charted EFIS.
                                              # Set false to show everything
                                              # X-Plane knows about.
+          min_runway_length:                 # optional; airport type only —
+                                             # real EFIS Nav Displays hide
+                                             # small airfields until you
+                                             # zoom in. Airports with no
+                                             # runway data at all (e.g.
+                                             # heliport-only fields, or a
+                                             # cache generated before this
+                                             # field existed) are hidden
+                                             # once this is configured, since
+                                             # there's no way to tell them
+                                             # apart from a genuinely tiny
+                                             # field. Omit entirely to show
+                                             # every airport regardless of
+                                             # size (old behavior).
+            table: [[0, 0], [10, 0], [20, 800], [40, 1200], [80, 1800], [160, 2400]]
+                                             # [range_nm, min_runway_length_m]
+                                             # pairs, piecewise-linear
+                                             # looked up against the
+                                             # currently-selected map range
+                                             # (range_rings.label's value) —
+                                             # same table convention as
+                                             # every other lookup table in
+                                             # this schema
           visibility:                        # optional; independently
                                              # shows/hides this whole
                                              # feature type — separate from
@@ -888,6 +911,7 @@ class _MapFeatureStyle:
         circle_outline_color: tuple[int, int, int, int] = (255, 255, 255, 255),
         circle_outline_width: float = 1.0,
         icao_only: bool = True,
+        min_runway_length_table: list[list[float]] | None = None,
         vis_dataref: Any | None = None,
         vis_predicate: Callable | None = None,
         active_ident_datarefs: list[Any] | None = None,
@@ -908,6 +932,13 @@ class _MapFeatureStyle:
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
         self.icao_only = bool(icao_only)
+        # Range-dependent declutter-by-size: [range_nm, min_runway_length_m]
+        # pairs, piecewise-linear looked up against the current range —
+        # see moving_map's draw loop for the actual filter. None (the
+        # default) disables it entirely, preserving old behavior.
+        self.min_runway_length_table = (
+            [list(p) for p in min_runway_length_table] if min_runway_length_table else None
+        )
         self.vis_dataref = vis_dataref
         self.vis_predicate = vis_predicate
         self.visible = True
@@ -2257,6 +2288,20 @@ class VectorCompassRose(_VecBase):
                 and not navdata.looks_like_icao_ident(entry.get("ident", ""))
             ):
                 continue
+            if entry["type"] == "airport" and style.min_runway_length_table:
+                # Real-EFIS-style declutter by airport size vs. selected
+                # range — small fields only show up once you zoom in.
+                # Confirmed against the user's own screenshot: every extra
+                # airport cluttering our display but absent from the real
+                # Zibo ND was a sub-2200m grass/light-GA strip. Entries
+                # with no runway data at all (runway_length_m == 0.0, e.g.
+                # heliport-only fields, or older caches generated before
+                # this field existed) are hidden once ANY threshold is
+                # configured, since there's no way to tell them apart from
+                # a genuinely tiny field.
+                min_len = lookup_piecewise(style.min_runway_length_table, range_nm)
+                if entry.get("runway_length_m", 0.0) < min_len:
+                    continue
             bearing_deg, distance_nm = geo.bearing_distance_nm(
                 self._map_lat, self._map_lon, entry["lat"], entry["lon"],
             )
@@ -2781,6 +2826,7 @@ def _compass_rose_factory(
                 circle_outline_color=_as_color(circle_cfg.get("outline_color", [255, 255, 255, 255])),
                 circle_outline_width=float(circle_cfg.get("outline_width", 1.0)),
                 icao_only=bool(style_cfg.get("icao_only", True)),
+                min_runway_length_table=(style_cfg.get("min_runway_length") or {}).get("table"),
                 vis_dataref=_as_dataref(style_vis_cfg["dataref"]) if style_vis_cfg else None,
                 vis_predicate=get_convert(resolve_predicate_name(style_vis_cfg)) if style_vis_cfg else None,
                 active_ident_datarefs=active_ident_datarefs,

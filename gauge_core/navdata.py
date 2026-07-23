@@ -34,6 +34,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from gauge_core.geo import distance_m
+
 CACHE_PATH = Path.home() / ".pySTXPlanePanels" / "navdata_cache.json"
 
 _NAVAID_ROW_TYPES = {"2": "ndb", "3": "vor"}
@@ -133,21 +135,44 @@ def parse_earth_fix(path: Path) -> list[dict[str, Any]]:
 # whitespace split.
 _FALLBACK_ROW_LATLON_COLS = {
     "100": (9, 10),   # land runway: ... end1_number end1_lat end1_lon ...
-    "101": (3, 4),    # water runway: ... end1_number end1_lat end1_lon ...
+    "101": (4, 5),    # water runway: width buoys end1_number end1_lat end1_lon ...
+                       # (was (3, 4) — that's end1_number, not lat/lon; fixed
+                       # while adding the runway-length feature below, which
+                       # needed to get this row's exact columns right anyway)
     "102": (2, 3),    # helipad: helipad_id lat lon ...
+}
+
+# Both endpoints (not just the first, like the fallback-position table
+# above) for the runway-length declutter feature — length is the great-
+# circle distance between them. Land (100) and water (101) runways only;
+# helipads (102) have no meaningful "length" the same way.
+_RUNWAY_ENDPOINT_COLS = {
+    "100": ((9, 10), (18, 19)),
+    "101": ((4, 5), (7, 8)),
 }
 
 
 def parse_apt_dat(path: Path) -> list[dict[str, Any]]:
     """Parse apt.dat, streaming line-by-line — never loads the (300+ MB)
     file into memory at once. Keeps only the airport header (ident/name/
-    elevation, row 1/16/17); runway/taxiway/pavement geometry (row 100+)
-    is otherwise skipped without being parsed.
+    elevation, row 1/16/17) plus each land/water runway's (row 100/101)
+    two endpoints, used only to compute the airport's longest runway
+    length — the rest of runway/taxiway/pavement geometry is skipped
+    without being parsed.
 
     Position prefers `1302 datum_lat`/`datum_lon` (the documented airport
     reference point) but falls back to the first runway/helipad endpoint
     when those keys are present with no value, which is common for small,
     minimally-modeled fields.
+
+    `runway_length_m` is the longest land/water runway at the airport (great-
+    circle distance between its two ends), 0.0 if it has none parseable
+    (e.g. heliport-only fields) — feeds `moving_map.airport.min_runway_length`,
+    a real-EFIS-style declutter-by-size filter (small fields only show up
+    once you zoom in), confirmed against a real apt.dat + the user's own
+    screenshot: the small-airfield idents cluttering our display but absent
+    from the real Zibo ND were all sub-2200m grass/light-GA strips, while
+    the one major airport in view (a real ~3500m airport) was on both.
 
     Every airport apt.dat carries is kept here, including small/private/
     unlicensed fields with non-ICAO identifiers — see `looks_like_icao_ident`
@@ -158,9 +183,10 @@ def parse_apt_dat(path: Path) -> list[dict[str, Any]]:
     cur: dict[str, Any] | None = None
     datum_lat = datum_lon = None
     fallback_lat = fallback_lon = None
+    max_runway_len = 0.0
 
     def finalize() -> None:
-        nonlocal cur, datum_lat, datum_lon, fallback_lat, fallback_lon
+        nonlocal cur, datum_lat, datum_lon, fallback_lat, fallback_lon, max_runway_len
         if cur is None:
             return
         lat = datum_lat if datum_lat is not None else fallback_lat
@@ -168,10 +194,12 @@ def parse_apt_dat(path: Path) -> list[dict[str, Any]]:
         if lat is not None and lon is not None:
             cur["lat"] = lat
             cur["lon"] = lon
+            cur["runway_length_m"] = max_runway_len
             out.append(cur)
         cur = None
         datum_lat = datum_lon = None
         fallback_lat = fallback_lon = None
+        max_runway_len = 0.0
 
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -204,15 +232,27 @@ def parse_apt_dat(path: Path) -> list[dict[str, Any]]:
                         datum_lon = float(val)
                 except ValueError:
                     pass
-            elif code in _FALLBACK_ROW_LATLON_COLS and cur is not None and fallback_lat is None:
-                lat_idx, lon_idx = _FALLBACK_ROW_LATLON_COLS[code]
+            elif code in _FALLBACK_ROW_LATLON_COLS and cur is not None:
                 parts = line.split()
-                if len(parts) > lon_idx:
-                    try:
-                        fallback_lat = float(parts[lat_idx])
-                        fallback_lon = float(parts[lon_idx])
-                    except ValueError:
-                        pass
+                if code in _RUNWAY_ENDPOINT_COLS:
+                    (a_lat_i, a_lon_i), (b_lat_i, b_lon_i) = _RUNWAY_ENDPOINT_COLS[code]
+                    if len(parts) > max(a_lat_i, a_lon_i, b_lat_i, b_lon_i):
+                        try:
+                            length = distance_m(
+                                float(parts[a_lat_i]), float(parts[a_lon_i]),
+                                float(parts[b_lat_i]), float(parts[b_lon_i]),
+                            )
+                            max_runway_len = max(max_runway_len, length)
+                        except ValueError:
+                            pass
+                if fallback_lat is None:
+                    lat_idx, lon_idx = _FALLBACK_ROW_LATLON_COLS[code]
+                    if len(parts) > lon_idx:
+                        try:
+                            fallback_lat = float(parts[lat_idx])
+                            fallback_lon = float(parts[lon_idx])
+                        except ValueError:
+                            pass
             elif code == "99":
                 break
     finalize()

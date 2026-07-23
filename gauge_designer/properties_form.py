@@ -1885,12 +1885,14 @@ class _MapStyleSection(_SubSection):
     feature type on the map."""
 
     def __init__(self, label: str, owner: "PropertiesForm", parent=None,
-                 show_icao_only_option: bool = False, show_active_option: bool = False):
+                 show_icao_only_option: bool = False, show_active_option: bool = False,
+                 show_min_runway_length_option: bool = False):
         super().__init__(label, collapsed=True, parent=parent)
         self._owner = owner
         emit = owner._emit
         self._show_icao_only = show_icao_only_option
         self._show_active = show_active_option
+        self._show_min_runway_length = show_min_runway_length_option
 
         if show_icao_only_option:
             self._icao_only_chk = QCheckBox("Charted (ICAO 4-letter ident) airports only")
@@ -1905,6 +1907,27 @@ class _MapStyleSection(_SubSection):
             )
             self._icao_only_chk.toggled.connect(emit)
             self.row_widget(self._icao_only_chk)
+
+        if show_min_runway_length_option:
+            self._min_rwy_table_data: list[list[float]] = []
+            self._min_rwy_chk = QCheckBox("Declutter small airports by range (runway length)")
+            self._min_rwy_chk.setToolTip(
+                "Real EFIS Nav Displays hide small airfields until you zoom\n"
+                "in — a [range_nm, min_runway_length_m] lookup table (same\n"
+                "piecewise-linear convention as every other table in this\n"
+                "form). Airports with no runway data at all (e.g. heliport-\n"
+                "only fields, or a cache generated before this feature\n"
+                "existed) are hidden once this is enabled, since there's no\n"
+                "way to tell them apart from a genuinely tiny field."
+            )
+            self._min_rwy_chk.toggled.connect(self._on_min_rwy_toggled)
+            self._min_rwy_chk.toggled.connect(emit)
+            self.row_widget(self._min_rwy_chk)
+
+            self._min_rwy_table_btn = QPushButton("Edit range/length table…")
+            self._min_rwy_table_btn.setEnabled(False)
+            self._min_rwy_table_btn.clicked.connect(self._edit_min_rwy_table)
+            self.row_widget(self._min_rwy_table_btn)
 
         self._pts = _PointsTableEditor()
         self._pts.changed.connect(emit)
@@ -2178,6 +2201,25 @@ class _MapStyleSection(_SubSection):
             self._active_label_font_size.setValue(float(font.pointSize()))
             self._owner._emit()
 
+    def _on_min_rwy_toggled(self, on: bool) -> None:
+        self._min_rwy_table_btn.setEnabled(on)
+
+    def _edit_min_rwy_table(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Airport declutter: range (NM) / min runway length (m)")
+        dlg.resize(320, 300)
+        tbl = _TableEditor("Range NM", "Min runway m", expanding=True)
+        tbl.load(self._min_rwy_table_data)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(tbl, 1)
+        lay.addWidget(btns)
+        if dlg.exec() == QDialog.Accepted:
+            self._min_rwy_table_data = tbl.get_data()
+            self._owner._emit()
+
     def _on_vis_toggled(self, on: bool) -> None:
         self._vis_dr_box.setEnabled(on)
         self._vis_pred.setEnabled(on)
@@ -2244,6 +2286,14 @@ class _MapStyleSection(_SubSection):
         cfg = cfg or {}
         if self._show_icao_only:
             self._icao_only_chk.setChecked(bool(cfg.get("icao_only", True)))
+        if self._show_min_runway_length:
+            min_rwy = cfg.get("min_runway_length")
+            min_rwy_on = min_rwy is not None
+            self._min_rwy_chk.blockSignals(True)
+            self._min_rwy_chk.setChecked(min_rwy_on)
+            self._min_rwy_chk.blockSignals(False)
+            self._min_rwy_table_data = [list(p) for p in (min_rwy or {}).get("table", [])]
+            self._on_min_rwy_toggled(min_rwy_on)
         vis = cfg.get("visibility")
         self._vis_chk.setChecked(vis is not None)
         self._vis_dr_box.setEnabled(vis is not None)
@@ -2334,6 +2384,8 @@ class _MapStyleSection(_SubSection):
         data: dict = {}
         if self._show_icao_only and not self._icao_only_chk.isChecked():
             data["icao_only"] = False
+        if self._show_min_runway_length and self._min_rwy_chk.isChecked() and self._min_rwy_table_data:
+            data["min_runway_length"] = {"table": self._min_rwy_table_data}
         if self._vis_chk.isChecked():
             vis_dr = self._vis_dr.text().strip()
             if vis_dr:
@@ -2417,6 +2469,10 @@ class _MapStyleSection(_SubSection):
     def reset(self) -> None:
         if self._show_icao_only:
             self._icao_only_chk.setChecked(True)
+        if self._show_min_runway_length:
+            self._min_rwy_chk.setChecked(False)
+            self._min_rwy_table_data = []
+            self._on_min_rwy_toggled(False)
         self._vis_chk.setChecked(False)
         self._vis_dr_box.setEnabled(False); self._vis_pred.setEnabled(False)
         self._vis_dr.clear(); self._vis_pred.setCurrentIndex(0)
@@ -5196,7 +5252,8 @@ class PropertiesForm(QWidget):
         self._cr_map_vis_pred.currentTextChanged.connect(self._emit)
         _cr_map.row("Show/hide predicate", self._cr_map_vis_pred)
 
-        self._cr_map_airport = _MapStyleSection("Airport", self, show_icao_only_option=True)
+        self._cr_map_airport = _MapStyleSection(
+            "Airport", self, show_icao_only_option=True, show_min_runway_length_option=True)
         _cr_map.row_widget(self._cr_map_airport)
         self._cr_map_vor = _MapStyleSection("VOR", self, show_active_option=True)
         _cr_map.row_widget(self._cr_map_vor)

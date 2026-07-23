@@ -331,7 +331,7 @@ components:
         width: 2.0
       label:
         offset: 370.0
-        font_size: 16
+        font_size: 16.0
         color:
         - 242
         - 161
@@ -369,7 +369,7 @@ components:
         width: 2.0
       label:
         offset: 370.0
-        font_size: 16
+        font_size: 16.0
         color:
         - 242
         - 161
@@ -425,6 +425,20 @@ components:
       visibility:
         dataref: laminar/B738/EFIS/EFIS_airport_on
         predicate: true_if_equals_1
+      min_runway_length:
+        table:
+        - - 0
+          - 0
+        - - 10
+          - 0
+        - - 20
+          - 800
+        - - 40
+          - 1200
+        - - 80
+          - 1800
+        - - 160
+          - 2400
       circle:
         radius: 10.0
         filled: false
@@ -520,7 +534,7 @@ components:
       - 255
       label_font: ST_Boeing_PFD
       label_offset:
-      - 14.0
+      - -13.0
       - -14.0
       active:
         ident_char_count: 4
@@ -536,14 +550,16 @@ components:
         - 8.0
         - 4.0
         label:
-          head_offset: 40.0
+          head_offset: 80.0
           tail_offset: 40.0
-          font_size: 14
+          font_size: 14.0
           color:
           - 255
           - 60
           - 60
           - 255
+          perp_offset: 10.0
+          rotation_offset: 90.0
     waypoint:
       visibility:
         dataref: laminar/B738/EFIS/EFIS_fix_on

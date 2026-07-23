@@ -27,3 +27,12 @@ def bearing_distance_nm(
     distance_nm = math.hypot(dlat_nm, dlon_nm)
     bearing_deg = math.degrees(math.atan2(dlon_nm, dlat_nm)) % 360.0
     return bearing_deg, distance_nm
+
+
+def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distance in meters between two points — same flat-earth
+    approximation as bearing_distance_nm(), just returned in meters
+    instead of NM (used for runway-length calculations, where the two
+    points are always close together, a few km at most)."""
+    _, distance_nm = bearing_distance_nm(lat1, lon1, lat2, lon2)
+    return distance_nm * 1852.0
