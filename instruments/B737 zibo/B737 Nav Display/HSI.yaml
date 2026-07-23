@@ -536,7 +536,8 @@ components:
         - 8.0
         - 4.0
         label:
-          offset: 40.0
+          head_offset: 40.0
+          tail_offset: 40.0
           font_size: 14
           color:
           - 255

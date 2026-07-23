@@ -1331,15 +1331,20 @@ class InstrumentCanvas(QWidget):
             # negate `h_deg` (PIL's rotate() is CCW-positive, Arcade's own
             # rotation is CW-positive; see that call site's own comment).
             font_size = max(8, int(float(label_cfg.get("font_size", 14.0))))
+            # font/bold/italic fall back to the rose's own heading-label
+            # font when this label doesn't configure its own — matches the
+            # runtime factory's own fallback (_parse_cdi_segment).
+            font_name = label_cfg.get("font") or comp.get("label_font")
             font = _pil_font(
-                comp.get("label_font"), font_size,
-                bold=bool(comp.get("label_bold", False)),
-                italic=bool(comp.get("label_italic", False)),
+                font_name, font_size,
+                bold=bool(label_cfg.get("bold", comp.get("label_bold", False))),
+                italic=bool(label_cfg.get("italic", comp.get("label_italic", False))),
             )
             color = _rgba(label_cfg.get("color", [255, 255, 255, 255]))
             lx, ly = point_at(bearing_deg, float(label_cfg.get("offset", 200.0)))
             text = f"{int(round(bearing_deg)) % 360:03d}"
-            self._paste_rotated_text(composite, text, font, color, lx, ly, -bearing_deg)
+            rotation_offset = float(label_cfg.get("rotation_offset", 0.0))
+            self._paste_rotated_text(composite, text, font, color, lx, ly, -bearing_deg - rotation_offset)
 
     def _draw_compassrose_map_placeholders(self, map_cfg: dict, point_at, draw: ImageDraw.ImageDraw) -> None:
         # One representative position per configured type, spread around

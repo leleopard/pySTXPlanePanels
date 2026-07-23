@@ -1586,8 +1586,7 @@ class _CdiLineSection(_SubSection):
         self._label.row_widget(_sep_label(
             "Optional course-readout text (e.g. \"124\") near this segment's\n"
             "own end, rotated to stay aligned with the course line. Text is\n"
-            "always this segment's own bearing, zero-padded to 3 digits —\n"
-            "shares the rose's own label font/bold/italic."
+            "always this segment's own bearing, zero-padded to 3 digits."
         ))
 
         self._label_chk = QCheckBox("Add label")
@@ -1603,6 +1602,16 @@ class _CdiLineSection(_SubSection):
         self._label_offset.valueChanged.connect(emit)
         self._label.row("Offset px (from centre)", self._label_offset)
 
+        self._label_rotation_offset = QDoubleSpinBox()
+        self._label_rotation_offset.setRange(-360.0, 360.0); self._label_rotation_offset.setDecimals(1)
+        self._label_rotation_offset.setEnabled(False)
+        self._label_rotation_offset.setToolTip(
+            "Degrees added on top of the \"aligned with the course line\"\n"
+            "rotation — nudge/flip (e.g. 180) if it ever reads the wrong way round."
+        )
+        self._label_rotation_offset.valueChanged.connect(emit)
+        self._label.row("Rotation offset °", self._label_rotation_offset)
+
         self._label_font_size = QDoubleSpinBox()
         self._label_font_size.setRange(4.0, 96.0); self._label_font_size.setDecimals(1)
         self._label_font_size.setValue(14.0)
@@ -1610,12 +1619,40 @@ class _CdiLineSection(_SubSection):
         self._label_font_size.valueChanged.connect(emit)
         self._label.row("Font size", self._label_font_size)
 
+        self._label_font = QLineEdit()
+        self._label_font.setPlaceholderText("blank = inherit rose's heading-label font")
+        self._label_font.setEnabled(False)
+        self._label_font.editingFinished.connect(emit)
+        self._label_font_btn = QPushButton("…")
+        self._label_font_btn.setFixedWidth(28)
+        self._label_font_btn.setToolTip("Choose font")
+        self._label_font_btn.setEnabled(False)
+        self._label_font_btn.clicked.connect(self._pick_cdi_label_font)
+        _cdi_label_font_row = QWidget()
+        _cdi_label_font_hl = QHBoxLayout(_cdi_label_font_row)
+        _cdi_label_font_hl.setContentsMargins(0, 0, 0, 0); _cdi_label_font_hl.setSpacing(4)
+        _cdi_label_font_hl.addWidget(self._label_font)
+        _cdi_label_font_hl.addWidget(self._label_font_btn)
+        self._label.row("Font", _cdi_label_font_row)
+
         self._label_color = _ColorButton()
         self._label_color.setEnabled(False)
         self._label_color.color_changed.connect(emit)
         self._label.row("Color", self._label_color)
 
         self.row_widget(self._label)
+
+    def _pick_cdi_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
+        current_name = self._label_font.text().strip() or "Arial"
+        current_size = int(self._label_font_size.value())
+        initial = QFont(current_name, current_size)
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._label_font.setText(strip_style_suffix(font.family()))
+            self._label_font_size.setValue(float(font.pointSize()))
+            self._owner._emit()
 
     def _on_dash_toggled(self, on: bool) -> None:
         self._dash_on.setEnabled(on)
@@ -1649,7 +1686,10 @@ class _CdiLineSection(_SubSection):
 
     def _on_label_toggled(self, on: bool) -> None:
         self._label_offset.setEnabled(on)
+        self._label_rotation_offset.setEnabled(on)
         self._label_font_size.setEnabled(on)
+        self._label_font.setEnabled(on)
+        self._label_font_btn.setEnabled(on)
         self._label_color.setEnabled(on)
 
     def load(self, cfg: dict | None) -> None:
@@ -1702,7 +1742,9 @@ class _CdiLineSection(_SubSection):
         self._on_label_toggled(label_on)
         label = label or {}
         self._label_offset.setValue(float(label.get("offset", 200.0)))
+        self._label_rotation_offset.setValue(float(label.get("rotation_offset", 0.0)))
         self._label_font_size.setValue(float(label.get("font_size", 14.0)))
+        self._label_font.setText(str(label.get("font", "")))
         self._label_color.set_rgba(label.get("color", [255, 255, 255, 255]))
 
     def get_data(self) -> dict:
@@ -1731,11 +1773,17 @@ class _CdiLineSection(_SubSection):
                     symbol["outline_width"] = self._symbol_outline_width.value()
                 data["symbol"] = symbol
         if self._label_chk.isChecked():
-            data["label"] = {
+            label_data: dict = {
                 "offset": self._label_offset.value(),
                 "font_size": self._label_font_size.value(),
                 "color": list(self._label_color.get_rgba()),
             }
+            if self._label_rotation_offset.value() != 0.0:
+                label_data["rotation_offset"] = self._label_rotation_offset.value()
+            font = self._label_font.text().strip()
+            if font:
+                label_data["font"] = font
+            data["label"] = label_data
         return data
 
     def reset(self) -> None:
@@ -1751,6 +1799,7 @@ class _CdiLineSection(_SubSection):
         self._symbol_outline_color.set_rgba(None); self._symbol_outline_width.setValue(1.0)
         self._label_chk.setChecked(False)
         self._label_offset.setValue(200.0); self._label_font_size.setValue(14.0)
+        self._label_rotation_offset.setValue(0.0); self._label_font.clear()
         self._label_color.set_rgba(None)
 
 
@@ -2026,22 +2075,42 @@ class _MapStyleSection(_SubSection):
                 "VOR's own position along the radial, one either side —\n"
                 "same idea as course_deviation_indicator's own head/tail\n"
                 "labels, offset from the VOR's own position instead of the\n"
-                "rose centre. Shares this type's own label font."
+                "rose centre."
             )
             self._active_label_chk.setEnabled(False)
             self._active_label_chk.toggled.connect(self._on_active_label_toggled)
             self._active_label_chk.toggled.connect(emit)
             self.row_widget(self._active_label_chk)
 
-            self._active_label_offset = QDoubleSpinBox()
-            self._active_label_offset.setRange(-4096.0, 4096.0); self._active_label_offset.setDecimals(1)
-            self._active_label_offset.setValue(40.0)
-            self._active_label_offset.setEnabled(False)
-            self._active_label_offset.setToolTip(
-                "Distance from the VOR's own position, along each direction of the radial."
+            self._active_label_head_offset = QDoubleSpinBox()
+            self._active_label_head_offset.setRange(-4096.0, 4096.0); self._active_label_head_offset.setDecimals(1)
+            self._active_label_head_offset.setValue(40.0)
+            self._active_label_head_offset.setEnabled(False)
+            self._active_label_head_offset.setToolTip(
+                "Distance from the VOR's own position, along the course direction."
             )
-            self._active_label_offset.valueChanged.connect(emit)
-            self.row("Label offset px (from VOR)", self._active_label_offset)
+            self._active_label_head_offset.valueChanged.connect(emit)
+            self.row("Label offset px (course side)", self._active_label_head_offset)
+
+            self._active_label_tail_offset = QDoubleSpinBox()
+            self._active_label_tail_offset.setRange(-4096.0, 4096.0); self._active_label_tail_offset.setDecimals(1)
+            self._active_label_tail_offset.setValue(40.0)
+            self._active_label_tail_offset.setEnabled(False)
+            self._active_label_tail_offset.setToolTip(
+                "Distance from the VOR's own position, along the reciprocal direction."
+            )
+            self._active_label_tail_offset.valueChanged.connect(emit)
+            self.row("Label offset px (reciprocal side)", self._active_label_tail_offset)
+
+            self._active_label_rotation_offset = QDoubleSpinBox()
+            self._active_label_rotation_offset.setRange(-360.0, 360.0)
+            self._active_label_rotation_offset.setDecimals(1)
+            self._active_label_rotation_offset.setEnabled(False)
+            self._active_label_rotation_offset.setToolTip(
+                "Degrees added on top of the \"aligned with the radial\" rotation."
+            )
+            self._active_label_rotation_offset.valueChanged.connect(emit)
+            self.row("Label rotation offset °", self._active_label_rotation_offset)
 
             self._active_label_font_size = QDoubleSpinBox()
             self._active_label_font_size.setRange(4.0, 96.0); self._active_label_font_size.setDecimals(1)
@@ -2050,11 +2119,39 @@ class _MapStyleSection(_SubSection):
             self._active_label_font_size.valueChanged.connect(emit)
             self.row("Label font size", self._active_label_font_size)
 
+            self._active_label_font = QLineEdit()
+            self._active_label_font.setPlaceholderText("blank = inherit this type's own label font")
+            self._active_label_font.setEnabled(False)
+            self._active_label_font.editingFinished.connect(emit)
+            self._active_label_font_btn = QPushButton("…")
+            self._active_label_font_btn.setFixedWidth(28)
+            self._active_label_font_btn.setToolTip("Choose font")
+            self._active_label_font_btn.setEnabled(False)
+            self._active_label_font_btn.clicked.connect(self._pick_active_label_font)
+            _active_label_font_row = QWidget()
+            _active_label_font_hl = QHBoxLayout(_active_label_font_row)
+            _active_label_font_hl.setContentsMargins(0, 0, 0, 0); _active_label_font_hl.setSpacing(4)
+            _active_label_font_hl.addWidget(self._active_label_font)
+            _active_label_font_hl.addWidget(self._active_label_font_btn)
+            self.row("Label font", _active_label_font_row)
+
             self._active_label_color = _ColorButton()
             self._active_label_color.set_rgba((255, 0, 0, 255))
             self._active_label_color.setEnabled(False)
             self._active_label_color.color_changed.connect(emit)
             self.row("Label color", self._active_label_color)
+
+    def _pick_active_label_font(self) -> None:
+        from PySide6.QtGui import QFont
+        from gauge_core.font_utils import strip_style_suffix
+        current_name = self._active_label_font.text().strip() or "Arial"
+        current_size = int(self._active_label_font_size.value())
+        initial = QFont(current_name, current_size)
+        ok, font = QFontDialog.getFont(initial, self, "Choose label font")
+        if ok:
+            self._active_label_font.setText(strip_style_suffix(font.family()))
+            self._active_label_font_size.setValue(float(font.pointSize()))
+            self._owner._emit()
 
     def _on_vis_toggled(self, on: bool) -> None:
         self._vis_dr_box.setEnabled(on)
@@ -2074,8 +2171,12 @@ class _MapStyleSection(_SubSection):
         self._on_active_label_toggled(on and self._active_label_chk.isChecked())
 
     def _on_active_label_toggled(self, on: bool) -> None:
-        self._active_label_offset.setEnabled(on)
+        self._active_label_head_offset.setEnabled(on)
+        self._active_label_tail_offset.setEnabled(on)
+        self._active_label_rotation_offset.setEnabled(on)
         self._active_label_font_size.setEnabled(on)
+        self._active_label_font.setEnabled(on)
+        self._active_label_font_btn.setEnabled(on)
         self._active_label_color.setEnabled(on)
 
     def _on_active_dash_toggled(self, on: bool) -> None:
@@ -2189,8 +2290,12 @@ class _MapStyleSection(_SubSection):
             self._active_label_chk.setChecked(active_label is not None)
             self._active_label_chk.blockSignals(False)
             active_label = active_label or {}
-            self._active_label_offset.setValue(float(active_label.get("offset", 40.0)))
+            head_off = float(active_label.get("head_offset", 40.0))
+            self._active_label_head_offset.setValue(head_off)
+            self._active_label_tail_offset.setValue(float(active_label.get("tail_offset", head_off)))
+            self._active_label_rotation_offset.setValue(float(active_label.get("rotation_offset", 0.0)))
             self._active_label_font_size.setValue(float(active_label.get("font_size", 14.0)))
+            self._active_label_font.setText(str(active_label.get("font", "")))
             self._active_label_color.set_rgba(active_label.get("color", [255, 0, 0, 255]))
             self._on_active_toggled(active_on)
 
@@ -2265,11 +2370,18 @@ class _MapStyleSection(_SubSection):
             if self._active_dash_chk.isChecked():
                 active["dash"] = [self._active_dash_on.value(), self._active_dash_off.value()]
             if self._active_label_chk.isChecked():
-                active["label"] = {
-                    "offset": self._active_label_offset.value(),
+                active_label_data: dict = {
+                    "head_offset": self._active_label_head_offset.value(),
+                    "tail_offset": self._active_label_tail_offset.value(),
                     "font_size": self._active_label_font_size.value(),
                     "color": list(self._active_label_color.get_rgba()),
                 }
+                if self._active_label_rotation_offset.value() != 0.0:
+                    active_label_data["rotation_offset"] = self._active_label_rotation_offset.value()
+                active_label_font = self._active_label_font.text().strip()
+                if active_label_font:
+                    active_label_data["font"] = active_label_font
+                active["label"] = active_label_data
             data["active"] = active
         return data
 
@@ -2305,8 +2417,11 @@ class _MapStyleSection(_SubSection):
             self._active_dash_on.setValue(8.0)
             self._active_dash_off.setValue(4.0)
             self._active_label_chk.setChecked(False)
-            self._active_label_offset.setValue(40.0)
+            self._active_label_head_offset.setValue(40.0)
+            self._active_label_tail_offset.setValue(40.0)
+            self._active_label_rotation_offset.setValue(0.0)
             self._active_label_font_size.setValue(14.0)
+            self._active_label_font.clear()
             self._active_label_color.set_rgba((255, 0, 0, 255))
             self._on_active_toggled(False)
 
