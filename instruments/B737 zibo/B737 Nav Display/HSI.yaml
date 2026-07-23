@@ -535,6 +535,14 @@ components:
         dash:
         - 8.0
         - 4.0
+        label:
+          offset: 40.0
+          font_size: 14
+          color:
+          - 255
+          - 60
+          - 60
+          - 255
     waypoint:
       visibility:
         dataref: laminar/B738/EFIS/EFIS_fix_on

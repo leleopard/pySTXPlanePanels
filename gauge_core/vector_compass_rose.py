@@ -508,6 +508,23 @@ YAML schema
             dash: [8.0, 4.0]                 # optional [on_px, off_px];
                                              # omit (or null) for a solid line
             width: 2.0
+            label:                            # optional: course-readout
+                                             # text (e.g. "124"/"304") near
+                                             # the VOR's own position along
+                                             # the radial, one either side —
+                                             # same idea as
+                                             # course_deviation_indicator's
+                                             # head/tail labels, just offset
+                                             # from the VOR's own screen
+                                             # position instead of the rose
+                                             # centre. Uses this style's own
+                                             # label_font/label_bold/
+                                             # label_italic.
+              offset: 40.0                    # px from the VOR's own
+                                             # position, along each
+                                             # direction of the radial
+              font_size: 14
+              color: [255, 0, 0, 255]
         ndb:                                 # same shape as airport:
           points: [[0, -5], [5, 4], [-5, 4]]
           filled: true
@@ -815,6 +832,9 @@ class _MapFeatureStyle:
         active_course_convert: Callable | None = None,
         active_dash: tuple[float, float] | None = None,
         active_width: float = 2.0,
+        active_label_offset: float | None = None,
+        active_label_color: tuple[int, int, int, int] = (255, 0, 0, 255),
+        active_label_font_size: float = 14.0,
     ) -> None:
         self.points = [(float(x), float(y)) for x, y in points]
         self.icao_only = bool(icao_only)
@@ -847,6 +867,19 @@ class _MapFeatureStyle:
         self.active_width = float(active_width)
         self.active_ident = ""     # updated per-frame in update()
         self.active_course = 0.0  # updated per-frame in update()
+        # Course-readout labels (e.g. "124"/"304") near the VOR's own
+        # position along the radial, one per direction — same convention
+        # as course_deviation_indicator's own head/tail labels, just
+        # offset from the VOR's screen position instead of the rose
+        # centre, since this radial passes *through* an off-centre point
+        # rather than starting at the rose's own centre.
+        self.active_label_offset = (
+            float(active_label_offset) if active_label_offset is not None else None
+        )
+        self.active_label_color = active_label_color
+        self.active_label_font_size = float(active_label_font_size)
+        self.active_label_head_obj: Any | None = None  # lazily-created arcade.Text
+        self.active_label_tail_obj: Any | None = None
         # Own pool, not shared across styles — each style may have its own
         # label_font, which (unlike font_size/color/position) can only be
         # set at arcade.Text construction time, so pool objects can't be
@@ -1495,6 +1528,11 @@ class VectorCompassRose(_VecBase):
             style.circle_radius *= scale
             style.circle_outline_width *= scale
             style.active_width *= scale
+            if style.active_label_offset is not None:
+                style.active_label_offset *= scale
+            style.active_label_font_size *= scale
+            style.active_label_head_obj = None  # font size changed; stale, rebuilt lazily
+            style.active_label_tail_obj = None
             style.label_pool.clear()  # font size changed; pool objects are stale
         if self._viewport is not None:
             vx, vy, vw, vh = self._viewport
@@ -2030,6 +2068,36 @@ class VectorCompassRose(_VecBase):
         t.rotation = bearing_deg - self._heading
         t.draw()
 
+    def _draw_active_vor_label(
+        self, style: "_MapFeatureStyle", x: float, y: float, bearing_deg: float, is_head: bool,
+    ) -> None:
+        # Course readout (e.g. "124"/"304") near the active VOR's own
+        # position along its radial — same text/rotation convention as
+        # _draw_cdi_label, just positioned relative to the VOR's own
+        # screen position (already computed by the caller) rather than
+        # self._point_at() from the rose centre, since this radial passes
+        # *through* an off-centre point. Uses the moving_map style's own
+        # label font (not the rose's heading-label font), matching the
+        # ident label right next to it.
+        attr = "active_label_head_obj" if is_head else "active_label_tail_obj"
+        if getattr(style, attr) is None:
+            kw: dict = dict(bold=style.label_bold, italic=style.label_italic)
+            if style.label_font:
+                kw["font_name"] = style.label_font
+            setattr(style, attr, arcade.Text(
+                "", 0, 0,
+                color=style.active_label_color,
+                font_size=style.active_label_font_size,
+                anchor_x="center",
+                anchor_y="center",
+                **kw,
+            ))
+        t = getattr(style, attr)
+        t.text = f"{int(round(bearing_deg)) % 360:03d}"
+        t.x, t.y = x, y
+        t.rotation = bearing_deg - self._heading
+        t.draw()
+
     def _draw_deviation_bar(self) -> None:
         # Translates from the rose centre along the perpendicular to the CDI
         # course line (cdi_angle + 90°) by a dataref-driven px amount, but
@@ -2156,6 +2224,17 @@ class VectorCompassRose(_VecBase):
                     active_lines_to_draw.append(
                         (ex1, ey1, ex2, ey2, style.active_color, style.active_width, style.active_dash)
                     )
+                    if style.active_label_offset is not None:
+                        self._draw_active_vor_label(
+                            style, cx + dx * style.active_label_offset,
+                            cy + dy * style.active_label_offset,
+                            style.active_course, is_head=True,
+                        )
+                        self._draw_active_vor_label(
+                            style, cx - dx * style.active_label_offset,
+                            cy - dy * style.active_label_offset,
+                            style.active_course + 180.0, is_head=False,
+                        )
 
                 if style.label:
                     if label_idx >= len(style.label_pool):
@@ -2526,6 +2605,7 @@ def _compass_rose_factory(
             )
             active_course_dr = active_cfg.get("course_dataref")
             active_course_fn = active_cfg.get("convert_function")
+            active_label_cfg = active_cfg.get("label")
             styles[type_name] = _MapFeatureStyle(
                 points=[tuple(p) for p in style_cfg.get("points", [])],
                 filled=bool(style_cfg.get("filled", True)),
@@ -2555,6 +2635,13 @@ def _compass_rose_factory(
                 active_course_convert=get_convert(active_course_fn) if active_course_fn else None,
                 active_dash=tuple(active_cfg["dash"]) if active_cfg.get("dash") else None,
                 active_width=float(active_cfg.get("width", 2.0)),
+                active_label_offset=(
+                    float(active_label_cfg.get("offset", 40.0)) if active_label_cfg else None
+                ),
+                active_label_color=_as_color(
+                    (active_label_cfg or {}).get("color", [255, 0, 0, 255])
+                ),
+                active_label_font_size=float((active_label_cfg or {}).get("font_size", 14.0)),
             )
         map_vis_cfg = map_cfg.get("visibility")
         rose.set_moving_map(

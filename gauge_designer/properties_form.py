@@ -2020,6 +2020,42 @@ class _MapStyleSection(_SubSection):
             self._active_dash_off.valueChanged.connect(emit)
             self.row("Dash off px", self._active_dash_off)
 
+            self._active_label_chk = QCheckBox("Course-readout label")
+            self._active_label_chk.setToolTip(
+                "Course-readout text (e.g. \"124\"/\"304\") near the active\n"
+                "VOR's own position along the radial, one either side —\n"
+                "same idea as course_deviation_indicator's own head/tail\n"
+                "labels, offset from the VOR's own position instead of the\n"
+                "rose centre. Shares this type's own label font."
+            )
+            self._active_label_chk.setEnabled(False)
+            self._active_label_chk.toggled.connect(self._on_active_label_toggled)
+            self._active_label_chk.toggled.connect(emit)
+            self.row_widget(self._active_label_chk)
+
+            self._active_label_offset = QDoubleSpinBox()
+            self._active_label_offset.setRange(-4096.0, 4096.0); self._active_label_offset.setDecimals(1)
+            self._active_label_offset.setValue(40.0)
+            self._active_label_offset.setEnabled(False)
+            self._active_label_offset.setToolTip(
+                "Distance from the VOR's own position, along each direction of the radial."
+            )
+            self._active_label_offset.valueChanged.connect(emit)
+            self.row("Label offset px (from VOR)", self._active_label_offset)
+
+            self._active_label_font_size = QDoubleSpinBox()
+            self._active_label_font_size.setRange(4.0, 96.0); self._active_label_font_size.setDecimals(1)
+            self._active_label_font_size.setValue(14.0)
+            self._active_label_font_size.setEnabled(False)
+            self._active_label_font_size.valueChanged.connect(emit)
+            self.row("Label font size", self._active_label_font_size)
+
+            self._active_label_color = _ColorButton()
+            self._active_label_color.set_rgba((255, 0, 0, 255))
+            self._active_label_color.setEnabled(False)
+            self._active_label_color.color_changed.connect(emit)
+            self.row("Label color", self._active_label_color)
+
     def _on_vis_toggled(self, on: bool) -> None:
         self._vis_dr_box.setEnabled(on)
         self._vis_pred.setEnabled(on)
@@ -2034,6 +2070,13 @@ class _MapStyleSection(_SubSection):
         self._active_dash_chk.setEnabled(on)
         self._active_dash_on.setEnabled(on and self._active_dash_chk.isChecked())
         self._active_dash_off.setEnabled(on and self._active_dash_chk.isChecked())
+        self._active_label_chk.setEnabled(on)
+        self._on_active_label_toggled(on and self._active_label_chk.isChecked())
+
+    def _on_active_label_toggled(self, on: bool) -> None:
+        self._active_label_offset.setEnabled(on)
+        self._active_label_font_size.setEnabled(on)
+        self._active_label_color.setEnabled(on)
 
     def _on_active_dash_toggled(self, on: bool) -> None:
         self._active_dash_on.setEnabled(on)
@@ -2141,6 +2184,14 @@ class _MapStyleSection(_SubSection):
             self._active_dash_chk.setChecked(active_dash is not None)
             self._active_dash_on.setValue(float(active_dash[0]) if active_dash else 8.0)
             self._active_dash_off.setValue(float(active_dash[1]) if active_dash else 4.0)
+            active_label = active.get("label")
+            self._active_label_chk.blockSignals(True)
+            self._active_label_chk.setChecked(active_label is not None)
+            self._active_label_chk.blockSignals(False)
+            active_label = active_label or {}
+            self._active_label_offset.setValue(float(active_label.get("offset", 40.0)))
+            self._active_label_font_size.setValue(float(active_label.get("font_size", 14.0)))
+            self._active_label_color.set_rgba(active_label.get("color", [255, 0, 0, 255]))
             self._on_active_toggled(active_on)
 
     def get_data(self) -> dict | None:
@@ -2213,6 +2264,12 @@ class _MapStyleSection(_SubSection):
                 active["convert_function"] = active_fn
             if self._active_dash_chk.isChecked():
                 active["dash"] = [self._active_dash_on.value(), self._active_dash_off.value()]
+            if self._active_label_chk.isChecked():
+                active["label"] = {
+                    "offset": self._active_label_offset.value(),
+                    "font_size": self._active_label_font_size.value(),
+                    "color": list(self._active_label_color.get_rgba()),
+                }
             data["active"] = active
         return data
 
@@ -2247,6 +2304,10 @@ class _MapStyleSection(_SubSection):
             self._active_dash_chk.setChecked(False)
             self._active_dash_on.setValue(8.0)
             self._active_dash_off.setValue(4.0)
+            self._active_label_chk.setChecked(False)
+            self._active_label_offset.setValue(40.0)
+            self._active_label_font_size.setValue(14.0)
+            self._active_label_color.set_rgba((255, 0, 0, 255))
             self._on_active_toggled(False)
 
 
