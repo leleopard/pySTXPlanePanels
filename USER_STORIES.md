@@ -314,6 +314,7 @@ A moving map layer for `VectorCompassRose`: airports, VORs, and NDBs plotted aro
 - Multi-panel / multi-monitor coordination
 - Mouse interaction / draggable windows
 - Instrument properties form: disable mouse-wheel on all QSpinBox / QDoubleSpinBox widgets (same pattern as `_NoScrollComboBox` already in `properties_form.py`)
+- `VectorCompassRose.heading` should be able to switch datarefs depending on the EFIS mode selector (e.g. real/Zibo behavior: HDG in APP/VOR modes, TRK in MAP mode) instead of always reading one fixed heading dataref (currently mag heading only, regardless of mode) — likely needs a per-mode dataref+predicate table on `heading`, mirroring the `visibility`/`vis_predicate` convention already used elsewhere in this schema, switching which dataref drives rotation based on the same EFIS mode dataref `course_deviation_indicator.visibility`/`moving_map.visibility` already read
 
 ---
 
