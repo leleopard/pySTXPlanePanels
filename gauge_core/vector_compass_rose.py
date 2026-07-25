@@ -534,29 +534,49 @@ YAML schema
           active:                            # optional; recolors whichever
                                              # VOR's ident matches a live
                                              # "tuned station" string
-                                             # dataref, and draws a dashed
-                                             # course radial THROUGH that
-                                             # VOR's own position, capped at
-                                             # the rose's own edge in both
+                                             # dataref (VOR1, and
+                                             # optionally VOR2 too — e.g.
+                                             # NAV1/NAV2, both independently
+                                             # matched and drawn, sharing
+                                             # every styling field below),
+                                             # and draws a dashed course
+                                             # radial THROUGH that VOR's
+                                             # own position, capped at the
+                                             # rose's own edge in both
                                              # directions (course and its
                                              # reciprocal) — NOT the
                                              # rose-centred CDI course line
             ident_dataref: sim/cockpit2/radios/indicators/nav1_nav_id
+                                             # VOR1's tuned-station ident —
                                              # a plain dataref path (not a
                                              # (group, index) tuple) — read
                                              # char-by-char via X-Plane's
                                              # array-index syntax, same
                                              # mechanism as Text's
                                              # char_count mode
-            ident_char_count: 4              # how many characters to read
+            course_dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
+                                             # VOR1's own OBS/course
+            ident_dataref2: sim/cockpit2/radios/indicators/nav2_nav_id
+                                             # optional: VOR2's tuned-
+                                             # station ident, same
+                                             # char-by-char convention;
+                                             # omit entirely for a
+                                             # single-VOR (VOR1-only) setup
+            course_dataref2: sim/cockpit/radios/nav2_obs_deg_mag_pilot
+                                             # VOR2's own OBS/course
+                                             # (required if
+                                             # ident_dataref2 is set)
+            ident_char_count: 4              # how many characters to
+                                             # read — shared by VOR1/VOR2
             color: [255, 60, 60, 255]        # overrides every color slot
                                              # on the matched candidate
                                              # (fill/outline/circle alike)
-            course_dataref: sim/cockpit/radios/nav1_obs_deg_mag_pilot
-            convert_function: null           # optional
+                                             # — shared by VOR1/VOR2
+            convert_function: null           # optional; shared by VOR1/VOR2
             dash: [8.0, 4.0]                 # optional [on_px, off_px];
-                                             # omit (or null) for a solid line
-            width: 2.0
+                                             # omit (or null) for a solid
+                                             # line — shared by VOR1/VOR2
+            width: 2.0                       # shared by VOR1/VOR2
             label:                            # optional: course-readout
                                              # text (e.g. "124"/"304") near
                                              # the VOR's own position along
@@ -864,6 +884,30 @@ def _arc_points(
     ]
 
 
+class _ActiveVorSource:
+    """One "tuned VOR" candidate for _MapFeatureStyle's active-VOR
+    highlight/radial feature — its own ident dataref (read char-by-char,
+    like Text's char_count mode) and course dataref/convert_function, with
+    the current per-frame ident/course values. A style can have more than
+    one of these (e.g. NAV1 and NAV2 on a real ND, both independently
+    "tuned" and both drawn if their ident matches a candidate) — all
+    sharing the SAME styling (active_color/dash/width/label_*) on the
+    owning _MapFeatureStyle, since a real ND draws both radios' radials
+    identically, just at their own course angle."""
+
+    def __init__(
+        self,
+        ident_datarefs: list[Any],
+        course_dataref: Any | None,
+        course_convert: Callable | None,
+    ) -> None:
+        self.ident_datarefs = list(ident_datarefs)
+        self.course_dataref = course_dataref
+        self.course_convert = course_convert
+        self.ident = ""     # updated per-frame in update()
+        self.course = 0.0  # updated per-frame in update()
+
+
 class _MapFeatureStyle:
     """Polygon + optional circle + optional label styling for one
     moving_map feature type (airport/vor/ndb/waypoint). Fill and outline
@@ -881,13 +925,15 @@ class _MapFeatureStyle:
     `vis_predicate` independently show/hide this whole feature type (e.g. a
     range-selector knob position, same convention as bearing_pointers'
     per-pointer visibility) — separate from the moving_map's own overall
-    visibility gate. `active_*` (meaningful for the vor type — the "tuned
-    VOR" concept) recolors whichever candidate's ident matches a live
-    string dataref (e.g. the active nav radio's station ident) and draws a
-    dashed course radial through that candidate's own screen position, at
-    an angle from a course dataref, capped at the rose's own edge in both
-    directions (the course and its reciprocal) — a VOR radial overlay, not
-    the rose-centred CDI course line."""
+    visibility gate. `active_sources` (meaningful for the vor type — the
+    "tuned VOR" concept, one entry per radio, e.g. NAV1/NAV2) recolors
+    whichever candidate's ident matches any source's live string dataref
+    and draws a dashed course radial through that candidate's own screen
+    position, at an angle from that source's own course dataref, capped at
+    the rose's own edge in both directions (the course and its reciprocal)
+    — a VOR radial overlay, not the rose-centred CDI course line. Every
+    source shares this same style's active_color/dash/width/label_* —
+    only the ident/course datarefs differ per source."""
 
     def __init__(
         self,
@@ -914,10 +960,8 @@ class _MapFeatureStyle:
         min_runway_length_table: list[list[float]] | None = None,
         vis_dataref: Any | None = None,
         vis_predicate: Callable | None = None,
-        active_ident_datarefs: list[Any] | None = None,
+        active_sources: list[_ActiveVorSource] | None = None,
         active_color: tuple[int, int, int, int] = (255, 0, 0, 255),
-        active_course_dataref: Any | None = None,
-        active_course_convert: Callable | None = None,
         active_dash: tuple[float, float] | None = None,
         active_width: float = 2.0,
         active_label_head_offset: float | None = None,
@@ -960,14 +1004,10 @@ class _MapFeatureStyle:
         self.circle_outline = bool(circle_outline)
         self.circle_outline_color = circle_outline_color
         self.circle_outline_width = float(circle_outline_width)
-        self.active_ident_datarefs = list(active_ident_datarefs or [])
+        self.active_sources = list(active_sources or [])
         self.active_color = active_color
-        self.active_course_dataref = active_course_dataref
-        self.active_course_convert = active_course_convert
         self.active_dash = tuple(active_dash) if active_dash else None
         self.active_width = float(active_width)
-        self.active_ident = ""     # updated per-frame in update()
-        self.active_course = 0.0  # updated per-frame in update()
         # Course-readout labels (e.g. "124"/"304") near the VOR's own
         # position along the radial, one per direction — same convention
         # as course_deviation_indicator's own head/tail labels, just
@@ -1719,19 +1759,20 @@ class VectorCompassRose(_VecBase):
             for style in self._map_styles.values():
                 if style.vis_dataref is not None and style.vis_predicate is not None:
                     style.visible = bool(style.vis_predicate(float(get_data(style.vis_dataref)), get_data))
-                if style.active_ident_datarefs:
-                    chars = []
-                    for dr in style.active_ident_datarefs:
-                        code = int(get_data(dr))
-                        if code <= 0:
-                            break  # null terminator / unfilled padding — stop, like a C string
-                        chars.append(chr(code))
-                    style.active_ident = "".join(chars)
-                if style.active_course_dataref is not None:
-                    raw = float(get_data(style.active_course_dataref))
-                    if style.active_course_convert is not None:
-                        raw = float(style.active_course_convert(raw, get_data))
-                    style.active_course = raw % 360.0
+                for src in style.active_sources:
+                    if src.ident_datarefs:
+                        chars = []
+                        for dr in src.ident_datarefs:
+                            code = int(get_data(dr))
+                            if code <= 0:
+                                break  # null terminator / unfilled padding — stop, like a C string
+                            chars.append(chr(code))
+                        src.ident = "".join(chars)
+                    if src.course_dataref is not None:
+                        raw = float(get_data(src.course_dataref))
+                        if src.course_convert is not None:
+                            raw = float(src.course_convert(raw, get_data))
+                        src.course = raw % 360.0
 
     def _point_at(self, heading_deg: float, r: float) -> tuple[float, float]:
         angle = math.radians(90.0 - heading_deg + self._heading)
@@ -2342,12 +2383,18 @@ class VectorCompassRose(_VecBase):
             for i, (distance_nm, bearing_deg, entry) in enumerate(visible_items):
                 cx, cy = self._point_at(bearing_deg, distance_nm * px_per_nm)
 
-                # The "active" candidate (e.g. the tuned VOR) recolors
-                # every color slot on this one entry — same icon shape,
-                # just highlighted via the white-silhouette texture tinted
-                # to active_color — and gets a dashed course-line radial
-                # from its own position out to the rose's edge.
-                is_active = bool(style.active_ident) and entry.get("ident", "") == style.active_ident
+                # The "active" candidates (e.g. NAV1/NAV2 both tuned to
+                # this station) recolor every color slot on this one entry
+                # — same icon shape, just highlighted via the white-
+                # silhouette texture tinted to active_color — and each
+                # gets its own dashed course-line radial from its own
+                # position out to the rose's edge (own course, shared
+                # styling — see _ActiveVorSource's own docstring).
+                matched_sources = [
+                    src for src in style.active_sources
+                    if src.ident and entry.get("ident", "") == src.ident
+                ]
+                is_active = bool(matched_sources)
 
                 if style.icon_texture is not None:
                     sp = style.icon_sprites[i]
@@ -2367,12 +2414,12 @@ class VectorCompassRose(_VecBase):
                         sp.color = (255, 255, 255)
                         sp.alpha = 255
 
-                if is_active and style.active_course_dataref is not None:
+                for src in matched_sources:
                     # A full radial through the VOR — both the course
                     # direction and its reciprocal — not just a one-way ray
                     # toward the rose's edge, so both the TO and FROM sides
                     # of the course are visible.
-                    angle = math.radians(90.0 - style.active_course + self._heading)
+                    angle = math.radians(90.0 - src.course + self._heading)
                     dx, dy = math.cos(angle), math.sin(angle)
                     ex1, ey1 = _ray_circle_exit(cx, cy, dx, dy, self._cx, self._cy, self._radius)
                     ex2, ey2 = _ray_circle_exit(cx, cy, -dx, -dy, self._cx, self._cy, self._radius)
@@ -2389,12 +2436,12 @@ class VectorCompassRose(_VecBase):
                         self._draw_active_vor_label(
                             style, cx + dx * style.active_label_head_offset + pdx,
                             cy + dy * style.active_label_head_offset + pdy,
-                            style.active_course, style.active_course,
+                            src.course, src.course,
                         )
                         self._draw_active_vor_label(
                             style, cx - dx * style.active_label_tail_offset + pdx,
                             cy - dy * style.active_label_tail_offset + pdy,
-                            style.active_course + 180.0, style.active_course,
+                            src.course + 180.0, src.course,
                             is_head=False,
                         )
 
@@ -2786,13 +2833,32 @@ def _compass_rose_factory(
             circle_cfg = style_cfg.get("circle") or {}
             style_vis_cfg = style_cfg.get("visibility")
             active_cfg = style_cfg.get("active") or {}
-            active_ident_dr = active_cfg.get("ident_dataref")
-            active_ident_datarefs = (
-                [f"{active_ident_dr}[{i}]" for i in range(int(active_cfg.get("ident_char_count", 1)))]
-                if active_ident_dr else []
-            )
-            active_course_dr = active_cfg.get("course_dataref")
+            active_ident_char_count = int(active_cfg.get("ident_char_count", 1))
             active_course_fn = active_cfg.get("convert_function")
+            active_course_convert = get_convert(active_course_fn) if active_course_fn else None
+
+            def _make_active_source(ident_key: str, course_key: str) -> "_ActiveVorSource | None":
+                ident_dr = active_cfg.get(ident_key)
+                if not ident_dr:
+                    return None
+                course_dr = active_cfg.get(course_key)
+                return _ActiveVorSource(
+                    ident_datarefs=[f"{ident_dr}[{i}]" for i in range(active_ident_char_count)],
+                    course_dataref=_as_dataref(course_dr) if course_dr else None,
+                    course_convert=active_course_convert,
+                )
+
+            # Two independent "tuned VOR" sources (e.g. NAV1/NAV2) sharing
+            # this style's own active_color/dash/width/label_* — see
+            # _ActiveVorSource's own docstring. VOR2 is entirely optional;
+            # a single-VOR1 config (the original shape of this feature)
+            # still works unchanged.
+            active_sources = [
+                src for src in (
+                    _make_active_source("ident_dataref", "course_dataref"),
+                    _make_active_source("ident_dataref2", "course_dataref2"),
+                ) if src is not None
+            ]
             active_label_cfg = active_cfg.get("label")
             if active_label_cfg and (active_label_cfg.get("font") or active_label_cfg.get("font_file")):
                 active_label_font, active_label_bold, active_label_italic = resolve_font_for_arcade(
@@ -2829,10 +2895,8 @@ def _compass_rose_factory(
                 min_runway_length_table=(style_cfg.get("min_runway_length") or {}).get("table"),
                 vis_dataref=_as_dataref(style_vis_cfg["dataref"]) if style_vis_cfg else None,
                 vis_predicate=get_convert(resolve_predicate_name(style_vis_cfg)) if style_vis_cfg else None,
-                active_ident_datarefs=active_ident_datarefs,
+                active_sources=active_sources,
                 active_color=_as_color(active_cfg.get("color", [255, 0, 0, 255])),
-                active_course_dataref=_as_dataref(active_course_dr) if active_course_dr else None,
-                active_course_convert=get_convert(active_course_fn) if active_course_fn else None,
                 active_dash=tuple(active_cfg["dash"]) if active_cfg.get("dash") else None,
                 active_width=float(active_cfg.get("width", 2.0)),
                 active_label_head_offset=(

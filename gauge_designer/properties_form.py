@@ -2037,12 +2037,15 @@ class _MapStyleSection(_SubSection):
         self.row("Label offset", _off_w)
 
         if show_active_option:
-            self._active_chk = QCheckBox("Highlight active VOR + course radial")
+            self._active_chk = QCheckBox("Highlight active VOR1/2 + course radials")
             self._active_chk.setToolTip(
                 "Recolors whichever candidate's ident matches a live \"tuned\n"
-                "station\" string dataref, and draws a dashed course line from\n"
-                "that VOR's own position out to the rose's own edge — a VOR\n"
-                "radial overlay, not the rose-centred CDI course line."
+                "station\" string dataref (VOR1, and optionally VOR2 too —\n"
+                "e.g. NAV1/NAV2, both independently matched and drawn), and\n"
+                "draws a dashed course line from that VOR's own position out\n"
+                "to the rose's own edge — a VOR radial overlay, not the\n"
+                "rose-centred CDI course line. VOR1/VOR2 share every styling\n"
+                "field below; only their ident/course datarefs differ."
             )
             self._active_chk.toggled.connect(self._on_active_toggled)
             self._active_chk.toggled.connect(emit)
@@ -2053,7 +2056,14 @@ class _MapStyleSection(_SubSection):
             self._active_ident_dr.editingFinished.connect(emit)
             self._active_ident_dr_box = owner._dr_field(self._active_ident_dr)
             self._active_ident_dr_box.setEnabled(False)
-            self.row("Active ident dataref", self._active_ident_dr_box)
+            self.row("Active VOR1 ident dataref", self._active_ident_dr_box)
+
+            self._active_ident_dr2 = QLineEdit()
+            self._active_ident_dr2.setPlaceholderText("optional, e.g. sim/cockpit2/radios/indicators/nav2_nav_id")
+            self._active_ident_dr2.editingFinished.connect(emit)
+            self._active_ident_dr2_box = owner._dr_field(self._active_ident_dr2)
+            self._active_ident_dr2_box.setEnabled(False)
+            self.row("Active VOR2 ident dataref", self._active_ident_dr2_box)
 
             self._active_ident_count = QSpinBox()
             self._active_ident_count.setRange(1, 16)
@@ -2072,7 +2082,13 @@ class _MapStyleSection(_SubSection):
             self._active_course_dr.editingFinished.connect(emit)
             self._active_course_dr_box = owner._dr_field(self._active_course_dr)
             self._active_course_dr_box.setEnabled(False)
-            self.row("Course dataref", self._active_course_dr_box)
+            self.row("VOR1 Course dataref", self._active_course_dr_box)
+
+            self._active_course_dr2 = QLineEdit()
+            self._active_course_dr2.editingFinished.connect(emit)
+            self._active_course_dr2_box = owner._dr_field(self._active_course_dr2)
+            self._active_course_dr2_box.setEnabled(False)
+            self.row("VOR2 Course dataref", self._active_course_dr2_box)
 
             self._active_course_fn = _NoScrollComboBox()
             self._active_course_fn.addItems(_VALUE_FUNCS)
@@ -2226,9 +2242,11 @@ class _MapStyleSection(_SubSection):
 
     def _on_active_toggled(self, on: bool) -> None:
         self._active_ident_dr_box.setEnabled(on)
+        self._active_ident_dr2_box.setEnabled(on)
         self._active_ident_count.setEnabled(on)
         self._active_color.setEnabled(on)
         self._active_course_dr_box.setEnabled(on)
+        self._active_course_dr2_box.setEnabled(on)
         self._active_course_fn.setEnabled(on)
         self._active_width.setEnabled(on)
         self._active_dash_chk.setEnabled(on)
@@ -2351,9 +2369,11 @@ class _MapStyleSection(_SubSection):
             self._active_chk.setChecked(active_on)
             active = active or {}
             self._active_ident_dr.setText(str(active.get("ident_dataref", "")))
+            self._active_ident_dr2.setText(str(active.get("ident_dataref2", "")))
             self._active_ident_count.setValue(int(active.get("ident_char_count", 4)))
             self._active_color.set_rgba(active.get("color", [255, 60, 60, 255]))
             self._active_course_dr.setText(str(active.get("course_dataref", "")))
+            self._active_course_dr2.setText(str(active.get("course_dataref2", "")))
             active_fn_idx = self._active_course_fn.findText(str(active.get("convert_function") or _NONE))
             self._active_course_fn.setCurrentIndex(max(active_fn_idx, 0))
             self._active_width.setValue(float(active.get("width", 2.0)))
@@ -2440,9 +2460,15 @@ class _MapStyleSection(_SubSection):
             active_ident_dr = self._active_ident_dr.text().strip()
             if active_ident_dr:
                 active["ident_dataref"] = active_ident_dr
+            active_ident_dr2 = self._active_ident_dr2.text().strip()
+            if active_ident_dr2:
+                active["ident_dataref2"] = active_ident_dr2
             active_course_dr = self._active_course_dr.text().strip()
             if active_course_dr:
                 active["course_dataref"] = active_course_dr
+            active_course_dr2 = self._active_course_dr2.text().strip()
+            if active_course_dr2:
+                active["course_dataref2"] = active_course_dr2
             active_fn = self._active_course_fn.currentText()
             if active_fn != _NONE:
                 active["convert_function"] = active_fn
@@ -2493,9 +2519,11 @@ class _MapStyleSection(_SubSection):
         if self._show_active:
             self._active_chk.setChecked(False)
             self._active_ident_dr.clear()
+            self._active_ident_dr2.clear()
             self._active_ident_count.setValue(4)
             self._active_color.set_rgba((255, 60, 60, 255))
             self._active_course_dr.clear()
+            self._active_course_dr2.clear()
             self._active_course_fn.setCurrentIndex(0)
             self._active_width.setValue(2.0)
             self._active_dash_chk.setChecked(False)
