@@ -379,3 +379,13 @@ def get_index() -> NavDataIndex | None:
         cache = load_cache()
         _index_cache = NavDataIndex(cache) if cache else None
     return _index_cache
+
+
+def reset_index() -> None:
+    """Force the next get_index() call to reload from disk — used after
+    importing a cache file over the existing one (see navdata_dialog.py),
+    so a live process picks up the new data instead of whatever it had
+    already lazily loaded and cached in memory."""
+    global _index_cache, _index_loaded
+    _index_cache = None
+    _index_loaded = False
