@@ -1865,7 +1865,10 @@ class VectorCompassRose(_VecBase):
         half = self._radius + pad
         size_px = max(2, int(round(half * 2.0)))
         max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
-        while oversample >= 2 and size_px * oversample > max_tex:
+        # Limit each baked sprite to half the atlas side so it can share the
+        # atlas with the tick sprite and other panel textures.
+        atlas_share = max_tex // 2
+        while oversample >= 2 and size_px * oversample > atlas_share:
             oversample //= 2
         os_px = size_px * oversample
         img = Image.new("RGBA", (os_px, os_px), (0, 0, 0, 0))
@@ -1942,7 +1945,10 @@ class VectorCompassRose(_VecBase):
         half = self._radius + max_len + 2.0
         size_px = max(2, int(round(half * 2.0)))
         max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
-        while oversample >= 2 and size_px * oversample > max_tex:
+        # Limit each baked sprite to half the atlas side so it can share the
+        # atlas with the ring sprite and other panel textures.
+        atlas_share = max_tex // 2
+        while oversample >= 2 and size_px * oversample > atlas_share:
             oversample //= 2
         os_px = size_px * oversample
         img = Image.new("RGBA", (os_px, os_px), (0, 0, 0, 0))
