@@ -847,21 +847,40 @@ def _bake_map_icon(style: "_MapFeatureStyle", oversample: int = 4) -> None:
     style.icon_scale = 1.0 / oversample
 
 
-def _ray_circle_exit(ox: float, oy: float, dx: float, dy: float,
-                      cx: float, cy: float, r: float) -> tuple[float, float]:
-    """Point where a ray from (ox, oy) in unit direction (dx, dy) exits the
-    circle centred at (cx, cy) with radius r. Used for the active-VOR
-    course line, which starts at the VOR's own screen position (inside the
-    rose) and must stop exactly at the rose's own edge rather than running
-    off to infinity. Assumes the origin is inside (or on) the circle —
-    true here since map features are only plotted within the rose's own
-    radius in the first place — so the forward root always exists."""
-    fx, fy = ox - cx, oy - cy
+# Hard, range-independent limit for the active-VOR course radial fallback
+# lookup (a tuned VOR outside the currently displayed map range, or
+# decluttered by max_per_type) — real avionics still show the course
+# radial for a tuned station regardless of the selected map range, but
+# not indefinitely; 100 NM is roughly real VOR reception range and a
+# reasonable real-world-motivated cutoff.
+_ACTIVE_VOR_FALLBACK_RANGE_NM = 100.0
+
+
+def _line_circle_intersections(
+    px: float, py: float, dx: float, dy: float, cx: float, cy: float, r: float,
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """Both points where the INFINITE line through (px, py) in unit
+    direction (dx, dy) crosses the circle centred at (cx, cy) with radius
+    r. Used for the active-VOR course line: when the VOR's own screen
+    position is inside the rose (the common case), this reduces exactly
+    to "both directions' exit points" (one t negative, one positive) — no
+    behavior change from the single-direction ray-exit version this
+    replaced. When the VOR is outside the rose (beyond the displayed
+    range or the per-type declutter cap, but still within the fixed 100 NM
+    hard limit — real avionics still show a tuned station's course radial
+    even when its own icon isn't on screen), this correctly finds where
+    the radial crosses the visible rose if it happens to, or returns None
+    if the course doesn't point anywhere near the visible area at all —
+    matching real behavior (nothing to draw, not a garbage clamped point)."""
+    fx, fy = px - cx, py - cy
     b_half = fx * dx + fy * dy
     c = fx * fx + fy * fy - r * r
-    disc = max(0.0, b_half * b_half - c)
-    t = -b_half + math.sqrt(disc)
-    return (ox + t * dx, oy + t * dy)
+    disc = b_half * b_half - c
+    if disc < 0.0:
+        return None
+    sq = math.sqrt(disc)
+    t1, t2 = -b_half - sq, -b_half + sq
+    return (px + t1 * dx, py + t1 * dy), (px + t2 * dx, py + t2 * dy)
 
 
 def _arc_points(
@@ -2280,6 +2299,39 @@ class VectorCompassRose(_VecBase):
         t.rotation = orient_bearing_deg - self._heading + style.active_label_rotation_offset
         t.draw()
 
+    def _find_active_vor_position(
+        self, index: "navdata.NavDataIndex", type_name: str, src: _ActiveVorSource,
+        in_range_items: list[tuple[float, float, dict]], px_per_nm: float,
+    ) -> tuple[float, float] | None:
+        # A tuned VOR keeps its course radial on screen even once it's
+        # outside the currently displayed map range (or decluttered by
+        # max_per_type) — matching real avionics, where the course to a
+        # tuned station stays shown well past the point its own icon
+        # disappears. First checks the in-range candidates already
+        # fetched for this frame (no extra lookup); only when that
+        # fails does it re-query the spatial index at a fixed,
+        # range-independent _ACTIVE_VOR_FALLBACK_RANGE_NM (real VOR
+        # reception is roughly this order of magnitude) — a rare path,
+        # only taken while a tuned station is genuinely far from the
+        # aircraft or the display is zoomed in tight.
+        for distance_nm, bearing_deg, entry in in_range_items:
+            if entry.get("ident", "") == src.ident:
+                return self._point_at(bearing_deg, distance_nm * px_per_nm)
+
+        best: tuple[float, float] | None = None
+        best_distance = _ACTIVE_VOR_FALLBACK_RANGE_NM
+        for entry in index.nearby(self._map_lat, self._map_lon, _ACTIVE_VOR_FALLBACK_RANGE_NM):
+            if entry.get("type") != type_name or entry.get("ident", "") != src.ident:
+                continue
+            bearing_deg, distance_nm = geo.bearing_distance_nm(
+                self._map_lat, self._map_lon, entry["lat"], entry["lon"],
+            )
+            if distance_nm > best_distance:
+                continue
+            best_distance = distance_nm
+            best = self._point_at(bearing_deg, distance_nm * px_per_nm)
+        return best
+
     def _draw_deviation_bar(self) -> None:
         # Translates from the rose centre along the perpendicular to the CDI
         # course line (cdi_angle + 90°) by a dataref-driven px amount, but
@@ -2379,6 +2431,23 @@ class VectorCompassRose(_VecBase):
                 for i in range(len(visible_items), len(style.icon_sprites)):
                     style.icon_sprites[i].visible = False
 
+            # Screen position of every active source that's matched by an
+            # in-range candidate — searched over the FULL in-range `items`
+            # list (not `visible_items`), so a tuned VOR still gets its
+            # radial even if it'd otherwise be decluttered by
+            # max_per_type; falls back to a fixed, range-independent
+            # _ACTIVE_VOR_FALLBACK_RANGE_NM search when the source isn't
+            # in range at all — see _find_active_vor_position()'s own
+            # docstring for why (real avionics keep showing a tuned
+            # station's course radial well past the displayed map range).
+            active_positions: dict[int, tuple[float, float]] = {}
+            for src in style.active_sources:
+                if not src.ident:
+                    continue
+                pos = self._find_active_vor_position(index, type_name, src, items, px_per_nm)
+                if pos is not None:
+                    active_positions[id(src)] = pos
+
             label_idx = 0
             for i, (distance_nm, bearing_deg, entry) in enumerate(visible_items):
                 cx, cy = self._point_at(bearing_deg, distance_nm * px_per_nm)
@@ -2386,15 +2455,11 @@ class VectorCompassRose(_VecBase):
                 # The "active" candidates (e.g. NAV1/NAV2 both tuned to
                 # this station) recolor every color slot on this one entry
                 # — same icon shape, just highlighted via the white-
-                # silhouette texture tinted to active_color — and each
-                # gets its own dashed course-line radial from its own
-                # position out to the rose's edge (own course, shared
-                # styling — see _ActiveVorSource's own docstring).
-                matched_sources = [
-                    src for src in style.active_sources
-                    if src.ident and entry.get("ident", "") == src.ident
-                ]
-                is_active = bool(matched_sources)
+                # silhouette texture tinted to active_color.
+                is_active = any(
+                    src.ident and entry.get("ident", "") == src.ident
+                    for src in style.active_sources
+                )
 
                 if style.icon_texture is not None:
                     sp = style.icon_sprites[i]
@@ -2413,37 +2478,6 @@ class VectorCompassRose(_VecBase):
                         sp.texture = style.icon_texture
                         sp.color = (255, 255, 255)
                         sp.alpha = 255
-
-                for src in matched_sources:
-                    # A full radial through the VOR — both the course
-                    # direction and its reciprocal — not just a one-way ray
-                    # toward the rose's edge, so both the TO and FROM sides
-                    # of the course are visible.
-                    angle = math.radians(90.0 - src.course + self._heading)
-                    dx, dy = math.cos(angle), math.sin(angle)
-                    ex1, ey1 = _ray_circle_exit(cx, cy, dx, dy, self._cx, self._cy, self._radius)
-                    ex2, ey2 = _ray_circle_exit(cx, cy, -dx, -dy, self._cx, self._cy, self._radius)
-                    active_lines_to_draw.append(
-                        (ex1, ey1, ex2, ey2, style.active_color, style.active_width, style.active_dash)
-                    )
-                    if style.active_label_head_offset is not None:
-                        # Perpendicular to the (shared) course direction —
-                        # +90° from it — so a positive offset nudges both
-                        # labels to the same visual side of the radial.
-                        perp_dx, perp_dy = -dy, dx
-                        pdx = perp_dx * style.active_label_perp_offset
-                        pdy = perp_dy * style.active_label_perp_offset
-                        self._draw_active_vor_label(
-                            style, cx + dx * style.active_label_head_offset + pdx,
-                            cy + dy * style.active_label_head_offset + pdy,
-                            src.course, src.course,
-                        )
-                        self._draw_active_vor_label(
-                            style, cx - dx * style.active_label_tail_offset + pdx,
-                            cy - dy * style.active_label_tail_offset + pdy,
-                            src.course + 180.0, src.course,
-                            is_head=False,
-                        )
 
                 if style.label:
                     if label_idx >= len(style.label_pool):
@@ -2479,6 +2513,46 @@ class VectorCompassRose(_VecBase):
             # enough.
             for i in range(label_idx, len(style.label_pool)):
                 style.label_pool[i].visible = False
+
+            for src in style.active_sources:
+                pos = active_positions.get(id(src))
+                if pos is None:
+                    continue
+                cx, cy = pos
+                # A full radial through the VOR — both the course
+                # direction and its reciprocal — not just a one-way ray
+                # toward the rose's edge, so both the TO and FROM sides
+                # of the course are visible. Uses the general line/circle
+                # intersection (not an inside-the-rose-assuming ray exit)
+                # since cx/cy may be well outside the rose for a tuned VOR
+                # beyond the displayed range (see _find_active_vor_position).
+                angle = math.radians(90.0 - src.course + self._heading)
+                dx, dy = math.cos(angle), math.sin(angle)
+                hit = _line_circle_intersections(cx, cy, dx, dy, self._cx, self._cy, self._radius)
+                if hit is None:
+                    continue  # course doesn't cross the visible rose at all
+                (ex1, ey1), (ex2, ey2) = hit
+                active_lines_to_draw.append(
+                    (ex1, ey1, ex2, ey2, style.active_color, style.active_width, style.active_dash)
+                )
+                if style.active_label_head_offset is not None:
+                    # Perpendicular to the (shared) course direction —
+                    # +90° from it — so a positive offset nudges both
+                    # labels to the same visual side of the radial.
+                    perp_dx, perp_dy = -dy, dx
+                    pdx = perp_dx * style.active_label_perp_offset
+                    pdy = perp_dy * style.active_label_perp_offset
+                    self._draw_active_vor_label(
+                        style, cx + dx * style.active_label_head_offset + pdx,
+                        cy + dy * style.active_label_head_offset + pdy,
+                        src.course, src.course,
+                    )
+                    self._draw_active_vor_label(
+                        style, cx - dx * style.active_label_tail_offset + pdx,
+                        cy - dy * style.active_label_tail_offset + pdy,
+                        src.course + 180.0, src.course,
+                        is_head=False,
+                    )
 
             if style.icon_sprites is not None:
                 style.icon_sprites.draw()
