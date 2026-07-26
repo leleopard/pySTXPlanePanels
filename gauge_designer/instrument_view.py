@@ -814,7 +814,6 @@ class InstrumentView(QWidget):
     def do_paste(self) -> None:
         if InstrumentView._component_clipboard is None:
             return
-        import copy
         new_comp = copy.deepcopy(InstrumentView._component_clipboard)
         existing = {c.get("name", "") for c in self._components}
         base_name = new_comp.get("name", "component")
@@ -826,7 +825,20 @@ class InstrumentView(QWidget):
         new_comp["name"] = candidate
         self._components.append(new_comp)
         self._list.addItem(new_comp["name"])
-        self._list.item(self._list.count() - 1).setData(Qt.UserRole, True)
+        # Pasting a hidden component must keep it hidden -- same reasoning
+        # as _duplicate_component()'s own fix: new_comp is a deep copy of
+        # the clipboard entry, so it inherits `hidden: true` verbatim if
+        # present, and the tree/canvas display must be derived from that,
+        # not hardcoded to visible.
+        is_visible = not new_comp.get("hidden", False)
+        item = self._list.item(self._list.count() - 1)
+        item.setData(Qt.UserRole, is_visible)
+        if is_visible:
+            self._hidden.discard(candidate)
+        else:
+            self._hidden.add(candidate)
+            item.setForeground(QColor(110, 110, 110))
+        self._canvas.set_hidden(self._hidden.copy())
         self._list.setCurrentRow(len(self._components) - 1)
         self.changed.emit()
 
@@ -1144,7 +1156,6 @@ class InstrumentView(QWidget):
         self.changed.emit()
 
     def _duplicate_component(self):
-        import copy
         row = self._list.currentRow()
         if row < 0:
             return
@@ -1162,7 +1173,25 @@ class InstrumentView(QWidget):
         insert_at = row + 1
         self._components.insert(insert_at, new_comp)
         self._list.insertItem(insert_at, new_comp["name"])
-        self._list.item(insert_at).setData(Qt.UserRole, True)
+        # Duplicating a hidden component must keep it hidden -- new_comp is a
+        # deep copy of `original`, so it inherits `hidden: true` verbatim if
+        # present, but the tree item's own visible/hidden display (UserRole
+        # + foreground colour + self._hidden bookkeeping) was previously
+        # always forced to visible regardless, desyncing the tree/canvas
+        # preview from what actually gets saved -- the runtime (which always
+        # reads hidden fresh from the saved YAML) would correctly hide it
+        # while the still-open designer session kept showing it visible
+        # until the file was reloaded. Mirror load()'s own derivation
+        # instead of hardcoding True.
+        is_visible = not new_comp.get("hidden", False)
+        item = self._list.item(insert_at)
+        item.setData(Qt.UserRole, is_visible)
+        if is_visible:
+            self._hidden.discard(candidate)
+        else:
+            self._hidden.add(candidate)
+            item.setForeground(QColor(110, 110, 110))
+        self._canvas.set_hidden(self._hidden.copy())
         self._list.setCurrentRow(insert_at)
         self.changed.emit()
 
