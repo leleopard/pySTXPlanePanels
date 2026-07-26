@@ -267,14 +267,25 @@ def _image_panel_factory(
         position_xy=tuple(comp["position"]),
     )
 
+    # Manual render-size multiplier, applied after cropping — distinct from
+    # cliprect/origin (atlas-space, define WHICH pixels are cropped, must
+    # never scale without corrupting the crop) and from resize_to_container
+    # (dynamic, container-driven). Defaults to 1.0 (no behavior change for
+    # existing instruments); the designer's resize function is the main
+    # consumer, since cliprect itself can't be scaled without breaking the
+    # texture crop. Composes multiplicatively with resize_to_container's
+    # own dynamic fit, so a manually-tuned scale still applies on top.
+    manual_scale = float(comp.get("scale", 1.0))
     if comp.get("resize_to_container") and container_size is not None:
         cw, ch = container_size
         sw, sh = cliprect_wh
         if comp.get("maintain_proportions", True):
-            panel.sprite.scale = min(cw / sw, ch / sh)
+            panel.sprite.scale = min(cw / sw, ch / sh) * manual_scale
         else:
-            panel.sprite.width = float(cw)
-            panel.sprite.height = float(ch)
+            panel.sprite.width = float(cw) * manual_scale
+            panel.sprite.height = float(ch) * manual_scale
+    elif manual_scale != 1.0:
+        panel.sprite.scale = manual_scale
 
     if "rotation" in comp:
         rot = comp["rotation"]

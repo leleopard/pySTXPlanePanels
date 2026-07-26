@@ -91,6 +91,7 @@ class SpriteSheet:
         smooth: bool = True,
         pixels_per_unit: float | None = None,
         shift_direction: str = "right",
+        scale: float = 1.0,
     ) -> None:
         self.name = name
         self._columns = columns
@@ -112,6 +113,8 @@ class SpriteSheet:
         self._tex_h = texture.height
 
         self.sprite = arcade.Sprite(texture)
+        if scale != 1.0:
+            self.sprite.scale = scale
         self._base_x = float(position_xy[0])
         self._base_y = float(position_xy[1])
         self._inst_scale: float = 1.0
@@ -261,6 +264,7 @@ def _sprite_sheet_factory(
         smooth=bool(comp.get("smooth", True)),
         pixels_per_unit=float(comp["pixels_per_unit"]) if "pixels_per_unit" in comp else None,
         shift_direction=str(comp.get("shift_direction", "right")),
+        scale=float(comp.get("scale", 1.0)),
     )
 
     if "animation" in comp:

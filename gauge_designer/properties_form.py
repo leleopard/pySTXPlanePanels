@@ -2685,6 +2685,21 @@ class PropertiesForm(QWidget):
         hl.addWidget(btn)
         self._tex_sec.row("File", tex_row)
 
+        self._tex_scale = QDoubleSpinBox()
+        self._tex_scale.setRange(0.01, 100.0)
+        self._tex_scale.setDecimals(3)
+        self._tex_scale.setSingleStep(0.1)
+        self._tex_scale.setValue(1.0)
+        self._tex_scale.setToolTip(
+            "Render-size multiplier, applied after cropping/framing — shared\n"
+            "by ImagePanel/SpriteSheet/ScrollingTape. Distinct from Clip/Frame\n"
+            "size (which pixels get cropped from the source texture, never\n"
+            "changes on its own): this is what the instrument resize feature\n"
+            "adjusts, since the crop region can't safely double as render size."
+        )
+        self._tex_scale.valueChanged.connect(self._emit)
+        self._tex_sec.row("Scale", self._tex_scale)
+
         # Atlas detail — ImagePanel-only fields in a toggleable container
         self._atlas_detail = QWidget()
         ad = QFormLayout(self._atlas_detail)
@@ -5814,8 +5829,8 @@ class PropertiesForm(QWidget):
         self._loading = True
         known = {
             "name", "type", "position",
-            # ImagePanel
-            "texture", "cliprect", "origin",
+            # ImagePanel (scale is shared by ImagePanel/SpriteSheet/ScrollingTape)
+            "texture", "cliprect", "origin", "scale",
             "resize_to_container", "maintain_proportions",
             "rotation", "translation",
             # SpriteSheet
@@ -5914,6 +5929,7 @@ class PropertiesForm(QWidget):
 
         # Texture file (all image-based types)
         self._tex.setText(str(comp.get("texture", "")))
+        self._tex_scale.setValue(float(comp.get("scale", 1.0)))
 
         # ImagePanel atlas detail
         cr = comp.get("cliprect", [0, 0])
@@ -7371,6 +7387,8 @@ class PropertiesForm(QWidget):
 
         elif ct == "ImagePanel":
             data["texture"] = self._tex.text().strip()
+            if self._tex_scale.value() != 1.0:
+                data["scale"] = self._tex_scale.value()
             data["origin"]  = [self._orig_x.value(), self._orig_y.value()]
             data["cliprect"] = [self._clip_w.value(), self._clip_h.value()]
             if self._resize_chk.isChecked():
@@ -7404,6 +7422,8 @@ class PropertiesForm(QWidget):
 
         elif ct == "SpriteSheet":
             data["texture"] = self._tex.text().strip()
+            if self._tex_scale.value() != 1.0:
+                data["scale"] = self._tex_scale.value()
             data["columns"] = self._ss_cols.value()
             data["rows"] = self._ss_rows_sb.value()
             data["frame_width"] = self._ss_fw.value()
@@ -7431,6 +7451,8 @@ class PropertiesForm(QWidget):
 
         elif ct == "ScrollingTape":
             data["texture"] = self._tex.text().strip()
+            if self._tex_scale.value() != 1.0:
+                data["scale"] = self._tex_scale.value()
             data["scroll_axis"] = "y" if self._st_axis.currentIndex() == 0 else "x"
             anim_dr = self._anim_dr.text().strip()
             anim_tbl = self._anim_tbl.get_data()
@@ -7608,6 +7630,7 @@ class PropertiesForm(QWidget):
         self._on_type_changed("ImagePanel")  # explicit: index may not have changed
         self._px.setValue(0); self._py.setValue(0)
         self._tex.clear()
+        self._tex_scale.setValue(1.0)
         self._clip_w.setValue(0); self._clip_h.setValue(0)
         self._orig_x.setValue(0); self._orig_y.setValue(0)
         self._resize_chk.setChecked(False)

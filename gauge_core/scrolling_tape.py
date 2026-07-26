@@ -57,6 +57,7 @@ class ScrollingTape:
         atlas_path: Path,
         scroll_axis: str,
         position_xy: tuple[float, float],
+        scale: float = 1.0,
     ) -> None:
         if scroll_axis not in ("x", "y"):
             raise ValueError(f"scroll_axis must be 'x' or 'y', got {scroll_axis!r}")
@@ -69,6 +70,8 @@ class ScrollingTape:
         self._tex_h = texture.height
 
         self.sprite = arcade.Sprite(texture)
+        if scale != 1.0:
+            self.sprite.scale = scale
         self._base_x = float(position_xy[0])
         self._base_y = float(position_xy[1])
         self._inst_scale: float = 1.0
@@ -178,6 +181,7 @@ def _scrolling_tape_factory(
         atlas_path=atlas_path,
         scroll_axis=str(comp.get("scroll_axis", "y")),
         position_xy=tuple(comp["position"]),
+        scale=float(comp.get("scale", 1.0)),
     )
 
     if "scroll" in comp:

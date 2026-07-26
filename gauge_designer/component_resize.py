@@ -139,6 +139,53 @@ def _resize_vector(comp: dict, sx: float, sy: float) -> None:
         comp["cap_height"] = comp["cap_height"] * s
 
 
+def _resize_viewport(comp: dict, sx: float, sy: float) -> None:
+    if "viewport" in comp:
+        vx, vy, vw, vh = comp["viewport"]
+        comp["viewport"] = [vx * sx, vy * sy, vw * sx, vh * sy]
+
+
+def _resize_image_panel(comp: dict, sx: float, sy: float) -> None:
+    # origin/cliprect are atlas-space (which pixels get cropped from the
+    # source texture) — must never scale, or the crop region shifts/grows
+    # into unrelated (or out-of-bounds) parts of the source image. The
+    # on-screen render size is controlled entirely by the separate `scale`
+    # field (added alongside this resize feature specifically because
+    # cliprect can't safely double as both crop size and render size).
+    if "position" in comp:
+        comp["position"] = _scale_pair(comp["position"], sx, sy)
+    s = min(sx, sy)
+    comp["scale"] = comp.get("scale", 1.0) * s
+    _resize_viewport(comp, sx, sy)
+    rotation = comp.get("rotation")
+    if rotation and "rotation_center" in rotation:
+        # Relative to the sprite's own local frame, which only has one
+        # uniform scale (matching `scale` above, not independently x/y).
+        rcx, rcy = rotation["rotation_center"]
+        rotation["rotation_center"] = [rcx * s, rcy * s]
+
+
+def _resize_sprite_sheet(comp: dict, sx: float, sy: float) -> None:
+    # columns/rows/frame_width/frame_height/stride_x/stride_y/
+    # pixels_per_unit are all atlas-space (fixed frame-grid geometry and
+    # atlas-pixel shift-per-unit) — never scale, same reasoning as
+    # ImagePanel's cliprect/origin.
+    if "position" in comp:
+        comp["position"] = _scale_pair(comp["position"], sx, sy)
+    comp["scale"] = comp.get("scale", 1.0) * min(sx, sy)
+    _resize_viewport(comp, sx, sy)
+
+
+def _resize_scrolling_tape(comp: dict, sx: float, sy: float) -> None:
+    # scroll.table maps a raw dataref value to a pixel offset *into the
+    # source texture strip* (atlas-space) — never scales, same reasoning
+    # as ImagePanel's cliprect/origin.
+    if "position" in comp:
+        comp["position"] = _scale_pair(comp["position"], sx, sy)
+    comp["scale"] = comp.get("scale", 1.0) * min(sx, sy)
+    _resize_viewport(comp, sx, sy)
+
+
 _RESIZERS = {
     "Text": _resize_text,
     "Arc": _resize_arc,
@@ -146,4 +193,7 @@ _RESIZERS = {
     "Polygon": _resize_polygon,
     "Line": _resize_line,
     "Vector": _resize_vector,
+    "ImagePanel": _resize_image_panel,
+    "SpriteSheet": _resize_sprite_sheet,
+    "ScrollingTape": _resize_scrolling_tape,
 }
