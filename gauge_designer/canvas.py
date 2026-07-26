@@ -2363,14 +2363,21 @@ class InstrumentCanvas(QWidget):
         px, py = comp.get("position", [0, 0])
 
         sprite = atlas.crop((ox, oy, ox + cw, oy + ch))
+        manual_scale = float(comp.get("scale", 1.0))
 
         if comp.get("resize_to_container"):
             if comp.get("maintain_proportions", True):
-                scale = min(canvas_w / cw, canvas_h / ch)
+                scale = min(canvas_w / cw, canvas_h / ch) * manual_scale
                 new_w = max(1, int(round(cw * scale)))
                 new_h = max(1, int(round(ch * scale)))
             else:
-                new_w, new_h = canvas_w, canvas_h
+                new_w = max(1, int(round(canvas_w * manual_scale)))
+                new_h = max(1, int(round(canvas_h * manual_scale)))
+            sprite = sprite.resize((new_w, new_h), Image.LANCZOS)
+            cw, ch = new_w, new_h
+        elif manual_scale != 1.0:
+            new_w = max(1, int(round(cw * manual_scale)))
+            new_h = max(1, int(round(ch * manual_scale)))
             sprite = sprite.resize((new_w, new_h), Image.LANCZOS)
             cw, ch = new_w, new_h
 
