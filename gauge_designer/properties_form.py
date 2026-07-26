@@ -2591,6 +2591,7 @@ class PropertiesForm(QWidget):
         super().__init__(parent)
         self._yaml_dir: str = ""
         self._ref_height: int = 310
+        self._ref_width: int = 310
         self._extra: dict = {}
         self._loading = False
 
@@ -2637,6 +2638,9 @@ class PropertiesForm(QWidget):
     def set_ref_height(self, h: int):
         self._ref_height = h
 
+    def set_ref_width(self, w: int):
+        self._ref_width = w
+
     # ── Section builders ──────────────────────────────────────────────────
 
     def _mk_component(self):
@@ -2657,8 +2661,21 @@ class PropertiesForm(QWidget):
         self._px = _sb(); self._py = _sb()
         for w in (self._px, self._py):
             w.valueChanged.connect(self._emit)
-        self._pos_sec.row_pair("X  /  Y", self._px, self._py)
+
+        centre_btn = QPushButton("Centre")
+        centre_btn.setToolTip("Set X/Y to the centre of the instrument")
+        centre_btn.clicked.connect(self._on_centre_position)
+
+        row = QWidget()
+        hl = QHBoxLayout(row)
+        hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
+        hl.addWidget(self._px); hl.addWidget(self._py); hl.addWidget(centre_btn)
+        self._pos_sec.row("X  /  Y", row)
         self._vbox.addWidget(self._pos_sec)
+
+    def _on_centre_position(self):
+        self._px.setValue(round(self._ref_width / 2))
+        self._py.setValue(round(self._ref_height / 2))
 
     def _mk_texture(self):
         self._tex_sec = _Section("Texture")
@@ -5942,6 +5959,7 @@ class PropertiesForm(QWidget):
         self._resize_chk.blockSignals(False)
         self._prop_chk.setEnabled(resize)
         self._prop_chk.setChecked(bool(comp.get("maintain_proportions", True)))
+        self._tex_scale.setEnabled(not resize)
 
         # SpriteSheet grid params
         self._ss_cols.setValue(int(comp.get("columns", 1)))
@@ -8074,6 +8092,10 @@ class PropertiesForm(QWidget):
         self._prop_chk.setEnabled(on)
         if not on:
             self._prop_chk.setChecked(True)
+        # "Fit to gauge size" fully overrides Scale (gauge_core's
+        # _image_panel_factory ignores it entirely once resize_to_container
+        # is set) — disable it so it can't look like it's doing something.
+        self._tex_scale.setEnabled(not on)
 
     def _on_tr_fixed(self, on: bool):
         self._tr_angle.setEnabled(on)

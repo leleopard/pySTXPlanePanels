@@ -553,6 +553,7 @@ class InstrumentView(QWidget):
             assets_root = str(Path(yaml_path).parent) if yaml_path else ""
         self._form.set_yaml_dir(assets_root)
         self._form.set_ref_height(int(h))
+        self._form.set_ref_width(int(w))
         self._canvas.load(instrument_data, assets_root)
         self._canvas.set_hidden(self._hidden.copy())
         if self._components:
@@ -904,6 +905,7 @@ class InstrumentView(QWidget):
     def _on_size_changed(self):
         new_w, new_h = self._gauge_w.value(), self._gauge_h.value()
         self._form.set_ref_height(new_h)
+        self._form.set_ref_width(new_w)
         self._canvas.set_size(new_w, new_h)
         self.changed.emit()
         if self._preserve_center_chk.isChecked() or self._scale_size_chk.isChecked():
