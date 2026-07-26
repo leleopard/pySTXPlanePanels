@@ -2366,13 +2366,15 @@ class InstrumentCanvas(QWidget):
         manual_scale = float(comp.get("scale", 1.0))
 
         if comp.get("resize_to_container"):
+            # Fully overrides `scale` rather than composing with it — see
+            # gauge_core/component.py's _image_panel_factory, the runtime
+            # equivalent of this preview logic, for why.
             if comp.get("maintain_proportions", True):
-                scale = min(canvas_w / cw, canvas_h / ch) * manual_scale
+                scale = min(canvas_w / cw, canvas_h / ch)
                 new_w = max(1, int(round(cw * scale)))
                 new_h = max(1, int(round(ch * scale)))
             else:
-                new_w = max(1, int(round(canvas_w * manual_scale)))
-                new_h = max(1, int(round(canvas_h * manual_scale)))
+                new_w, new_h = canvas_w, canvas_h
             sprite = sprite.resize((new_w, new_h), Image.LANCZOS)
             cw, ch = new_w, new_h
         elif manual_scale != 1.0:

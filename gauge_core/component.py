@@ -273,17 +273,19 @@ def _image_panel_factory(
     # (dynamic, container-driven). Defaults to 1.0 (no behavior change for
     # existing instruments); the designer's resize function is the main
     # consumer, since cliprect itself can't be scaled without breaking the
-    # texture crop. Composes multiplicatively with resize_to_container's
-    # own dynamic fit, so a manually-tuned scale still applies on top.
+    # texture crop. resize_to_container fully OVERRIDES `scale` rather than
+    # composing with it — "fit to gauge size" already recomputes the exact
+    # on-screen size from the instrument's own size every load, so a stale
+    # or leftover manual scale must not silently inflate/shrink that fit.
     manual_scale = float(comp.get("scale", 1.0))
     if comp.get("resize_to_container") and container_size is not None:
         cw, ch = container_size
         sw, sh = cliprect_wh
         if comp.get("maintain_proportions", True):
-            panel.sprite.scale = min(cw / sw, ch / sh) * manual_scale
+            panel.sprite.scale = min(cw / sw, ch / sh)
         else:
-            panel.sprite.width = float(cw) * manual_scale
-            panel.sprite.height = float(ch) * manual_scale
+            panel.sprite.width = float(cw)
+            panel.sprite.height = float(ch)
     elif manual_scale != 1.0:
         panel.sprite.scale = manual_scale
 
