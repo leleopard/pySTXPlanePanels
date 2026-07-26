@@ -552,6 +552,78 @@ def _resize_vector_compass_rose(comp: dict, sx: float, sy: float) -> None:
             # real-world units, never pixels — never scales.
 
 
+def _resize_attitude_indicator(comp: dict, sx: float, sy: float) -> None:
+    # Like the compass rose, the horizon/pitch-ladder assembly and every
+    # element mounted on the bank arc (ticks, roll pointer, slip indicator)
+    # rotate together to an arbitrary bank angle (_rot() in
+    # gauge_core/attitude_indicator.py) — scalar (min(sx,sy)), confirmed via
+    # _draw_ladder/_draw_bank_arc/_draw_roll_pointer/_draw_slip_indicator.
+    # Only the viewport itself and a handful of elements _draw_bank_arc's own
+    # geometry proves are screen-fixed (the 0-deg reference mark, always at
+    # the arc's top-dead-centre regardless of bank) and the two "drawn in
+    # screen space (no bank rotation)" FD bars / bug / wing overlays use
+    # directional (sx, sy) instead.
+    s = min(sx, sy)
+
+    if "viewport" in comp:
+        vx, vy, vw, vh = comp["viewport"]
+        comp["viewport"] = [vx * sx, vy * sy, vw * sx, vh * sy]
+
+    for key in (
+        "pixels_per_degree", "horizon_width", "ladder_width", "label_font_size",
+        "bank_arc_width", "bank_arc_radius",
+        "roll_pointer_height", "roll_pointer_width", "roll_pointer_size",
+        "roll_pointer_line_width", "roll_pointer_y_offset",
+        "bank_arc_y_offset",
+        "bank_tick_10", "bank_tick_20", "bank_tick_30", "bank_tick_45", "bank_tick_60",
+        "arc_ref_line_width",
+        "arc_bg_inset", "corner_radius",
+        "slip_width", "slip_height", "slip_line_width", "slip_offset", "slip_scale",
+        "centre_bug_outline_width", "wing_outline_width",
+        "fd_h_width", "fd_v_width",
+    ):
+        if key in comp:
+            comp[key] = comp[key] * s
+
+    # 0-deg reference mark on the bank arc — fixed at the arc's top-dead-
+    # centre regardless of bank (unlike the ticks/pointer above, this is
+    # never rotated), so arc_ref_height/offset are true vertical extents and
+    # arc_ref_width a true horizontal half-width.
+    if "arc_ref_height" in comp:
+        comp["arc_ref_height"] = comp["arc_ref_height"] * sy
+    if "arc_ref_width" in comp:
+        comp["arc_ref_width"] = comp["arc_ref_width"] * sx
+    if "arc_ref_offset" in comp:
+        comp["arc_ref_offset"] = comp["arc_ref_offset"] * sy
+
+    # FD bars are drawn "in screen space (no bank rotation)" per
+    # _draw_flight_director()'s own comment. The h-bar is a horizontal line
+    # (length along x) whose deflection moves it vertically; the v-bar is
+    # vertical (length along y) whose deflection moves it horizontally — so
+    # each bar's own length follows its axis, while its dataref->pixel scale
+    # follows the perpendicular (deflection) axis.
+    if "fd_h_length" in comp:
+        comp["fd_h_length"] = comp["fd_h_length"] * sx
+    if "fd_h_scale" in comp:
+        comp["fd_h_scale"] = comp["fd_h_scale"] * sy
+    if "fd_v_length" in comp:
+        comp["fd_v_length"] = comp["fd_v_length"] * sy
+    if "fd_v_scale" in comp:
+        comp["fd_v_scale"] = comp["fd_v_scale"] * sx
+
+    # Reference bug/wings are fixed screen overlays (_draw_reference_bug/
+    # _draw_reference_wings, drawn straight off cx,cy with no bank rotation)
+    # — directional per-point scaling, not scalar.
+    if "centre_bug_points" in comp:
+        comp["centre_bug_points"] = _scale_points(comp["centre_bug_points"], sx, sy)
+    if "wing_points" in comp:
+        comp["wing_points"] = _scale_points(comp["wing_points"], sx, sy)
+
+    # ladder_step (degrees), ladder_hw_4/2/1 (ratios of viewport width, not
+    # absolute pixels) are not geometry — never scaled, matching
+    # AttitudeIndicator.apply_scale()'s own exclusions.
+
+
 _RESIZERS = {
     "Text": _resize_text,
     "Arc": _resize_arc,
@@ -566,4 +638,5 @@ _RESIZERS = {
     "NeedleGauge": _resize_needle_gauge,
     "VectorTape": _resize_vector_tape,
     "VectorCompassRose": _resize_vector_compass_rose,
+    "AttitudeIndicator": _resize_attitude_indicator,
 }
