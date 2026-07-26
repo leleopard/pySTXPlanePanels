@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QScrollArea, QWidget, QDialogButtonBox,
+    QScrollArea, QWidget, QDialogButtonBox, QPushButton,
 )
 from gauge_designer.ui_utils import QSpinBox
 from PySide6.QtCore import Qt, Signal, QTimer
@@ -172,6 +172,7 @@ class TextureEditorDialog(QDialog):
         pixmap = QPixmap()
         if texture_path and Path(texture_path).is_file():
             pixmap.load(texture_path)
+        self._pixmap = pixmap
 
         def _sb(lo: int = 0, hi: int = 4096, val: int = 0) -> QSpinBox:
             s = QSpinBox()
@@ -212,6 +213,11 @@ class TextureEditorDialog(QDialog):
         grid.addWidget(self._clip_w,        1, 1)
         grid.addWidget(QLabel("H:"),        1, 2)
         grid.addWidget(self._clip_h,        1, 3)
+
+        self._full_tex_btn = QPushButton("Full texture size")
+        self._full_tex_btn.setToolTip("Set Clip W/H to the full loaded texture's dimensions")
+        self._full_tex_btn.clicked.connect(self._on_full_texture_size)
+        grid.addWidget(self._full_tex_btn, 1, 4)
 
         grid.addWidget(QLabel("Grid X:"),   0, 5)
         grid.addWidget(self._grid_x,        0, 6)
@@ -274,6 +280,11 @@ class TextureEditorDialog(QDialog):
         self._view.zoom_changed.disconnect(self._on_zoom_changed)
         self._view.set_zoom(value / 100.0)
         self._view.zoom_changed.connect(self._on_zoom_changed)
+
+    def _on_full_texture_size(self):
+        if not self._pixmap.isNull():
+            self._clip_w.setValue(self._pixmap.width())
+            self._clip_h.setValue(self._pixmap.height())
 
     def _on_mouse_pos(self, x: int, y: int):
         if x < 0:
