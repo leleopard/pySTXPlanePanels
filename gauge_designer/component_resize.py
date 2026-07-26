@@ -243,6 +243,19 @@ def _resize_image_panel(comp: dict, sx: float, sy: float,
     _resize_viewport(comp, sx, sy, scale_position, scale_size)
     if not scale_size:
         return
+    if comp.get("resize_to_container"):
+        # "Fit to gauge size" already recomputes the sprite's own render
+        # size from scratch on every load, straight from cliprect vs. the
+        # instrument's own (just-resized) `size:` field — see
+        # gauge_core/loader.py's container_size and
+        # _image_panel_factory()'s own min(cw/sw, ch/sh) fit. It needs no
+        # help from `scale` to track an instrument resize; bumping `scale`
+        # here as well would compose on top of that automatic fit and
+        # double-count the growth. rotation_center likewise stays untouched
+        # for the same reason it can't be right anyway when the sprite's
+        # effective size is decided dynamically at load time, not by a
+        # static factor we can pre-compute here.
+        return
     s = min(sx, sy)
     comp["scale"] = comp.get("scale", 1.0) * s
     rotation = comp.get("rotation")
