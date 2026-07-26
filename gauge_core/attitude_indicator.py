@@ -597,7 +597,8 @@ class AttitudeIndicator(_VecBase):
         w_px = max(2, int(round((max_hw + pad) * 2.0)))
         h_px = max(2, int(round((max_y + pad) * 2.0)))
         max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
-        while oversample >= 2 and max(w_px, h_px) * oversample > max_tex:
+        atlas_share = max_tex // 2
+        while oversample >= 2 and max(w_px, h_px) * oversample > atlas_share:
             oversample //= 2
         ow_px, oh_px = w_px * oversample, h_px * oversample
         img = Image.new("RGBA", (ow_px, oh_px), (0, 0, 0, 0))
@@ -867,7 +868,8 @@ class AttitudeIndicator(_VecBase):
         w_px = max(2, int(round(vw)))
         h_px = max(2, int(round(vh)))
         max_tex = arcade.get_window().ctx.info.MAX_TEXTURE_SIZE
-        while oversample >= 2 and max(w_px, h_px) * oversample > max_tex:
+        atlas_share = max_tex // 2
+        while oversample >= 2 and max(w_px, h_px) * oversample > atlas_share:
             oversample //= 2
         ow_px, oh_px = w_px * oversample, h_px * oversample
         img = Image.new("RGBA", (ow_px, oh_px), self._corner_bg_color)
