@@ -272,6 +272,69 @@ def _resize_needle_gauge(comp: dict, sx: float, sy: float) -> None:
                 target["width"] = target["width"] * s
 
 
+def _resize_vector_tape(comp: dict, sx: float, sy: float) -> None:
+    # x_offset/y_offset are literally named screen-space X/Y nudges (per
+    # this component's own schema docstring) — always sx/sy respectively,
+    # regardless of scroll_axis. `length` and the spine-gap-style offsets
+    # (labels.offset, bands.width/offset) are NOT axis-named — their
+    # screen axis depends on scroll_axis (confirmed directly against
+    # VectorTape._draw_ticks_y/_x, _draw_bands_y/_x, _draw_labels_y/_x):
+    # a vertical tape's spine runs along y, so its "across" (perpendicular)
+    # direction is x; a horizontal tape swaps the two. pixels_per_unit
+    # relates a dataref value to scroll distance along the primary axis —
+    # scales by that same "along" factor.
+    s = min(sx, sy)
+    vertical = str(comp.get("scroll_axis", "y")) == "y"
+    along = sy if vertical else sx
+    across = sx if vertical else sy
+
+    if "position" in comp:
+        comp["position"] = _scale_pair(comp["position"], sx, sy)
+    _resize_viewport(comp, sx, sy)
+    if "pixels_per_unit" in comp:
+        comp["pixels_per_unit"] = comp["pixels_per_unit"] * along
+
+    for td in comp.get("ticks", []):
+        if "length" in td:
+            td["length"] = td["length"] * across
+        if "width" in td:
+            td["width"] = td["width"] * s
+        if "x_offset" in td:
+            td["x_offset"] = td["x_offset"] * sx
+        if "y_offset" in td:
+            td["y_offset"] = td["y_offset"] * sy
+        # interval is a value-domain spacing (dataref units), not pixels —
+        # never scales.
+
+    labels = comp.get("labels")
+    if labels:
+        if "font_size" in labels:
+            labels["font_size"] = labels["font_size"] * s
+        if "emphasize_font_size" in labels:
+            labels["emphasize_font_size"] = labels["emphasize_font_size"] * s
+        if "offset" in labels:
+            labels["offset"] = labels["offset"] * across
+
+    for band in comp.get("bands", []):
+        # range is value-domain (dataref units or a static endpoint) —
+        # never scales.
+        if "width" in band:
+            band["width"] = band["width"] * across
+        if "offset" in band:
+            band["offset"] = band["offset"] * across
+        if "dash" in band:
+            band["dash"] = band["dash"] * along
+
+    for bug in comp.get("bugs", []):
+        # value (static or {dataref, table}) is value-domain — never
+        # scales. points define the bug's own marker shape in ordinary
+        # screen x/y offsets from its anchor — directional per point.
+        if "points" in bug:
+            bug["points"] = _scale_points(bug["points"], sx, sy)
+        if "width" in bug:
+            bug["width"] = bug["width"] * s
+
+
 _RESIZERS = {
     "Text": _resize_text,
     "Arc": _resize_arc,
@@ -284,4 +347,5 @@ _RESIZERS = {
     "ScrollingTape": _resize_scrolling_tape,
     "RotaryEncoder": _resize_rotary_encoder,
     "NeedleGauge": _resize_needle_gauge,
+    "VectorTape": _resize_vector_tape,
 }
