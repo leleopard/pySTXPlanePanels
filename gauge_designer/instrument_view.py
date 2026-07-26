@@ -295,6 +295,21 @@ class InstrumentView(QWidget):
         self._live_timer.setInterval(500)
         self._live_timer.timeout.connect(self._poll_live)
 
+        # Debounces "preserve components relative position from centre":
+        # the width/height spinboxes each fire their own valueChanged
+        # independently, so resizing both together (the common case) would
+        # otherwise apply as two separate single-axis resize() calls, each
+        # only ever seeing one dimension actually changed — min(sx,sy)
+        # scalar fields (radius, stroke widths, etc.) would barely scale
+        # since the unchanged axis's factor is always 1.0 in each
+        # individual call. Restarting this on every spinbox change and
+        # only applying once it's settled batches a same-burst width+height
+        # edit into one true (sx, sy) resize.
+        self._resize_debounce_timer = QTimer(self)
+        self._resize_debounce_timer.setSingleShot(True)
+        self._resize_debounce_timer.setInterval(300)
+        self._resize_debounce_timer.timeout.connect(self._apply_pending_resize)
+
         # cache standard icons once (requires a live QWidget)
         self._dir_icon = None
         self._file_icon = None
@@ -872,15 +887,27 @@ class InstrumentView(QWidget):
 
     def _on_size_changed(self):
         new_w, new_h = self._gauge_w.value(), self._gauge_h.value()
-        if self._preserve_center_chk.isChecked():
-            old_w = getattr(self, "_last_gauge_w", new_w)
-            old_h = getattr(self, "_last_gauge_h", new_h)
-            if old_w and old_h and (new_w != old_w or new_h != old_h):
-                self._resize_components(new_w / old_w, new_h / old_h)
-        self._last_gauge_w, self._last_gauge_h = new_w, new_h
         self._form.set_ref_height(new_h)
         self._canvas.set_size(new_w, new_h)
         self.changed.emit()
+        if self._preserve_center_chk.isChecked():
+            # Debounced — see _resize_debounce_timer's own comment. The
+            # preview (form ref height / canvas size, above) updates
+            # immediately regardless; only the actual component resize
+            # mutation waits for both spinboxes to settle.
+            self._resize_debounce_timer.start()
+        else:
+            self._last_gauge_w, self._last_gauge_h = new_w, new_h
+
+    def _apply_pending_resize(self) -> None:
+        new_w, new_h = self._gauge_w.value(), self._gauge_h.value()
+        old_w = getattr(self, "_last_gauge_w", new_w)
+        old_h = getattr(self, "_last_gauge_h", new_h)
+        # Re-check the checkbox: it may have been unticked after this timer
+        # was scheduled but before it fired.
+        if self._preserve_center_chk.isChecked() and old_w and old_h and (new_w != old_w or new_h != old_h):
+            self._resize_components(new_w / old_w, new_h / old_h)
+        self._last_gauge_w, self._last_gauge_h = new_w, new_h
 
     def _resize_components(self, sx: float, sy: float) -> None:
         """Scale every component by (sx, sy) — used by the "preserve
@@ -895,7 +922,6 @@ class InstrumentView(QWidget):
         component_resize.py for the full per-type field list."""
         for comp in self._components:
             component_resize.resize_component(comp, sx, sy)
-        self.refresh_form()
         self.refresh_form()
 
     def refresh_form(self):

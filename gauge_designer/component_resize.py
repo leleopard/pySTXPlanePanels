@@ -47,6 +47,17 @@ def _scale_points(points: list, sx: float, sy: float) -> list:
     return [[x * sx, y * sy] for x, y in points]
 
 
+def _scale_points_scalar(points: list, s: float) -> list:
+    """Same as _scale_points but with one uniform factor for both x and y —
+    for local shape points attached to an element that rotates to an
+    arbitrary (usually dataref-driven) angle, e.g. a compass rose's
+    bearing-pointer/heading-bug/CDI-symbol shapes. Scaling such a shape
+    directionally (different sx vs sy) would distort it differently
+    depending on which way it currently happens to be rotated — clearly
+    wrong for a shape that's meant to look the same at every angle."""
+    return [[x * s, y * s] for x, y in points]
+
+
 def resize_component(comp: dict[str, Any], sx: float, sy: float) -> None:
     """Scale `comp` (a raw component dict, mutated in place) by (sx, sy).
     Unknown/unregistered component types are a no-op — forward-compatible
@@ -335,6 +346,212 @@ def _resize_vector_tape(comp: dict, sx: float, sy: float) -> None:
             bug["width"] = bug["width"] * s
 
 
+def _resize_vector_compass_rose(comp: dict, sx: float, sy: float) -> None:
+    # A compass rose is fundamentally radial: ticks/labels/pointers/CDI/
+    # deviation-bar/moving_map-active-radial all rotate to arbitrary
+    # (usually dataref-driven) angles via _point_at()-style geometry, not
+    # fixed instrument x/y axes. Every such radius/offset/length/stroke-
+    # width field scales by the single scalar factor `s` (min(sx,sy)),
+    # matching how Vector's/NeedleGauge circular's own radial fields were
+    # treated in earlier stages — avoids the rose becoming an ellipse, or
+    # a rotating shape distorting differently depending on which way it
+    # currently happens to be pointing. Only a handful of elements are
+    # genuinely screen-fixed (never rotate) and use directional (sx, sy)
+    # instead: the rose's own `center`/`viewport`, `heading_marker` (always
+    # straight up — confirmed via _draw_heading_marker()'s own comment,
+    # "Fixed top-dead-centre... this marker doesn't move"), `center_marker`
+    # (fixed at the rose centre), `range_rings.label.offset` (confirmed via
+    # _draw_range_label()'s own comment, "Fixed relative to the rose
+    # centre"), and moving_map's own symbols/label_offset (confirmed via
+    # the moving_map draw loop's own comment, "Symbols stay screen-fixed...
+    # like north-up on a paper chart, not the heading-up convention").
+    s = min(sx, sy)
+
+    if "center" in comp:
+        comp["center"] = _scale_pair(comp["center"], sx, sy)
+    if "radius" in comp:
+        comp["radius"] = comp["radius"] * s
+    for key in (
+        "line_width", "tick5_length", "tick5_width", "tick10_length", "tick10_width",
+        "label_offset", "label_font_size", "label_emphasize_font_size",
+    ):
+        if key in comp:
+            comp[key] = comp[key] * s
+    _resize_viewport(comp, sx, sy)
+
+    track = comp.get("track")
+    if track:
+        for key in ("width", "start", "end", "tick_position", "tick_length"):
+            if key in track:
+                track[key] = track[key] * s
+
+    bug = comp.get("heading_bug")
+    if bug:
+        if "radius" in bug:
+            bug["radius"] = bug["radius"] * s
+        if "points" in bug:
+            bug["points"] = _scale_points_scalar(bug["points"], s)
+        if "width" in bug:
+            bug["width"] = bug["width"] * s
+        if "outline_width" in bug:
+            bug["outline_width"] = bug["outline_width"] * s
+        line = bug.get("line")
+        if line:
+            if "width" in line:
+                line["width"] = line["width"] * s
+            if "dash" in line:
+                line["dash"] = [line["dash"][0] * s, line["dash"][1] * s]
+
+    rings = comp.get("range_rings")
+    if rings:
+        if "width" in rings:
+            rings["width"] = rings["width"] * s
+        label = rings.get("label")
+        if label:
+            if "offset" in label:
+                label["offset"] = _scale_pair(label["offset"], sx, sy)
+            if "font_size" in label:
+                label["font_size"] = label["font_size"] * s
+
+    marker = comp.get("heading_marker")
+    if marker:
+        # Always straight up — a pure y-direction distance, not radial.
+        if "radius" in marker:
+            marker["radius"] = marker["radius"] * sy
+        if "points" in marker:
+            marker["points"] = _scale_points(marker["points"], sx, sy)
+        if "width" in marker:
+            marker["width"] = marker["width"] * s
+        if "outline_width" in marker:
+            marker["outline_width"] = marker["outline_width"] * s
+
+    cm = comp.get("center_marker")
+    if cm:
+        if "points" in cm:
+            cm["points"] = _scale_points(cm["points"], sx, sy)
+        if "width" in cm:
+            cm["width"] = cm["width"] * s
+        if "outline_width" in cm:
+            cm["outline_width"] = cm["outline_width"] * s
+
+    for pointer in comp.get("bearing_pointers", []):
+        if "offset" in pointer:
+            pointer["offset"] = pointer["offset"] * s
+        if "points" in pointer:
+            pointer["points"] = _scale_points_scalar(pointer["points"], s)
+        if "width" in pointer:
+            pointer["width"] = pointer["width"] * s
+        if "outline_width" in pointer:
+            pointer["outline_width"] = pointer["outline_width"] * s
+        tail = pointer.get("tail")
+        if tail:
+            if "offset" in tail:
+                tail["offset"] = tail["offset"] * s
+            if "points" in tail:
+                tail["points"] = _scale_points_scalar(tail["points"], s)
+            if "width" in tail:
+                tail["width"] = tail["width"] * s
+            if "outline_width" in tail:
+                tail["outline_width"] = tail["outline_width"] * s
+
+    cdi = comp.get("course_deviation_indicator")
+    if cdi:
+        for seg_key in ("head", "tail"):
+            seg = cdi.get(seg_key)
+            if not seg:
+                continue
+            if "start" in seg:
+                seg["start"] = seg["start"] * s
+            if "end" in seg:
+                seg["end"] = seg["end"] * s
+            if "width" in seg:
+                seg["width"] = seg["width"] * s
+            if "dash" in seg:
+                seg["dash"] = [seg["dash"][0] * s, seg["dash"][1] * s]
+            symbol = seg.get("symbol")
+            if symbol:
+                if "offset" in symbol:
+                    symbol["offset"] = symbol["offset"] * s
+                if "points" in symbol:
+                    symbol["points"] = _scale_points_scalar(symbol["points"], s)
+                if "width" in symbol:
+                    symbol["width"] = symbol["width"] * s
+                if "outline_width" in symbol:
+                    symbol["outline_width"] = symbol["outline_width"] * s
+            label = seg.get("label")
+            if label:
+                for key in ("offset", "perp_offset", "font_size"):
+                    if key in label:
+                        label[key] = label[key] * s
+                # rotation_offset is an angle — never scales.
+
+        dev_bar = cdi.get("deviation_bar")
+        if dev_bar:
+            if "points" in dev_bar:
+                dev_bar["points"] = _scale_points_scalar(dev_bar["points"], s)
+            if "width" in dev_bar:
+                dev_bar["width"] = dev_bar["width"] * s
+            if "outline_width" in dev_bar:
+                dev_bar["outline_width"] = dev_bar["outline_width"] * s
+            table = dev_bar.get("table")
+            if table:
+                # table maps a raw dataref value to a px displacement along
+                # the perpendicular-to-course axis (itself rotating) — the
+                # output column scales, matching Vector's length-table
+                # treatment in stage 1 (there's no separate `scale`-like
+                # field for this, unlike ImagePanel/SpriteSheet — scaling
+                # the table's own output directly reproduces exactly what
+                # apply_scale()'s internal-only _deviation_bar_scale
+                # multiplier already does for the live-object case).
+                dev_bar["table"] = [[row[0], row[1] * s] for row in table]
+
+        dev_markers = cdi.get("deviation_markers")
+        if dev_markers:
+            for key in ("spacing", "size", "width"):
+                if key in dev_markers:
+                    dev_markers[key] = dev_markers[key] * s
+
+    mm = comp.get("moving_map")
+    if mm:
+        for type_name in ("airport", "vor", "ndb", "waypoint"):
+            style = mm.get(type_name)
+            if not style:
+                continue
+            # Map symbols are screen-fixed (north/window-up, never rotated
+            # by heading or bearing) — directional, unlike every rotating
+            # element above.
+            if "points" in style:
+                style["points"] = _scale_points(style["points"], sx, sy)
+            if "outline_width" in style:
+                style["outline_width"] = style["outline_width"] * s
+            if "label_font_size" in style:
+                style["label_font_size"] = style["label_font_size"] * s
+            if "label_offset" in style:
+                style["label_offset"] = _scale_pair(style["label_offset"], sx, sy)
+            circle = style.get("circle")
+            if circle:
+                if "radius" in circle:
+                    circle["radius"] = circle["radius"] * s
+                if "outline_width" in circle:
+                    circle["outline_width"] = circle["outline_width"] * s
+            active = style.get("active")
+            if active:
+                # The active-VOR radial itself rotates with course — scalar,
+                # same reasoning as the CDI segments above.
+                if "width" in active:
+                    active["width"] = active["width"] * s
+                if "dash" in active:
+                    active["dash"] = [active["dash"][0] * s, active["dash"][1] * s]
+                active_label = active.get("label")
+                if active_label:
+                    for key in ("head_offset", "tail_offset", "perp_offset", "font_size"):
+                        if key in active_label:
+                            active_label[key] = active_label[key] * s
+                    # rotation_offset is an angle — never scales.
+            # min_runway_length.table is [range_nm, min_length_m] —
+            # real-world units, never pixels — never scales.
+
+
 _RESIZERS = {
     "Text": _resize_text,
     "Arc": _resize_arc,
@@ -348,4 +565,5 @@ _RESIZERS = {
     "RotaryEncoder": _resize_rotary_encoder,
     "NeedleGauge": _resize_needle_gauge,
     "VectorTape": _resize_vector_tape,
+    "VectorCompassRose": _resize_vector_compass_rose,
 }
