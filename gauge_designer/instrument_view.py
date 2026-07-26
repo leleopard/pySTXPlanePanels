@@ -1,3 +1,4 @@
+import copy
 import os
 import shutil
 import subprocess
@@ -535,10 +536,13 @@ class InstrumentView(QWidget):
         self._gauge_w.blockSignals(True); self._gauge_h.blockSignals(True)
         self._gauge_w.setValue(int(w)); self._gauge_h.setValue(int(h))
         self._gauge_w.blockSignals(False); self._gauge_h.blockSignals(False)
-        # Baseline for _on_size_changed()'s "preserve relative position from
-        # centre" delta — must reflect the just-loaded size, not whatever
-        # the spinboxes happened to show before this file was opened.
+        # Baseline for the resize checkboxes — must reflect the just-loaded
+        # size/components, not whatever the spinboxes/components happened to
+        # hold before this file was opened. See _apply_pending_resize()'s own
+        # comment for why this baseline must stay FIXED across an entire
+        # resize session rather than advancing after every apply.
         self._last_gauge_w, self._last_gauge_h = int(w), int(h)
+        self._resize_baseline = copy.deepcopy(self._components)
 
         self._loading = False
         # Use the project root (parent of instruments/) as the asset base so
@@ -909,35 +913,78 @@ class InstrumentView(QWidget):
             # mutation waits for both spinboxes to settle.
             self._resize_debounce_timer.start()
         else:
+            # Not actively resizing: the current size/components become the
+            # new baseline for whenever a resize session next begins (see
+            # _apply_pending_resize()'s own comment for why the baseline
+            # must otherwise stay fixed).
             self._last_gauge_w, self._last_gauge_h = new_w, new_h
+            self._resize_baseline = copy.deepcopy(self._components)
 
     def _apply_pending_resize(self) -> None:
         new_w, new_h = self._gauge_w.value(), self._gauge_h.value()
-        old_w = getattr(self, "_last_gauge_w", new_w)
-        old_h = getattr(self, "_last_gauge_h", new_h)
+        base_w = getattr(self, "_last_gauge_w", new_w)
+        base_h = getattr(self, "_last_gauge_h", new_h)
         # Re-check the checkboxes: either may have been toggled after this
         # timer was scheduled but before it fired.
         scale_position = self._preserve_center_chk.isChecked()
         scale_size = self._scale_size_chk.isChecked()
-        if (scale_position or scale_size) and old_w and old_h and (new_w != old_w or new_h != old_h):
-            self._resize_components(new_w / old_w, new_h / old_h, scale_position, scale_size)
-        self._last_gauge_w, self._last_gauge_h = new_w, new_h
+        if (scale_position or scale_size) and base_w and base_h and (new_w != base_w or new_h != base_h):
+            self._resize_components(new_w / base_w, new_h / base_h, scale_position, scale_size)
+        # Deliberately NOT advancing _last_gauge_w/_last_gauge_h (or
+        # _resize_baseline) here — see _resize_components()'s own comment.
 
     def _resize_components(self, sx: float, sy: float,
                             scale_position: bool, scale_size: bool) -> None:
-        """Scale every component by (sx, sy) — used, independently or
-        together, by "Preserve components relative position from centre"
-        (scale_position: each component's own anchor —
-        position/center/origin/viewport — moves proportionally from the
+        """Recompute every component from the fixed resize baseline — used,
+        independently or together, by "Preserve components relative
+        position from centre" (scale_position: each component's own anchor
+        — position/center/origin/viewport — moves proportionally from the
         instrument's own origin (0, 0), same convention gauge_core's own
         apply_scale() already uses, so it keeps the same fractional
         position in the canvas) and "Scale component sizes" (scale_size:
         each component's own dimensions — radius, width/height, font size,
         stroke width, shape points, etc. — grow/shrink with the
-        instrument). See component_resize.py for the full per-type field
-        list and its position/size split."""
+        instrument). (sx, sy) are the TOTAL cumulative factors since the
+        baseline (_last_gauge_w/_last_gauge_h, refreshed on load and
+        whenever both checkboxes are off — see _on_size_changed()), not a
+        delta since the last apply.
+
+        This recomputes from a frozen deep copy of each component
+        (_resize_baseline) rather than incrementally re-scaling the
+        already-mutated live dict. That's required for correctness, not
+        just style: scalar (min(sx, sy)) fields — most of them, see
+        component_resize.py — need to see BOTH axes' TOTAL change at once.
+        If the user resizes width, lets that settle, then separately
+        resizes height, an incremental approach would apply two single-axis
+        deltas, each with the *other* axis's delta pinned at 1.0 — so
+        min(sx, sy) would keep picking that stale 1.0 and scalar fields
+        would never grow past their pre-resize size no matter how far
+        either spinbox moves (verified: this was exactly the bug reported
+        against the C172 Airspeed Indicator — shrinking looked like it
+        worked since min() happened to pick the shrinking factor, growing
+        never did since min() kept picking the untouched axis's 1.0).
+        Recomputing fresh from a fixed baseline with the TOTAL (sx, sy)
+        every time sidesteps this entirely — the result only depends on
+        current vs. baseline size, never on the order or pacing of the
+        user's spinbox edits. Trade-off: any other, unrelated edit made to
+        a component (e.g. via the properties form) *between* two resize
+        applies within the same session is overwritten back to its
+        baseline value the next time a spinbox settles — acceptable given
+        the alternative is a resize that's silently wrong most of the
+        time; untick both checkboxes (or save/reload) before making
+        unrelated edits mid-session to avoid it."""
+        baseline = getattr(self, "_resize_baseline", None) or []
+        baseline_by_name = {b.get("name"): b for b in baseline}
         for comp in self._components:
-            component_resize.resize_component(comp, sx, sy, scale_position, scale_size)
+            base_comp = baseline_by_name.get(comp.get("name"))
+            if base_comp is None:
+                # Added since the baseline was captured (e.g. mid-session) —
+                # nothing to recompute from; leave it untouched.
+                continue
+            resized = copy.deepcopy(base_comp)
+            component_resize.resize_component(resized, sx, sy, scale_position, scale_size)
+            comp.clear()
+            comp.update(resized)
         self.refresh_form()
 
     def refresh_form(self):
