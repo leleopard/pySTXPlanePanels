@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QInputDialog, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QLineEdit, QFrame,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QStyle, QAbstractItemView,
-    QDialog, QDialogButtonBox, QFormLayout, QMenu,
+    QDialog, QDialogButtonBox, QFormLayout, QMenu, QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, QEvent, QEvent, QRect, QPoint, QSettings, QTimer
 from gauge_designer.ui_utils import QSpinBox
@@ -345,11 +345,11 @@ class InstrumentView(QWidget):
         sep.setFrameShadow(QFrame.Sunken)
         cl.addWidget(sep)
 
-        # Gauge size bar — top of the editor area
+        # Instrument size bar — top of the editor area
         size_bar = QHBoxLayout()
         size_bar.setContentsMargins(0, 0, 0, 4)
         size_bar.setSpacing(4)
-        size_bar.addWidget(QLabel("Gauge size:"))
+        size_bar.addWidget(QLabel("Instrument size:"))
         self._gauge_w = QSpinBox()
         self._gauge_w.setRange(1, 9999)
         self._gauge_w.setFixedWidth(90)
@@ -361,6 +361,13 @@ class InstrumentView(QWidget):
         size_bar.addWidget(self._gauge_w)
         size_bar.addWidget(QLabel("×"))
         size_bar.addWidget(self._gauge_h)
+        self._preserve_center_chk = QCheckBox("Preserve components relative position from centre")
+        self._preserve_center_chk.setToolTip(
+            "When the instrument size changes, shift every component by half\n"
+            "the size delta in each dimension, so each stays at the same\n"
+            "offset from the instrument's own centre instead of the origin."
+        )
+        size_bar.addWidget(self._preserve_center_chk)
         size_bar.addStretch()
         cl.addLayout(size_bar)
 
@@ -499,6 +506,10 @@ class InstrumentView(QWidget):
         self._gauge_w.blockSignals(True); self._gauge_h.blockSignals(True)
         self._gauge_w.setValue(int(w)); self._gauge_h.setValue(int(h))
         self._gauge_w.blockSignals(False); self._gauge_h.blockSignals(False)
+        # Baseline for _on_size_changed()'s "preserve relative position from
+        # centre" delta — must reflect the just-loaded size, not whatever
+        # the spinboxes happened to show before this file was opened.
+        self._last_gauge_w, self._last_gauge_h = int(w), int(h)
 
         self._loading = False
         # Use the project root (parent of instruments/) as the asset base so
@@ -830,7 +841,7 @@ class InstrumentView(QWidget):
             return
         self._populate_tree(Path(self._instruments_root))
 
-    # ── Gauge size ────────────────────────────────────────────────────────
+    # ── Instrument size ──────────────────────────────────────────────────
 
     def _on_name_changed(self):
         name = self._name_edit.text().strip()
@@ -858,9 +869,39 @@ class InstrumentView(QWidget):
         search(self._tree.invisibleRootItem())
 
     def _on_size_changed(self):
-        self._form.set_ref_height(self._gauge_h.value())
-        self._canvas.set_size(self._gauge_w.value(), self._gauge_h.value())
+        new_w, new_h = self._gauge_w.value(), self._gauge_h.value()
+        if self._preserve_center_chk.isChecked():
+            old_w = getattr(self, "_last_gauge_w", new_w)
+            old_h = getattr(self, "_last_gauge_h", new_h)
+            dx, dy = (new_w - old_w) / 2.0, (new_h - old_h) / 2.0
+            if dx or dy:
+                self._shift_components(dx, dy)
+        self._last_gauge_w, self._last_gauge_h = new_w, new_h
+        self._form.set_ref_height(new_h)
+        self._canvas.set_size(new_w, new_h)
         self.changed.emit()
+
+    def _shift_components(self, dx: float, dy: float) -> None:
+        """Translate every component's own screen anchor by (dx, dy) — used
+        by the "preserve components relative position from centre" option
+        when the instrument size changes, so each component keeps the same
+        offset from the (moving) centre instead of the fixed origin.
+        Handles every position-like key across the registered component
+        types: `position` (most types), `center` (VectorCompassRose,
+        NeedleGauge), `viewport` ([x, y_bottom, w, h] — AttitudeIndicator,
+        and optionally VectorCompassRose's own clip viewport; only x/y
+        shift, w/h are a size, not a position, and stay fixed)."""
+        for comp in self._components:
+            if "position" in comp:
+                x, y = comp["position"]
+                comp["position"] = [x + dx, y + dy]
+            if "center" in comp:
+                x, y = comp["center"]
+                comp["center"] = [x + dx, y + dy]
+            if "viewport" in comp:
+                vx, vy, vw, vh = comp["viewport"]
+                comp["viewport"] = [vx + dx, vy + dy, vw, vh]
+        self.refresh_form()
 
     def refresh_form(self):
         """Re-populate the active form using the current coord convention."""
