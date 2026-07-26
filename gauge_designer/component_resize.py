@@ -208,6 +208,70 @@ def _resize_rotary_encoder(comp: dict, sx: float, sy: float) -> None:
         comp["face_rotation_center"] = _scale_pair(comp["face_rotation_center"], sx, sy)
 
 
+def _resize_needle_gauge(comp: dict, sx: float, sy: float) -> None:
+    s = min(sx, sy)
+    if "center" in comp:
+        comp["center"] = _scale_pair(comp["center"], sx, sy)
+    if "radius" in comp:
+        comp["radius"] = comp["radius"] * s
+    if "arc_width" in comp:
+        comp["arc_width"] = comp["arc_width"] * s
+    # needle_length/width are radial along the needle's own dataref-driven
+    # angle (any direction, not fixed to x or y) — scalar, same reasoning
+    # as Vector's length/cap_width in _resize_vector().
+    if "needle_length" in comp:
+        comp["needle_length"] = comp["needle_length"] * s
+    if "needle_width" in comp:
+        comp["needle_width"] = comp["needle_width"] * s
+    if "needle_viewport" in comp:
+        vx, vy, vw, vh = comp["needle_viewport"]
+        comp["needle_viewport"] = [vx * sx, vy * sy, vw * sx, vh * sy]
+
+    linear = comp.get("linear")
+    if linear:
+        # Linear-mode ticks/labels/target are measured along the tape's own
+        # primary axis ("off"/label position) vs. across it ("length"/
+        # "label_offset", the tick's own extent) — which screen axis each
+        # maps to depends on orientation, confirmed directly against
+        # NeedleGauge._draw_linear()/_draw_linear_labels()'s real geometry
+        # (vertical: off/label-y along y, length/label_offset-x across x;
+        # horizontal: the same two swapped).
+        vertical = str(linear.get("orientation", "vertical")) == "vertical"
+        along = sy if vertical else sx
+        across = sx if vertical else sy
+        if "offset" in linear:
+            linear["offset"] = _scale_pair(linear["offset"], sx, sy)
+        if "size" in linear:
+            linear["size"] = _scale_pair(linear["size"], sx, sy)
+        if "line_width" in linear:
+            linear["line_width"] = linear["line_width"] * s
+        if "spacing_table" in linear:
+            new_rows = []
+            for row in linear["spacing_table"]:
+                row = list(row)
+                # [value, offset, length, width, show_label, font_size, label_offset]
+                # — variable length (2/4/7 cols accepted), preserved as-is,
+                # only scaling whichever columns are actually present.
+                if len(row) > 1:
+                    row[1] = row[1] * along
+                if len(row) > 2:
+                    row[2] = row[2] * across
+                if len(row) > 3:
+                    row[3] = row[3] * s
+                if len(row) > 5:
+                    row[5] = row[5] * s
+                if len(row) > 6:
+                    row[6] = row[6] * across
+                new_rows.append(row)
+            linear["spacing_table"] = new_rows
+        target = linear.get("target")
+        if target:
+            if "length" in target:
+                target["length"] = target["length"] * across
+            if "width" in target:
+                target["width"] = target["width"] * s
+
+
 _RESIZERS = {
     "Text": _resize_text,
     "Arc": _resize_arc,
@@ -219,4 +283,5 @@ _RESIZERS = {
     "SpriteSheet": _resize_sprite_sheet,
     "ScrollingTape": _resize_scrolling_tape,
     "RotaryEncoder": _resize_rotary_encoder,
+    "NeedleGauge": _resize_needle_gauge,
 }
