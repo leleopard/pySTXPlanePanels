@@ -2502,6 +2502,18 @@ class VectorCompassRose(_VecBase):
                     # of whether the value actually changed, and profiling
                     # showed font_size alone accounting for roughly half of
                     # this method's total cost when reassigned needlessly.
+                    # Exception: the active candidate's own ident label
+                    # should match the icon's own highlight tint, not stay
+                    # the plain label_color — but only bother touching
+                    # .color at all for styles that configure active
+                    # tracking in the first place (airport/ndb/waypoint
+                    # never do), and only write it when the value actually
+                    # changed, so this doesn't reintroduce the same
+                    # every-frame relayout cost for the common case.
+                    if style.active_sources:
+                        desired_color = style.active_color if is_active else style.label_color
+                        if t.color != desired_color:
+                            t.color = desired_color
                     t.x, t.y = cx + style.label_offset_x, cy + style.label_offset_y
                     label_idx += 1
 
