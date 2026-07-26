@@ -380,11 +380,23 @@ class InstrumentView(QWidget):
         self._preserve_center_chk = QCheckBox("Preserve components relative position from centre")
         self._preserve_center_chk.setToolTip(
             "When the instrument size changes, scale every component's own\n"
-            "position AND size by the same factor, so each keeps the same\n"
-            "fractional place in the layout — a proper proportional resize —\n"
-            "instead of staying a fixed pixel size anchored to the origin."
+            "anchor position (position/center/origin/viewport) by the same\n"
+            "factor, so each keeps the same fractional place in the layout,\n"
+            "instead of staying at a fixed pixel position anchored to the\n"
+            "origin. Independent of \"Scale component sizes\" — check either\n"
+            "or both."
         )
         size_bar.addWidget(self._preserve_center_chk)
+        self._scale_size_chk = QCheckBox("Scale component sizes")
+        self._scale_size_chk.setToolTip(
+            "When the instrument size changes, scale every component's own\n"
+            "size (radius, width/height, font size, stroke width, shape\n"
+            "points, etc.) by the same factor, so components grow/shrink\n"
+            "with the instrument instead of staying a fixed pixel size.\n"
+            "Independent of \"Preserve components relative position from\n"
+            "centre\" — check either or both."
+        )
+        size_bar.addWidget(self._scale_size_chk)
         size_bar.addStretch()
         cl.addLayout(size_bar)
 
@@ -890,7 +902,7 @@ class InstrumentView(QWidget):
         self._form.set_ref_height(new_h)
         self._canvas.set_size(new_w, new_h)
         self.changed.emit()
-        if self._preserve_center_chk.isChecked():
+        if self._preserve_center_chk.isChecked() or self._scale_size_chk.isChecked():
             # Debounced — see _resize_debounce_timer's own comment. The
             # preview (form ref height / canvas size, above) updates
             # immediately regardless; only the actual component resize
@@ -903,25 +915,29 @@ class InstrumentView(QWidget):
         new_w, new_h = self._gauge_w.value(), self._gauge_h.value()
         old_w = getattr(self, "_last_gauge_w", new_w)
         old_h = getattr(self, "_last_gauge_h", new_h)
-        # Re-check the checkbox: it may have been unticked after this timer
-        # was scheduled but before it fired.
-        if self._preserve_center_chk.isChecked() and old_w and old_h and (new_w != old_w or new_h != old_h):
-            self._resize_components(new_w / old_w, new_h / old_h)
+        # Re-check the checkboxes: either may have been toggled after this
+        # timer was scheduled but before it fired.
+        scale_position = self._preserve_center_chk.isChecked()
+        scale_size = self._scale_size_chk.isChecked()
+        if (scale_position or scale_size) and old_w and old_h and (new_w != old_w or new_h != old_h):
+            self._resize_components(new_w / old_w, new_h / old_h, scale_position, scale_size)
         self._last_gauge_w, self._last_gauge_h = new_w, new_h
 
-    def _resize_components(self, sx: float, sy: float) -> None:
-        """Scale every component by (sx, sy) — used by the "preserve
-        components relative position from centre" option when the
-        instrument size changes, so the whole layout resizes
-        proportionally (both position and size) instead of staying a
-        fixed pixel size anchored to the origin. Position scales
-        multiplicatively from the instrument's own origin (0, 0), same
-        convention gauge_core's own apply_scale() already uses — this is
-        what makes it preserve each component's *fractional* position in
-        the canvas, not just a fixed offset from centre. See
-        component_resize.py for the full per-type field list."""
+    def _resize_components(self, sx: float, sy: float,
+                            scale_position: bool, scale_size: bool) -> None:
+        """Scale every component by (sx, sy) — used, independently or
+        together, by "Preserve components relative position from centre"
+        (scale_position: each component's own anchor —
+        position/center/origin/viewport — moves proportionally from the
+        instrument's own origin (0, 0), same convention gauge_core's own
+        apply_scale() already uses, so it keeps the same fractional
+        position in the canvas) and "Scale component sizes" (scale_size:
+        each component's own dimensions — radius, width/height, font size,
+        stroke width, shape points, etc. — grow/shrink with the
+        instrument). See component_resize.py for the full per-type field
+        list and its position/size split."""
         for comp in self._components:
-            component_resize.resize_component(comp, sx, sy)
+            component_resize.resize_component(comp, sx, sy, scale_position, scale_size)
         self.refresh_form()
 
     def refresh_form(self):

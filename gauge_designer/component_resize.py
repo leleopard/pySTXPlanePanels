@@ -2,11 +2,12 @@
 field of a component's raw YAML dict by (sx, sy), the same way
 gauge_core's own `apply_scale(scale)` methods scale a live, already-
 instantiated component object. Used by InstrumentView's "Preserve
-components relative position from centre" resize path, which only ever
-holds raw dicts (`self._components`), never live component instances —
-there's no dict->object->apply_scale()->dict round trip anywhere in this
-codebase (no inverse "dump object back to dict" function exists), so this
-module re-derives the same field lists directly against dict keys instead.
+components relative position from centre" / "Scale component sizes"
+resize path, which only ever holds raw dicts (`self._components`), never
+live component instances — there's no dict->object->apply_scale()->dict
+round trip anywhere in this codebase (no inverse "dump object back to
+dict" function exists), so this module re-derives the same field lists
+directly against dict keys instead.
 
 Convention (locked in with the user):
   - sx = new_w / old_w, sy = new_h / old_h — independent, non-uniform
@@ -26,6 +27,33 @@ Convention (locked in with the user):
   - Colors, counts, angles, booleans, datarefs, convert_functions,
     predicates, and text strings are never touched, same as
     apply_scale()'s own exclusions.
+
+Two independent gates (locked in with the user — these were originally a
+single combined operation, split into two checkboxes on request so a user
+can move components without resizing them, resize them in place without
+moving them, or do both together):
+  - `scale_position` gates each type's own anchor field(s) — the field(s)
+    that answer "where does this component sit on the canvas": `position`,
+    `center`, Polygon's `origin`, a viewport-style field's own [x, y]
+    portion. This is the *only* thing "Preserve components relative
+    position from centre" controls.
+  - `scale_size` gates everything else — every field that answers "how
+    big/what shape is this component" (radius, width/height, viewport's
+    own [w, h] portion, font sizes, stroke widths, shape point lists,
+    lookup-table outputs, etc). This is what "Scale component sizes"
+    controls.
+  - The directional-vs-scalar factor choice for a given field (described
+    above) is completely orthogonal to this split and unaffected by it —
+    e.g. FilledRect's `size` is gated by `scale_size` but still scales
+    its x/y independently by sx/sy; Arc's `radius` is gated by
+    `scale_size` and scales by the scalar min(sx, sy).
+  - `Line` is the one type with no separate anchor field at all — its
+    `points`/`start`/`end` double as both the component's location AND
+    its own shape. See `_resize_line()` for how that's decomposed into an
+    anchor (gated by scale_position) plus deltas from that anchor (gated
+    by scale_size); with both flags on this reduces to the original
+    "scale every point directly" behaviour exactly, so it's a strict
+    generalization, not a behavior change, when both boxes are checked.
 
 Each per-type function below is built from that type's own apply_scale()
 in gauge_core/*.py (the field list) plus its factory function (the literal
@@ -58,74 +86,115 @@ def _scale_points_scalar(points: list, s: float) -> list:
     return [[x * s, y * s] for x, y in points]
 
 
-def resize_component(comp: dict[str, Any], sx: float, sy: float) -> None:
+def resize_component(
+    comp: dict[str, Any], sx: float, sy: float,
+    scale_position: bool = True, scale_size: bool = True,
+) -> None:
     """Scale `comp` (a raw component dict, mutated in place) by (sx, sy).
-    Unknown/unregistered component types are a no-op — forward-compatible
-    with a type added later that doesn't have its own resize function yet,
+    `scale_position`/`scale_size` independently gate a type's anchor
+    field(s) vs. everything else — see the module docstring. Unknown/
+    unregistered component types are a no-op — forward-compatible with a
+    type added later that doesn't have its own resize function yet,
     rather than crashing."""
+    if not scale_position and not scale_size:
+        return
     fn = _RESIZERS.get(comp.get("type"))
     if fn is not None:
-        fn(comp, sx, sy)
+        fn(comp, sx, sy, scale_position, scale_size)
 
 
-def _resize_text(comp: dict, sx: float, sy: float) -> None:
-    if "position" in comp:
+def _resize_text(comp: dict, sx: float, sy: float,
+                  scale_position: bool = True, scale_size: bool = True) -> None:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
-    s = min(sx, sy)
-    if "font_size" in comp:
-        comp["font_size"] = comp["font_size"] * s
-    if "emphasize_font_size" in comp:
-        comp["emphasize_font_size"] = comp["emphasize_font_size"] * s
+    if scale_size:
+        s = min(sx, sy)
+        if "font_size" in comp:
+            comp["font_size"] = comp["font_size"] * s
+        if "emphasize_font_size" in comp:
+            comp["emphasize_font_size"] = comp["emphasize_font_size"] * s
 
 
-def _resize_arc(comp: dict, sx: float, sy: float) -> None:
-    if "center" in comp:
+def _resize_arc(comp: dict, sx: float, sy: float,
+                 scale_position: bool = True, scale_size: bool = True) -> None:
+    if scale_position and "center" in comp:
         comp["center"] = _scale_pair(comp["center"], sx, sy)
-    s = min(sx, sy)
-    if "radius" in comp:
-        comp["radius"] = comp["radius"] * s
-    if "width" in comp:
-        comp["width"] = comp["width"] * s
+    if scale_size:
+        s = min(sx, sy)
+        if "radius" in comp:
+            comp["radius"] = comp["radius"] * s
+        if "width" in comp:
+            comp["width"] = comp["width"] * s
     # start_angle/end_angle/tilt_angle/num_segments are angles/counts,
     # not geometry — never scaled, matching Arc.apply_scale().
 
 
-def _resize_filledrect(comp: dict, sx: float, sy: float) -> None:
-    if "position" in comp:
+def _resize_filledrect(comp: dict, sx: float, sy: float,
+                        scale_position: bool = True, scale_size: bool = True) -> None:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
-    if "size" in comp:
-        comp["size"] = _scale_pair(comp["size"], sx, sy)
-    if "outline_width" in comp:
-        comp["outline_width"] = comp["outline_width"] * min(sx, sy)
+    if scale_size:
+        if "size" in comp:
+            comp["size"] = _scale_pair(comp["size"], sx, sy)
+        if "outline_width" in comp:
+            comp["outline_width"] = comp["outline_width"] * min(sx, sy)
 
 
-def _resize_polygon(comp: dict, sx: float, sy: float) -> None:
-    if "origin" in comp:
+def _resize_polygon(comp: dict, sx: float, sy: float,
+                     scale_position: bool = True, scale_size: bool = True) -> None:
+    if scale_position and "origin" in comp:
         comp["origin"] = _scale_pair(comp["origin"], sx, sy)
-    if "points" in comp:
-        comp["points"] = _scale_points(comp["points"], sx, sy)
-    s = min(sx, sy)
-    if "width" in comp:
-        comp["width"] = comp["width"] * s
-    if "outline_width" in comp:
-        comp["outline_width"] = comp["outline_width"] * s
+    if scale_size:
+        if "points" in comp:
+            comp["points"] = _scale_points(comp["points"], sx, sy)
+        s = min(sx, sy)
+        if "width" in comp:
+            comp["width"] = comp["width"] * s
+        if "outline_width" in comp:
+            comp["outline_width"] = comp["outline_width"] * s
 
 
-def _resize_line(comp: dict, sx: float, sy: float) -> None:
+def _resize_line(comp: dict, sx: float, sy: float,
+                  scale_position: bool = True, scale_size: bool = True) -> None:
+    # Line has no separate anchor field — points/start/end double as both
+    # this component's location AND its own shape. Decompose as an anchor
+    # (the first point, or `start`) plus deltas to every other point:
+    # scale_position moves the anchor, scale_size scales the deltas (the
+    # line's own length/shape) around that fixed anchor. With both flags
+    # on this reduces to "scale every point directly by (sx, sy)" exactly
+    # — the same result as before this type/size split existed.
     if "points" in comp:
-        comp["points"] = _scale_points(comp["points"], sx, sy)
-    else:
-        if "start" in comp:
-            comp["start"] = _scale_pair(comp["start"], sx, sy)
+        pts = comp["points"]
+        if pts:
+            ax, ay = pts[0]
+            new_ax, new_ay = (ax * sx, ay * sy) if scale_position else (ax, ay)
+            new_pts = [[new_ax, new_ay]]
+            for x, y in pts[1:]:
+                dx, dy = x - ax, y - ay
+                if scale_size:
+                    dx, dy = dx * sx, dy * sy
+                new_pts.append([new_ax + dx, new_ay + dy])
+            comp["points"] = new_pts
+    elif "start" in comp:
+        x0, y0 = comp["start"]
+        new_start = [x0 * sx, y0 * sy] if scale_position else [x0, y0]
         if "end" in comp:
-            comp["end"] = _scale_pair(comp["end"], sx, sy)
-    if "width" in comp:
+            ex, ey = comp["end"]
+            dx, dy = ex - x0, ey - y0
+            if scale_size:
+                dx, dy = dx * sx, dy * sy
+            comp["end"] = [new_start[0] + dx, new_start[1] + dy]
+        comp["start"] = new_start
+    if scale_size and "width" in comp:
         comp["width"] = comp["width"] * min(sx, sy)
 
 
-def _resize_vector(comp: dict, sx: float, sy: float) -> None:
-    if "position" in comp:
+def _resize_vector(comp: dict, sx: float, sy: float,
+                    scale_position: bool = True, scale_size: bool = True) -> None:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
+    if not scale_size:
+        return
     s = min(sx, sy)
     # length: either a static scalar or a {dataref, table, convert_function}
     # lookup — only the table's *output* (px length) column scales, its
@@ -150,24 +219,32 @@ def _resize_vector(comp: dict, sx: float, sy: float) -> None:
         comp["cap_height"] = comp["cap_height"] * s
 
 
-def _resize_viewport(comp: dict, sx: float, sy: float) -> None:
+def _resize_viewport(comp: dict, sx: float, sy: float,
+                      scale_position: bool = True, scale_size: bool = True) -> None:
     if "viewport" in comp:
         vx, vy, vw, vh = comp["viewport"]
-        comp["viewport"] = [vx * sx, vy * sy, vw * sx, vh * sy]
+        if scale_position:
+            vx, vy = vx * sx, vy * sy
+        if scale_size:
+            vw, vh = vw * sx, vh * sy
+        comp["viewport"] = [vx, vy, vw, vh]
 
 
-def _resize_image_panel(comp: dict, sx: float, sy: float) -> None:
+def _resize_image_panel(comp: dict, sx: float, sy: float,
+                         scale_position: bool = True, scale_size: bool = True) -> None:
     # origin/cliprect are atlas-space (which pixels get cropped from the
     # source texture) — must never scale, or the crop region shifts/grows
     # into unrelated (or out-of-bounds) parts of the source image. The
     # on-screen render size is controlled entirely by the separate `scale`
     # field (added alongside this resize feature specifically because
     # cliprect can't safely double as both crop size and render size).
-    if "position" in comp:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
+    _resize_viewport(comp, sx, sy, scale_position, scale_size)
+    if not scale_size:
+        return
     s = min(sx, sy)
     comp["scale"] = comp.get("scale", 1.0) * s
-    _resize_viewport(comp, sx, sy)
     rotation = comp.get("rotation")
     if rotation and "rotation_center" in rotation:
         # Relative to the sprite's own local frame, which only has one
@@ -176,28 +253,33 @@ def _resize_image_panel(comp: dict, sx: float, sy: float) -> None:
         rotation["rotation_center"] = [rcx * s, rcy * s]
 
 
-def _resize_sprite_sheet(comp: dict, sx: float, sy: float) -> None:
+def _resize_sprite_sheet(comp: dict, sx: float, sy: float,
+                          scale_position: bool = True, scale_size: bool = True) -> None:
     # columns/rows/frame_width/frame_height/stride_x/stride_y/
     # pixels_per_unit are all atlas-space (fixed frame-grid geometry and
     # atlas-pixel shift-per-unit) — never scale, same reasoning as
     # ImagePanel's cliprect/origin.
-    if "position" in comp:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
-    comp["scale"] = comp.get("scale", 1.0) * min(sx, sy)
-    _resize_viewport(comp, sx, sy)
+    _resize_viewport(comp, sx, sy, scale_position, scale_size)
+    if scale_size:
+        comp["scale"] = comp.get("scale", 1.0) * min(sx, sy)
 
 
-def _resize_scrolling_tape(comp: dict, sx: float, sy: float) -> None:
+def _resize_scrolling_tape(comp: dict, sx: float, sy: float,
+                            scale_position: bool = True, scale_size: bool = True) -> None:
     # scroll.table maps a raw dataref value to a pixel offset *into the
     # source texture strip* (atlas-space) — never scales, same reasoning
     # as ImagePanel's cliprect/origin.
-    if "position" in comp:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
-    comp["scale"] = comp.get("scale", 1.0) * min(sx, sy)
-    _resize_viewport(comp, sx, sy)
+    _resize_viewport(comp, sx, sy, scale_position, scale_size)
+    if scale_size:
+        comp["scale"] = comp.get("scale", 1.0) * min(sx, sy)
 
 
-def _resize_rotary_encoder(comp: dict, sx: float, sy: float) -> None:
+def _resize_rotary_encoder(comp: dict, sx: float, sy: float,
+                            scale_position: bool = True, scale_size: bool = True) -> None:
     # background_origin/background_cliprect/face_origin/face_cliprect are
     # atlas-space (which pixels get cropped) — never scale, same reasoning
     # as ImagePanel. Unlike ImagePanel, on-screen render size is already a
@@ -206,23 +288,45 @@ def _resize_rotary_encoder(comp: dict, sx: float, sy: float) -> None:
     # schema field is needed for this type. drag_px_per_step and
     # hit_padding are gesture/interaction tuning, not geometry — left
     # untouched, matching apply_scale()'s own exclusions (neither is
-    # scaled there either).
-    if "position" in comp:
-        comp["position"] = _scale_pair(comp["position"], sx, sy)
-    if "size" in comp:
-        comp["size"] = _scale_pair(comp["size"], sx, sy)
-    if "face_size" in comp:
-        comp["face_size"] = _scale_pair(comp["face_size"], sx, sy)
-    if "face_offset" in comp:
-        comp["face_offset"] = _scale_pair(comp["face_offset"], sx, sy)
-    if "face_rotation_center" in comp:
-        comp["face_rotation_center"] = _scale_pair(comp["face_rotation_center"], sx, sy)
+    # scaled there either). `position` is the component's own anchor;
+    # `face_offset` is a translation of the face sprite relative to that
+    # anchor, so it's anchor-like too — both gated by scale_position.
+    # `size`/`face_size`/`face_rotation_center` describe dimensions, gated
+    # by scale_size.
+    if scale_position:
+        if "position" in comp:
+            comp["position"] = _scale_pair(comp["position"], sx, sy)
+        if "face_offset" in comp:
+            comp["face_offset"] = _scale_pair(comp["face_offset"], sx, sy)
+    if scale_size:
+        if "size" in comp:
+            comp["size"] = _scale_pair(comp["size"], sx, sy)
+        if "face_size" in comp:
+            comp["face_size"] = _scale_pair(comp["face_size"], sx, sy)
+        if "face_rotation_center" in comp:
+            comp["face_rotation_center"] = _scale_pair(comp["face_rotation_center"], sx, sy)
 
 
-def _resize_needle_gauge(comp: dict, sx: float, sy: float) -> None:
+def _resize_needle_gauge(comp: dict, sx: float, sy: float,
+                          scale_position: bool = True, scale_size: bool = True) -> None:
     s = min(sx, sy)
-    if "center" in comp:
+    if scale_position and "center" in comp:
         comp["center"] = _scale_pair(comp["center"], sx, sy)
+    if "needle_viewport" in comp:
+        vx, vy, vw, vh = comp["needle_viewport"]
+        if scale_position:
+            vx, vy = vx * sx, vy * sy
+        if scale_size:
+            vw, vh = vw * sx, vh * sy
+        comp["needle_viewport"] = [vx, vy, vw, vh]
+
+    linear = comp.get("linear")
+    if scale_position and linear and "offset" in linear:
+        linear["offset"] = _scale_pair(linear["offset"], sx, sy)
+
+    if not scale_size:
+        return
+
     if "radius" in comp:
         comp["radius"] = comp["radius"] * s
     if "arc_width" in comp:
@@ -234,11 +338,7 @@ def _resize_needle_gauge(comp: dict, sx: float, sy: float) -> None:
         comp["needle_length"] = comp["needle_length"] * s
     if "needle_width" in comp:
         comp["needle_width"] = comp["needle_width"] * s
-    if "needle_viewport" in comp:
-        vx, vy, vw, vh = comp["needle_viewport"]
-        comp["needle_viewport"] = [vx * sx, vy * sy, vw * sx, vh * sy]
 
-    linear = comp.get("linear")
     if linear:
         # Linear-mode ticks/labels/target are measured along the tape's own
         # primary axis ("off"/label position) vs. across it ("length"/
@@ -250,8 +350,6 @@ def _resize_needle_gauge(comp: dict, sx: float, sy: float) -> None:
         vertical = str(linear.get("orientation", "vertical")) == "vertical"
         along = sy if vertical else sx
         across = sx if vertical else sy
-        if "offset" in linear:
-            linear["offset"] = _scale_pair(linear["offset"], sx, sy)
         if "size" in linear:
             linear["size"] = _scale_pair(linear["size"], sx, sy)
         if "line_width" in linear:
@@ -283,7 +381,8 @@ def _resize_needle_gauge(comp: dict, sx: float, sy: float) -> None:
                 target["width"] = target["width"] * s
 
 
-def _resize_vector_tape(comp: dict, sx: float, sy: float) -> None:
+def _resize_vector_tape(comp: dict, sx: float, sy: float,
+                         scale_position: bool = True, scale_size: bool = True) -> None:
     # x_offset/y_offset are literally named screen-space X/Y nudges (per
     # this component's own schema docstring) — always sx/sy respectively,
     # regardless of scroll_axis. `length` and the spine-gap-style offsets
@@ -293,15 +392,21 @@ def _resize_vector_tape(comp: dict, sx: float, sy: float) -> None:
     # a vertical tape's spine runs along y, so its "across" (perpendicular)
     # direction is x; a horizontal tape swaps the two. pixels_per_unit
     # relates a dataref value to scroll distance along the primary axis —
-    # scales by that same "along" factor.
+    # scales by that same "along" factor. `position` is the tape's own
+    # anchor (scale_position); everything else here is its own internal
+    # geometry (scale_size).
     s = min(sx, sy)
     vertical = str(comp.get("scroll_axis", "y")) == "y"
     along = sy if vertical else sx
     across = sx if vertical else sy
 
-    if "position" in comp:
+    if scale_position and "position" in comp:
         comp["position"] = _scale_pair(comp["position"], sx, sy)
-    _resize_viewport(comp, sx, sy)
+    _resize_viewport(comp, sx, sy, scale_position, scale_size)
+
+    if not scale_size:
+        return
+
     if "pixels_per_unit" in comp:
         comp["pixels_per_unit"] = comp["pixels_per_unit"] * along
 
@@ -346,7 +451,8 @@ def _resize_vector_tape(comp: dict, sx: float, sy: float) -> None:
             bug["width"] = bug["width"] * s
 
 
-def _resize_vector_compass_rose(comp: dict, sx: float, sy: float) -> None:
+def _resize_vector_compass_rose(comp: dict, sx: float, sy: float,
+                                 scale_position: bool = True, scale_size: bool = True) -> None:
     # A compass rose is fundamentally radial: ticks/labels/pointers/CDI/
     # deviation-bar/moving_map-active-radial all rotate to arbitrary
     # (usually dataref-driven) angles via _point_at()-style geometry, not
@@ -357,18 +463,31 @@ def _resize_vector_compass_rose(comp: dict, sx: float, sy: float) -> None:
     # a rotating shape distorting differently depending on which way it
     # currently happens to be pointing. Only a handful of elements are
     # genuinely screen-fixed (never rotate) and use directional (sx, sy)
-    # instead: the rose's own `center`/`viewport`, `heading_marker` (always
-    # straight up — confirmed via _draw_heading_marker()'s own comment,
-    # "Fixed top-dead-centre... this marker doesn't move"), `center_marker`
-    # (fixed at the rose centre), `range_rings.label.offset` (confirmed via
-    # _draw_range_label()'s own comment, "Fixed relative to the rose
-    # centre"), and moving_map's own symbols/label_offset (confirmed via
-    # the moving_map draw loop's own comment, "Symbols stay screen-fixed...
-    # like north-up on a paper chart, not the heading-up convention").
+    # instead: `heading_marker` (always straight up — confirmed via
+    # _draw_heading_marker()'s own comment, "Fixed top-dead-centre... this
+    # marker doesn't move"), `center_marker` (fixed at the rose centre),
+    # `range_rings.label.offset` (confirmed via _draw_range_label()'s own
+    # comment, "Fixed relative to the rose centre"), and moving_map's own
+    # symbols/label_offset (confirmed via the moving_map draw loop's own
+    # comment, "Symbols stay screen-fixed... like north-up on a paper
+    # chart, not the heading-up convention"). That directional-vs-scalar
+    # split is orthogonal to the position/size gate below: `center` (and
+    # the viewport's own [x, y]) is the rose's *only* true anchor, gated by
+    # scale_position; literally everything else — including those
+    # "screen-fixed" directional fields — is the rose's own shape/size,
+    # gated by scale_size (so resizing the rose in place, with position
+    # unchecked, still grows/shrinks those elements around the fixed
+    # centre; moving it without resizing, with size unchecked, leaves
+    # every one of them exactly as they were, just re-centred).
     s = min(sx, sy)
 
-    if "center" in comp:
+    if scale_position and "center" in comp:
         comp["center"] = _scale_pair(comp["center"], sx, sy)
+    _resize_viewport(comp, sx, sy, scale_position, scale_size)
+
+    if not scale_size:
+        return
+
     if "radius" in comp:
         comp["radius"] = comp["radius"] * s
     for key in (
@@ -377,7 +496,6 @@ def _resize_vector_compass_rose(comp: dict, sx: float, sy: float) -> None:
     ):
         if key in comp:
             comp[key] = comp[key] * s
-    _resize_viewport(comp, sx, sy)
 
     track = comp.get("track")
     if track:
@@ -552,22 +670,34 @@ def _resize_vector_compass_rose(comp: dict, sx: float, sy: float) -> None:
             # real-world units, never pixels — never scales.
 
 
-def _resize_attitude_indicator(comp: dict, sx: float, sy: float) -> None:
+def _resize_attitude_indicator(comp: dict, sx: float, sy: float,
+                                scale_position: bool = True, scale_size: bool = True) -> None:
     # Like the compass rose, the horizon/pitch-ladder assembly and every
     # element mounted on the bank arc (ticks, roll pointer, slip indicator)
     # rotate together to an arbitrary bank angle (_rot() in
     # gauge_core/attitude_indicator.py) — scalar (min(sx,sy)), confirmed via
     # _draw_ladder/_draw_bank_arc/_draw_roll_pointer/_draw_slip_indicator.
-    # Only the viewport itself and a handful of elements _draw_bank_arc's own
-    # geometry proves are screen-fixed (the 0-deg reference mark, always at
-    # the arc's top-dead-centre regardless of bank) and the two "drawn in
-    # screen space (no bank rotation)" FD bars / bug / wing overlays use
-    # directional (sx, sy) instead.
+    # A handful of elements _draw_bank_arc's own geometry proves are
+    # screen-fixed (the 0-deg reference mark, always at the arc's
+    # top-dead-centre regardless of bank) and the two "drawn in screen
+    # space (no bank rotation)" FD bars / bug / wing overlays use
+    # directional (sx, sy) instead — orthogonal to the position/size gate
+    # below: unlike the compass rose, this type has no separate `center`
+    # field at all, so `viewport`'s own [x, y] is its *only* anchor
+    # (scale_position); every other field, including those "screen-fixed"
+    # directional ones, is its own internal geometry (scale_size).
     s = min(sx, sy)
 
     if "viewport" in comp:
         vx, vy, vw, vh = comp["viewport"]
-        comp["viewport"] = [vx * sx, vy * sy, vw * sx, vh * sy]
+        if scale_position:
+            vx, vy = vx * sx, vy * sy
+        if scale_size:
+            vw, vh = vw * sx, vh * sy
+        comp["viewport"] = [vx, vy, vw, vh]
+
+    if not scale_size:
+        return
 
     for key in (
         "pixels_per_degree", "horizon_width", "ladder_width", "label_font_size",
