@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, Signal, QEvent, QEvent, QRect, QPoint, QSettings,
 from gauge_designer.ui_utils import QSpinBox
 from PySide6.QtGui import QPainter, QPen, QBrush, QColor
 
+from gauge_designer import component_resize
 from gauge_designer.canvas import InstrumentCanvas
 from gauge_designer.preview import _request_graceful_stop
 from gauge_designer.properties_form import PropertiesForm
@@ -363,9 +364,10 @@ class InstrumentView(QWidget):
         size_bar.addWidget(self._gauge_h)
         self._preserve_center_chk = QCheckBox("Preserve components relative position from centre")
         self._preserve_center_chk.setToolTip(
-            "When the instrument size changes, shift every component by half\n"
-            "the size delta in each dimension, so each stays at the same\n"
-            "offset from the instrument's own centre instead of the origin."
+            "When the instrument size changes, scale every component's own\n"
+            "position AND size by the same factor, so each keeps the same\n"
+            "fractional place in the layout — a proper proportional resize —\n"
+            "instead of staying a fixed pixel size anchored to the origin."
         )
         size_bar.addWidget(self._preserve_center_chk)
         size_bar.addStretch()
@@ -873,34 +875,27 @@ class InstrumentView(QWidget):
         if self._preserve_center_chk.isChecked():
             old_w = getattr(self, "_last_gauge_w", new_w)
             old_h = getattr(self, "_last_gauge_h", new_h)
-            dx, dy = (new_w - old_w) / 2.0, (new_h - old_h) / 2.0
-            if dx or dy:
-                self._shift_components(dx, dy)
+            if old_w and old_h and (new_w != old_w or new_h != old_h):
+                self._resize_components(new_w / old_w, new_h / old_h)
         self._last_gauge_w, self._last_gauge_h = new_w, new_h
         self._form.set_ref_height(new_h)
         self._canvas.set_size(new_w, new_h)
         self.changed.emit()
 
-    def _shift_components(self, dx: float, dy: float) -> None:
-        """Translate every component's own screen anchor by (dx, dy) — used
-        by the "preserve components relative position from centre" option
-        when the instrument size changes, so each component keeps the same
-        offset from the (moving) centre instead of the fixed origin.
-        Handles every position-like key across the registered component
-        types: `position` (most types), `center` (VectorCompassRose,
-        NeedleGauge), `viewport` ([x, y_bottom, w, h] — AttitudeIndicator,
-        and optionally VectorCompassRose's own clip viewport; only x/y
-        shift, w/h are a size, not a position, and stay fixed)."""
+    def _resize_components(self, sx: float, sy: float) -> None:
+        """Scale every component by (sx, sy) — used by the "preserve
+        components relative position from centre" option when the
+        instrument size changes, so the whole layout resizes
+        proportionally (both position and size) instead of staying a
+        fixed pixel size anchored to the origin. Position scales
+        multiplicatively from the instrument's own origin (0, 0), same
+        convention gauge_core's own apply_scale() already uses — this is
+        what makes it preserve each component's *fractional* position in
+        the canvas, not just a fixed offset from centre. See
+        component_resize.py for the full per-type field list."""
         for comp in self._components:
-            if "position" in comp:
-                x, y = comp["position"]
-                comp["position"] = [x + dx, y + dy]
-            if "center" in comp:
-                x, y = comp["center"]
-                comp["center"] = [x + dx, y + dy]
-            if "viewport" in comp:
-                vx, vy, vw, vh = comp["viewport"]
-                comp["viewport"] = [vx + dx, vy + dy, vw, vh]
+            component_resize.resize_component(comp, sx, sy)
+        self.refresh_form()
         self.refresh_form()
 
     def refresh_form(self):
