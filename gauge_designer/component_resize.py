@@ -186,6 +186,28 @@ def _resize_scrolling_tape(comp: dict, sx: float, sy: float) -> None:
     _resize_viewport(comp, sx, sy)
 
 
+def _resize_rotary_encoder(comp: dict, sx: float, sy: float) -> None:
+    # background_origin/background_cliprect/face_origin/face_cliprect are
+    # atlas-space (which pixels get cropped) — never scale, same reasoning
+    # as ImagePanel. Unlike ImagePanel, on-screen render size is already a
+    # genuinely separate field here (`size`/`face_size`, fed to
+    # sprite.scale_x/y as target_w/cw at construction time), so no new
+    # schema field is needed for this type. drag_px_per_step and
+    # hit_padding are gesture/interaction tuning, not geometry — left
+    # untouched, matching apply_scale()'s own exclusions (neither is
+    # scaled there either).
+    if "position" in comp:
+        comp["position"] = _scale_pair(comp["position"], sx, sy)
+    if "size" in comp:
+        comp["size"] = _scale_pair(comp["size"], sx, sy)
+    if "face_size" in comp:
+        comp["face_size"] = _scale_pair(comp["face_size"], sx, sy)
+    if "face_offset" in comp:
+        comp["face_offset"] = _scale_pair(comp["face_offset"], sx, sy)
+    if "face_rotation_center" in comp:
+        comp["face_rotation_center"] = _scale_pair(comp["face_rotation_center"], sx, sy)
+
+
 _RESIZERS = {
     "Text": _resize_text,
     "Arc": _resize_arc,
@@ -196,4 +218,5 @@ _RESIZERS = {
     "ImagePanel": _resize_image_panel,
     "SpriteSheet": _resize_sprite_sheet,
     "ScrollingTape": _resize_scrolling_tape,
+    "RotaryEncoder": _resize_rotary_encoder,
 }
