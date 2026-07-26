@@ -2727,12 +2727,12 @@ class PropertiesForm(QWidget):
         self._clip_w = _sb(0, 4096); self._clip_h = _sb(0, 4096)
         for w in (self._clip_w, self._clip_h):
             w.valueChanged.connect(self._emit)
-        ad.addRow("Clip W  /  H", _pair_box(self._clip_w, self._clip_h))
+        ad.addRow("Texture Clip W  /  H", _pair_box(self._clip_w, self._clip_h))
 
         self._orig_x = _sb(0, 4096); self._orig_y = _sb(0, 4096)
         for w in (self._orig_x, self._orig_y):
             w.valueChanged.connect(self._emit)
-        ad.addRow("Origin X  /  Y", _pair_box(self._orig_x, self._orig_y))
+        ad.addRow("Texture Origin X  /  Y", _pair_box(self._orig_x, self._orig_y))
 
         self._resize_chk = QCheckBox("Fit to gauge size")
         self._resize_chk.toggled.connect(self._on_resize_toggled)
