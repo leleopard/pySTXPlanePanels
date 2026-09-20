@@ -1,0 +1,127 @@
+# Golden-image cases for the render tier (tests/test_render.py).
+#
+# Each case renders one panel or instrument at a fixed set of dataref values
+# and compares the result against tests/goldens/<name>.png. Any dataref not
+# listed reads 0.0, so values are only given where a zero would be a useless
+# picture — a needle at its stop tells you much less than a needle mid-scale.
+#
+# Adding a case: add an entry here, run
+#     python -m pytest -m render --update-goldens
+# then LOOK at the generated PNG under tests/goldens/ before committing it.
+# A golden is only as good as the one time somebody checked it by eye.
+
+defaults:
+  # Render at 2x and downsample. Antialiased output is a stricter test than
+  # aliased output: a sub-pixel geometry shift that hard edges would round
+  # away still moves the blended edge pixels.
+  supersample: 2
+  # A channel may differ from the golden by this much without counting as a
+  # difference. Repeat renders were measured to vary by at most 2/255 on
+  # antialiased edges (arcade packs its texture atlas lazily), so 16 clears
+  # that noise by a wide margin while still catching any real visual change.
+  channel_tolerance: 16
+  # How many pixels are allowed to exceed the tolerance before the case
+  # fails. Zero: on one machine the render is reproducible, so any pixel
+  # genuinely beyond tolerance means something moved.
+  max_differing_pixels: 0
+
+cases:
+  # -- C172 sprite panel -------------------------------------------------
+
+  - name: c172_six_pack_cruise
+    yaml: panels/c172_six_pack.yaml
+    description: Whole sprite panel in a cruise attitude — the MVP1 deliverable.
+    values:
+      sim/cockpit2/gauges/indicators/airspeed_kts_pilot: 110.0
+      sim/cockpit2/gauges/indicators/altitude_ft_pilot: 4500.0
+      sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot: 29.92
+      sim/flightmodel/position/theta: 3.0
+      sim/flightmodel/position/phi: -12.0
+      sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot: 245.0
+      sim/cockpit2/autopilot/heading_dial_deg_mag_pilot: 270.0
+
+  - name: c172_altimeter_2450
+    yaml: instruments/C172/Standard 6/c172_altimeter.yaml
+    description: Three-needle altimeter mid-scale — exercises the rollover convert functions.
+    values:
+      sim/cockpit2/gauges/indicators/altitude_ft_pilot: 2450.0
+      sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot: 29.92
+
+  - name: c172_artificial_horizon_banked
+    yaml: instruments/C172/Standard 6/c172_artificial_horizon.yaml
+    description: Pitch and bank together — sprite-space rotation plus translation.
+    values:
+      sim/flightmodel/position/theta: 7.5
+      sim/flightmodel/position/phi: -20.0
+
+  - name: c172_directional_gyro_245
+    yaml: instruments/C172/Standard 6/c172_directional_gyro.yaml
+    description: Heading card off a cardinal point, with the heading bug elsewhere.
+    values:
+      sim/cockpit2/gauges/indicators/heading_vacuum_deg_mag_pilot: 245.0
+      sim/cockpit2/autopilot/heading_dial_deg_mag_pilot: 310.0
+
+  - name: c172_airspeed_110
+    yaml: instruments/C172/Standard 6/c172_airspeed.yaml
+    description: Single needle in the green arc.
+    values:
+      sim/cockpit2/gauges/indicators/airspeed_kts_pilot: 110.0
+
+  # -- B737 vector panel -------------------------------------------------
+
+  - name: b737_pfd_climb
+    yaml: panels/B737.yaml
+    description: Vector glass panel — compass rose, tapes, attitude indicator.
+    values:
+      sim/cockpit2/gauges/indicators/airspeed_kts_pilot: 250.0
+      sim/cockpit2/gauges/indicators/altitude_ft_pilot: 12500.0
+      sim/cockpit2/gauges/indicators/pitch_electric_deg_pilot: 5.0
+      sim/cockpit2/gauges/indicators/roll_electric_deg_pilot: -15.0
+      sim/cockpit2/gauges/indicators/slip_deg: 1.5
+      sim/cockpit2/gauges/indicators/mach_pilot: 0.62
+      sim/cockpit2/autopilot/airspeed_dial_kts: 260.0
+
+  - name: b737_speed_tape_250
+    yaml: instruments/B737 zibo/B737 PFD/Speed_Tape.yaml
+    description: Vector scrolling tape with speed bugs — the trickiest thing to get right.
+    values:
+      sim/cockpit2/gauges/indicators/airspeed_kts_pilot: 250.0
+      sim/cockpit2/autopilot/airspeed_dial_kts: 260.0
+      laminar/B738/pfd/max_speed: 340.0
+      laminar/B738/pfd/min_speed: 140.0
+      laminar/B738/pfd/min_maneuver_speed: 180.0
+
+  - name: b737_pfd_hsi_banked
+    yaml: instruments/B737 zibo/B737 PFD/HSI.yaml
+    description: Attitude indicator in a bank, flight director commanded.
+    values:
+      sim/cockpit2/gauges/indicators/pitch_electric_deg_pilot: 5.0
+      sim/cockpit2/gauges/indicators/roll_electric_deg_pilot: -15.0
+      sim/cockpit2/gauges/indicators/slip_deg: 1.5
+      laminar/B738/autopilot/pfd_fd_cmd: 1.0
+      laminar/B738/autopilot/fd_pitch_pilot_show: 1.0
+      laminar/B738/autopilot/fd_roll_pilot_show: 1.0
+      laminar/B738/pfd/flight_director_pitch_pilot: 7.0
+      laminar/B738/pfd/flight_director_roll_pilot: -10.0
+
+  # -- Radio stack: Text components and the instrument-visibility cascade --
+
+  - name: bk_radio_stack_powered
+    yaml: panels/bk_radio_stack.yaml
+    description: >-
+      Radio stack with power on, so the instrument-level visibility cascade
+      resolves visible and the frequency Text components actually render.
+    values:
+      sim/cockpit2/radios/actuators/com1_power[0]: 1.0
+      sim/cockpit/radios/com1_freq_hz[0]: 12180.0
+      sim/cockpit/radios/com1_stdby_freq_hz[0]: 11930.0
+      sim/cockpit/radios/nav1_freq_hz[0]: 11150.0
+      sim/cockpit/radios/nav1_stdby_freq_hz[0]: 10870.0
+
+  - name: bk_radio_stack_unpowered
+    yaml: panels/bk_radio_stack.yaml
+    description: >-
+      Same stack with power off — the negative case for the visibility
+      cascade. Catches a regression that makes gauges render when the
+      aircraft is cold and dark, which no positive test would notice.
+    values: {}

@@ -36,3 +36,6 @@ config/local.*
 
 # Claude Code per-user settings (project-shared settings.json is committed if present)
 .claude/settings.local.json
+
+# Render-tier failure artifacts (rendered frame + difference map)
+tests/_artifacts/

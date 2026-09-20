@@ -27,6 +27,20 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--update-goldens",
+        action="store_true",
+        default=False,
+        help=(
+            "Rewrite the render tier's golden PNGs from the current code "
+            "instead of comparing against them. Review the resulting image "
+            "diff before committing — this is how an intended visual change "
+            "is accepted, and it is also how an unintended one gets baked in."
+        ),
+    )
+
+
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "smoke: fast, no-GL config validation — runs on every change"
@@ -39,3 +53,21 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture(scope="session")
 def project_root() -> Path:
     return PROJECT_ROOT
+
+
+@pytest.fixture(scope="session")
+def update_goldens(request: pytest.FixtureRequest) -> bool:
+    return bool(request.config.getoption("--update-goldens"))
+
+
+@pytest.fixture(scope="session")
+def gl_context():
+    """Session-scoped hidden GL context for the render tier.
+
+    Created once for the whole session and torn down at the end, so a run
+    of forty render cases pays for one context rather than forty.
+    """
+    from gauge_core import offscreen
+
+    yield
+    offscreen.close_host_window()
