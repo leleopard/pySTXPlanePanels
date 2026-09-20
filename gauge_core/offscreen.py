@@ -149,6 +149,16 @@ def render_panel(
     texture = ctx.texture((fb_width, fb_height), components=4)
     framebuffer = ctx.framebuffer(color_attachments=[texture])
 
+    # Components that clip themselves (ImagePanel, NeedleGauge, SpriteSheet,
+    # ScrollingTape, AttitudeIndicator) convert their viewport rectangle from
+    # logical panel coords into framebuffer pixels using the ratio between
+    # the active viewport and the window's `_panel_size` — the same attribute
+    # PanelWindow sets. Without it they would scale against the host window's
+    # own dimensions, which have nothing to do with the panel, and clip
+    # everything away.
+    saved_panel_size = getattr(window, "_panel_size", None)
+    window._panel_size = (width, height)
+
     saved_projection = ctx.projection_matrix
     try:
         framebuffer.use()
@@ -169,6 +179,10 @@ def render_panel(
         ctx.screen.use()
         framebuffer.delete()
         texture.delete()
+        if saved_panel_size is None:
+            del window._panel_size
+        else:
+            window._panel_size = saved_panel_size
 
     # GL's origin is bottom-left, PIL's is top-left.
     image = Image.frombytes("RGBA", (fb_width, fb_height), bytes(raw)).transpose(

@@ -512,13 +512,20 @@ class AttitudeIndicator(_VecBase):
         arc_cy = cy + self._arc_y_offset
 
         # Clip to the viewport rectangle using the GL scissor test.
-        # Scale from logical coords to FBO pixels: in SSAA mode the active FBO
-        # is N× larger than the window, so the ratio handles both cases.
+        # ctx.scissor is in framebuffer pixels, so scale from logical panel
+        # coords by the active viewport's size — which already accounts for
+        # SSAA (the FBO is N× larger) without assuming anything about how
+        # big the window is. Dividing by win.width instead would silently
+        # mis-clip whenever the window is not exactly the panel's size:
+        # in fullscreen on a screen larger than the panel, and when
+        # rendering offscreen. Same convention as ImagePanel, NeedleGauge,
+        # ScrollingTape and SpriteSheet.
         win = arcade.get_window()
         ctx = win.ctx
-        fw, fh = ctx.fbo.size
-        sx = fw / win.width
-        sy = fh / win.height
+        _, _, fvp_w, fvp_h = ctx.viewport
+        panel_w, panel_h = getattr(win, "_panel_size", (win.width, win.height))
+        sx = fvp_w / panel_w
+        sy = fvp_h / panel_h
         ctx.scissor = (int(vx * sx), int(vy * sy), int(vw * sx), int(vh * sy))
 
         self._draw_background(cx, cy, pitch_y, cos_b, sin_b, vw, vh)
