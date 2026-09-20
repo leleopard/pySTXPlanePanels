@@ -24,3 +24,16 @@ gauge-designer = "gauge_designer.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["gauge_core*", "gauge_designer*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "numpy>=1.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The render tier needs a GPU and golden images, so it is opt-in: run it
+# with `pytest -m render` or, preferably, via `python scripts/regress.py`
+# which picks the tier from what actually changed.
+addopts = "-m 'not render' --strict-markers"
