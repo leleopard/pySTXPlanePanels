@@ -59,6 +59,35 @@ def load_panel_or_instrument(path: str | Path) -> Panel:
     return panel_from_instrument(load_instrument(p))
 
 
+def draw_panel(
+    panel: Panel,
+    get_data: Callable[[Any], float],
+    is_test_mode: bool = False,
+) -> None:
+    """Update and draw every instrument of *panel* into the bound framebuffer.
+
+    The scene-drawing core, with no window, overlay or framebuffer setup of
+    its own — so the live window (`PanelWindow._render_scene`) and the
+    offscreen renderer used by the regression suite (`gauge_core.offscreen`)
+    rasterise through one identical code path and cannot drift apart.
+
+    Instrument-level visibility cascades are honored except in test mode,
+    where everything is forced visible so an unpowered radio is still
+    inspectable.
+    """
+    for inst in panel.instruments:
+        if (
+            not is_test_mode
+            and inst.visibility is not None
+            and not inst.visibility.is_visible(get_data)
+        ):
+            continue
+        for comp in inst.components:
+            comp.update(get_data)
+        for comp in inst.components:
+            comp.draw()
+
+
 class PanelWindow(arcade.Window):
     NO_DATA_MESSAGE = "-- !! Not receiving any data from X-Plane !! --"
 
@@ -236,17 +265,7 @@ class PanelWindow(arcade.Window):
 
     def _render_scene(self) -> None:
         """Draw all instruments and overlays into the active framebuffer."""
-        for inst in self.panel.instruments:
-            if (
-                not self._is_test_mode
-                and inst.visibility is not None
-                and not inst.visibility.is_visible(self._get_data)
-            ):
-                continue
-            for comp in inst.components:
-                comp.update(self._get_data)
-            for comp in inst.components:
-                comp.draw()
+        draw_panel(self.panel, self._get_data, self._is_test_mode)
 
         if not self._is_test_mode and self._udp_alive is not None and not self._udp_alive():
             self._no_data_text.draw()
