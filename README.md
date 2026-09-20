@@ -103,6 +103,55 @@ In X-Plane: **Settings → Network → UDP → Send data to IP** — set the pan
 
 ---
 
+## Tests
+
+The suite is tiered, so that running it is never a reason not to.
+
+| Tier | What it does | Cost |
+|---|---|---|
+| `smoke` | Builds every instrument and panel YAML through the real loaders, with no GL context. Catches missing textures, dangling instrument references, unknown component types, renamed convert functions and absolute paths. | ~4s, 136 tests |
+| `render` | Renders golden cases offscreen at fixed dataref values and compares them pixel-by-pixel against committed baselines in `tests/goldens/`. Catches anything that visibly moves. | ~6s, 11 tests, needs a GPU |
+
+Normally you do not pick a tier by hand — the selector works it out from
+what you changed:
+
+```bash
+python scripts/regress.py            # tier chosen from the working tree
+python scripts/regress.py --dry-run  # show the plan, run nothing
+python scripts/regress.py --base main
+python scripts/regress.py --all      # force the whole suite
+```
+
+A docs change runs nothing. A `gauge_designer/` change runs smoke only. A
+`gauge_core/` change runs everything. Editing one instrument YAML runs
+smoke plus only the golden cases that actually contain that instrument —
+so touching the C172 altimeter does not re-render the B737 PFD.
+
+Running the tiers directly, if you want to:
+
+```bash
+python -m pytest                 # smoke only (the default)
+python -m pytest -m render       # golden images
+python -m pytest -m "smoke or render"
+```
+
+### Golden images
+
+When a visual change is intentional, regenerate the baselines and **look
+at them** before committing:
+
+```bash
+python -m pytest -m render --update-goldens
+```
+
+When a case fails, the rendered frame and an amplified difference map are
+written to `tests/_artifacts/` (gitignored) so you can see what moved
+rather than infer it from a pixel count.
+
+Add a case by adding an entry to `tests/cases.yaml` and regenerating.
+
+---
+
 ## Project structure
 
 ```
@@ -111,5 +160,7 @@ gauge_designer/      PySide6 WYSIWYG editor for instrument and panel YAML files
 instruments/         Instrument YAML definitions (C172, G1000, …)
 panels/              Panel YAML files (compose instruments at positions)
 assets/              Shared texture atlases
+tests/               Tiered regression suite (smoke + golden images)
+scripts/regress.py   Runs the tier that your change warrants
 config.yaml          UDP network settings
 ```
