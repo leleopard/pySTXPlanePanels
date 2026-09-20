@@ -9,5 +9,9 @@
 *.ini       text eol=lf
 *.json      text eol=lf
 
+# Git hooks are shell scripts with no file extension, so *.sh misses them.
+# They must stay LF or Linux/macOS fails with "bad interpreter: /bin/sh^M".
+.githooks/*  text eol=lf
+
 # Windows-only files can keep CRLF
 *.bat       text eol=crlf

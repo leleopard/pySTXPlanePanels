@@ -1,0 +1,64 @@
+#!/bin/sh
+#
+# Pre-commit regression gate.
+#
+# Runs scripts/regress.py --staged, which picks the tier from what is
+# staged and runs it against a snapshot of the index — so what gets tested
+# is the commit, not whatever else is uncommitted in the working tree.
+#
+# Most commits cost nothing or ~4s; only a gauge_core change pays for the
+# full render tier. See the Tests section of README.md.
+#
+# Enable (once per clone):
+#     git config core.hooksPath .githooks
+#
+# Skip for one commit:
+#     git commit --no-verify
+#
+# Distinguishes two kinds of failure deliberately:
+#   - tests failed          -> block the commit (a code problem)
+#   - no usable interpreter -> warn loudly and allow (an environment
+#     problem; a machine without the dev dependencies, such as a Pi used
+#     only to run panels, should still be able to commit)
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+# Find a Python. `py` is the Windows launcher; python3 is the Unix norm.
+PYTHON=""
+for candidate in python3 python py; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        if "$candidate" -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >/dev/null 2>&1; then
+            PYTHON="$candidate"
+            break
+        fi
+    fi
+done
+
+if [ -z "$PYTHON" ]; then
+    echo "pre-commit: WARNING - no Python >= 3.10 found; regression tests SKIPPED." >&2
+    echo "pre-commit: this commit has NOT been checked." >&2
+    exit 0
+fi
+
+if ! "$PYTHON" -c "import pytest" >/dev/null 2>&1; then
+    echo "pre-commit: WARNING - pytest not installed; regression tests SKIPPED." >&2
+    echo "pre-commit: this commit has NOT been checked. Install with: pip install -e \".[dev]\"" >&2
+    exit 0
+fi
+
+set +e
+"$PYTHON" scripts/regress.py --staged
+status=$?
+set -e
+
+if [ $status -ne 0 ]; then
+    echo "" >&2
+    echo "pre-commit: regression tests FAILED - commit aborted." >&2
+    echo "pre-commit: fix the failures, or commit anyway with --no-verify." >&2
+    exit $status
+fi
+
+exit 0

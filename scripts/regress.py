@@ -29,9 +29,14 @@ worse than one that occasionally spends an extra ten seconds.
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -43,7 +48,7 @@ from tests.discovery import rel  # noqa: E402
 # Paths that cannot affect behaviour under test.
 _IGNORED_SUFFIXES = {".md", ".bat", ".sh", ".txt", ".xcf", ".sfd", ".svg", ".dxf"}
 _IGNORED_NAMES = {".gitignore", ".gitattributes", "LICENSE"}
-_IGNORED_PREFIXES = ("\\.claude/", ".claude/", ".vscode/", ".idea/")
+_IGNORED_PREFIXES = (".claude/", ".vscode/", ".idea/", ".githooks/", ".github/")
 
 # gauge_core modules that provably cannot move a pixel.
 _NON_RENDERING_CORE = {"mock_source.py", "aa_probe.py"}
@@ -92,13 +97,17 @@ def _git(args: list[str]) -> list[str]:
     return [field for field in result.stdout.split("\0") if field]
 
 
-def changed_paths(base: str | None) -> list[str]:
+def changed_paths(base: str | None, staged: bool = False) -> list[str]:
     """Project-relative paths that changed, as forward-slash strings.
 
-    With `--base`, everything that differs from that ref. Without it, the
-    uncommitted working tree — staged, unstaged and untracked — which is
-    what you want when running this before a commit.
+    With `--base`, everything that differs from that ref. With `staged`,
+    only what is in the index — what a commit would actually contain.
+    Otherwise the whole uncommitted working tree: staged, unstaged and
+    untracked.
     """
+    if staged:
+        return sorted(set(_git(["diff", "--cached", "--name-only", "-z"])))
+
     if base:
         return sorted(set(_git(["diff", "--name-only", "-z", base])))
 
@@ -197,13 +206,81 @@ def _print_plan(plan: Plan, paths: list[str], total_cases: int) -> None:
         print("Plan: nothing to run")
 
 
-def _run(args: list[str]) -> int:
+def _run(args: list[str], cwd: Path | None = None) -> int:
     print(f"\n$ {' '.join(args)}")
     # The child writes straight to the terminal while our own prints are
     # buffered when stdout is a pipe, so without this the plan and the
     # pytest output come out in the wrong order.
     sys.stdout.flush()
-    return subprocess.run(args, cwd=PROJECT_ROOT).returncode
+    return subprocess.run(args, cwd=cwd or PROJECT_ROOT).returncode
+
+
+@contextmanager
+def staged_snapshot() -> Iterator[Path]:
+    """Materialise the index into a temp directory and yield its path.
+
+    A pre-commit check should test the commit, not the working tree — and
+    in this project the working tree is essentially always dirty with
+    unrelated work in progress. Testing it would both pass on things the
+    commit does not contain and fail on things it does not either.
+
+    `git checkout-index` writes the staged content out without touching
+    the working tree or the index, so unlike a stash-based approach there
+    is nothing to restore and nothing to lose if the run is interrupted.
+    Measured at ~0.3s for this repo, against a ~4s smoke tier.
+
+    A useful side effect: the snapshot contains only tracked files, so a
+    commit that references a file which was never `git add`ed fails here
+    rather than on somebody else's clone.
+    """
+    temp_dir = Path(tempfile.mkdtemp(prefix="gauge-regress-"))
+    try:
+        # checkout-index wants a trailing separator on the prefix.
+        subprocess.run(
+            ["git", "checkout-index", "-a", "--prefix", f"{temp_dir}{os.sep}"],
+            cwd=PROJECT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        yield temp_dir
+    finally:
+        # Copy any failure artifacts back where the user can actually look
+        # at them before the snapshot is deleted.
+        produced = temp_dir / "tests" / "_artifacts"
+        if produced.is_dir():
+            destination = PROJECT_ROOT / "tests" / "_artifacts"
+            destination.mkdir(parents=True, exist_ok=True)
+            for artifact in produced.iterdir():
+                if artifact.is_file():
+                    shutil.copy2(artifact, destination / artifact.name)
+            print(
+                f"\nFailure artifacts copied to "
+                f"{destination.relative_to(PROJECT_ROOT).as_posix()}/"
+            )
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _run_tiers(plan: Plan, cwd: Path | None = None) -> int:
+    """Run the tiers the plan calls for, in *cwd* (default: the repo)."""
+    # Keep the first failing tier's own exit code rather than combining
+    # them — pytest's codes are meaningful (1 = failures, 2 = interrupted,
+    # 5 = nothing collected) and OR-ing them together invents new ones.
+    exit_code = 0
+
+    if plan.run_smoke:
+        exit_code = (
+            _run([sys.executable, "-m", "pytest", "-m", "smoke", "-q"], cwd=cwd)
+            or exit_code
+        )
+
+    if plan.run_render:
+        render_args = [sys.executable, "-m", "pytest", "-m", "render", "-q"]
+        if not plan.full_render:
+            render_args += ["-k", " or ".join(sorted(plan.render_cases))]
+        exit_code = _run(render_args, cwd=cwd) or exit_code
+
+    return exit_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -226,6 +303,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Ignore what changed and run the whole suite.",
     )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help=(
+            "Pre-commit mode: pick the tier from the staged changes, and "
+            "run the tests against a snapshot of the index rather than the "
+            "working tree — so the commit is what gets tested, not whatever "
+            "else happens to be uncommitted. Used by the pre-commit hook."
+        ),
+    )
     args = parser.parse_args(argv)
 
     from tests.test_render import CASES
@@ -239,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
         paths = ["(--all)"]
         plan.note("(--all)", "smoke + full render tier")
     else:
-        paths = changed_paths(args.base)
+        paths = changed_paths(args.base, staged=args.staged)
         plan = classify(paths, graph)
 
     _print_plan(plan, paths, len(CASES))
@@ -247,23 +334,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         return 0
 
-    # Keep the first failing tier's own exit code rather than combining
-    # them — pytest's codes are meaningful (1 = failures, 2 = interrupted,
-    # 5 = nothing collected) and OR-ing them together invents new ones.
-    exit_code = 0
-    if plan.run_smoke:
-        exit_code = _run([sys.executable, "-m", "pytest", "-m", "smoke", "-q"]) or exit_code
-
-    if plan.run_render:
-        render_args = [sys.executable, "-m", "pytest", "-m", "render", "-q"]
-        if not plan.full_render:
-            render_args += ["-k", " or ".join(sorted(plan.render_cases))]
-        exit_code = _run(render_args) or exit_code
+    if args.staged and (plan.run_smoke or plan.run_render):
+        with staged_snapshot() as snapshot:
+            return _run_tiers(plan, cwd=snapshot)
 
     if not plan.run_smoke and not plan.run_render:
         print("\nNothing to run.")
+        return 0
 
-    return exit_code
+    return _run_tiers(plan)
 
 
 if __name__ == "__main__":
