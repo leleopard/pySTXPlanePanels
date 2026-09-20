@@ -127,6 +127,32 @@ A docs change runs nothing. A `gauge_designer/` change runs smoke only. A
 smoke plus only the golden cases that actually contain that instrument —
 so touching the C172 altimeter does not re-render the B737 PFD.
 
+### Pre-commit hook
+
+The suite can run automatically on every commit. Enable it once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+From then on `git commit` runs the tier your **staged** change warrants.
+A docs commit runs nothing; a YAML tweak runs smoke plus the one or two
+golden cases that contain it; a `gauge_core` change runs everything.
+
+The hook tests a snapshot of the index, not your working tree, so what
+gets checked is the commit itself — unrelated work in progress neither
+hides a failure nor causes a spurious one. Because that snapshot contains
+only tracked files, it also catches a commit that references a file you
+forgot to `git add`.
+
+Failing tests abort the commit. A machine with no Python or no pytest
+(a Pi that only runs panels) warns loudly and commits anyway. To bypass
+it for one commit:
+
+```bash
+git commit --no-verify
+```
+
 Running the tiers directly, if you want to:
 
 ```bash
